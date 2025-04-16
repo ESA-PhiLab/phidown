@@ -28,8 +28,8 @@ parser = argparse.ArgumentParser(
 )
 # User credentials
 
-parser.add_argument('-u', '--username', type=str, default=username, help='Username for authentication (default: sirbastiano94)')
-parser.add_argument('-p', '--password', type=str, default=password, help='Password for authentication (default: peppino123)')
+parser.add_argument('-u', '--username', type=str, default=username, help='Username for authentication')
+parser.add_argument('-p', '--password', type=str, default=password, help='Password for authentication')
 parser.add_argument('-eo_product_name', type=str, help='Name of the Earth Observation product to be downloaded (required)')
 args = parser.parse_args()
 
@@ -131,7 +131,16 @@ def traverse_and_download_s3(s3_resource, bucket_name, base_s3_path, local_path,
         relative_path = os.path.relpath(s3_key, base_s3_path)
         local_path_file = os.path.join(local_path, relative_path)
         local_dir = os.path.dirname(local_path_file)
+
+        # Check if a file with the same name as the directory exists
+        if os.path.isfile(local_dir):
+            print(f"Conflict detected: {local_dir} is a file. Removing it to create a directory.")
+            os.remove(local_dir)
+
+        # Create the directory if it doesn't exist
         os.makedirs(local_dir, exist_ok=True)
+
+        # Download the file
         download_file_s3(s3_resource.meta.client, bucket_name, s3_key, local_path_file, failed_downloads)
 
 def main():

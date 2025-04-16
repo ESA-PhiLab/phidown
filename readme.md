@@ -1,8 +1,11 @@
-# SentinelAPI: Sentinel Data Management Tool
+# Φ-Down: Sentinel Data Management Tool
 
-This repository provides tools for managing Sentinel data using AWS services and dataset tools. It includes functionality for authentication, product search, and downloading Earth Observation (EO) products.
+![Phi-Down Logo](./assets/phidown_logo.png)
 
-> **⚠️ Search Optimization Tips**  
+
+#### This repository provides tools for managing Sentinel data using AWS services and dataset tools. It includes functionality for authentication, product search, and downloading Earth Observation (EO) products.
+
+> **⚠️ Search Optimization Tips⚠️**  
 >  
 > Crucial for the search performance is specifying the collection name. Example:  
 > `Collection/Name eq 'SENTINEL-3'`.  
@@ -19,6 +22,40 @@ This repository provides tools for managing Sentinel data using AWS services and
 - Search for Sentinel products using the OData API.
 - Download Sentinel products using the S3 protocol.
 
+The following collections are currently available:
+
+<details>
+<summary><strong>Copernicus Sentinel Mission</strong></summary>
+
+- SENTINEL-1
+- SENTINEL-2
+- SENTINEL-3
+- SENTINEL-5P
+- SENTINEL-6
+- SENTINEL-1-RTC (Sentinel-1 Radiometric Terrain Corrected)
+
+</details>
+
+<details>
+<summary><strong>Complementary data</strong></summary>
+
+- GLOBAL-MOSAICS (Sentinel-1 and Sentinel-2 Global Mosaics)
+- SMOS (Soil Moisture and Ocean Salinity)
+- ENVISAT (ENVISAT- Medium Resolution Imaging Spectrometer - MERIS)
+- LANDSAT-5
+- LANDSAT-7
+- LANDSAT-8
+- COP-DEM (Copernicus DEM)
+- TERRAAQUA (Terra MODIS and Aqua MODIS)
+- S2GLC (S2GLC 2017)
+
+</details>
+
+<details>
+<summary><strong>Copernicus Contributing Missions (CCM)</strong></summary>
+<!-- Add CCM collections here if available -->
+</details>
+
 ---
 
 ## Prerequisites
@@ -29,29 +66,22 @@ This repository provides tools for managing Sentinel data using AWS services and
 ## Installation
 
 ### Step 1: Install PDM
-- [PDM](https://pdm.fming.dev/) (Python Dependency Manager). We gonna use pdm to simplify our life. 
+We gonna use [PDM](https://pdm.fming.dev/) (Python Dependency Manager) to simplify our life. 
 If you don't already have PDM installed, install it via pip:
 ```bash
 pip install pdm
 ```
 
-### Step 2: Clone the Repository
-```bash
-git clone https://github.com/sirbastiano/phidown.git
-cd phidown
-```
-
-### Step 3: Install Dependencies Using PDM
+### Step 2: Install Dependencies Using PDM
 Use the `pdm.lock` file to install exact versions of dependencies:
 ```bash
-pdm install
+pdm add git+https://github.com/sirbastiano/phidown.git
 ```
 
-This ensures faster and consistent environment setup.
-
-### Alternative: Install Dependencies Using pip
+### Alternative: Build from source
 If you prefer using pip, you can install the dependencies directly:
 ```bash
+git clone https://github.com/sirbastiano/phidown.git & cd phidown
 pip install .
 ```
 
@@ -77,22 +107,22 @@ To authenticate with the Copernicus Data Space Ecosystem, you need to create a `
 
 3. Save the file.
 
+### Alternative: Pass Credentials at Execution
 
----
+Instead of using a `secret.yml` file, you can pass your credentials directly when running the script. Use the following command:
 
-# Run the Main Script
-To search and download Sentinel products:
 ```bash
-pdm run python phisenapi/main.py
+pdm run python phidown/downloader.py --username your_username --password your_password --eo_product_name <eo_product_name>
 ```
 
-### Example
+Replace `your_username` and `your_password` with your actual credentials.
+Replace `eo_product_name` with your actual product name you want to download.
+
 The script will:
 1. Authenticate with the Copernicus Data Space Ecosystem.
 2. Search for Sentinel products within the specified AOI and date range.
 3. Download the first matching product using S3.
 
----
 
 ## Notes
 - **Credentials**: Update your username and password in `phisenapi/main.py`. Do **not** share this file publicly.
@@ -109,4 +139,4 @@ The script will:
 ---
 
 ## License
-This project is licensed under the MIT License.
+This project is licensed under the CC by 2.0 License.
