@@ -22,74 +22,69 @@ from datetime import datetime
 # display specific columns of interest.
 
 class CopernicusDataSearcher:
-    def __init__(self, 
-            base_url: str = "https://catalogue.dataspace.copernicus.eu/odata/v1/Products",
-            config_path: typing.Optional[str] = None,
-            collection_names: typing.Optional[str] = ['SENTINEL-1'],
-            product_type: typing.Optional[str] = None,
-            orbit_direction: typing.Optional[str] = None,
-            cloud_cover_threshold: typing.Optional[float] = None,
-            aoi_wkt: typing.Optional[str] = None, 
-            start_date: typing.Optional[str] = None,
-            end_date: typing.Optional[str] = None,
-            top: int = 1000,
-            order_by: str = "ContentDate/Start desc"):
+    def __init__(
+        self,
+        base_url: str = "https://catalogue.dataspace.copernicus.eu/odata/v1/Products",
+        config_path: typing.Optional[str] = None,
+        collection_names: typing.Optional[typing.List[str]] = ['SENTINEL-1'],
+        product_type: typing.Optional[str] = None,
+        orbit_direction: typing.Optional[str] = None,
+        cloud_cover_threshold: typing.Optional[float] = None,
+        aoi_wkt: typing.Optional[str] = None,
+        start_date: typing.Optional[str] = None,
+        end_date: typing.Optional[str] = None,
+        top: int = 1000,
+        order_by: str = "ContentDate/Start desc"
+    ) -> None:
         """
         Initialize the CopernicusDataSearcher with default parameters.
 
         Args:
             base_url (str): The base URL for the OData API.
             config_path (str, optional): Path to the configuration file. Defaults to None.
-            collection_names (List(str), optional): Name of the collection to search. Defaults to ['SENTINEL-1'].
+            collection_names (List[str], optional): Name of the collection to search. Defaults to ['SENTINEL-1'].
             product_type (str, optional): Type of product to filter. Defaults to None.
             orbit_direction (str, optional): Orbit direction to filter (e.g., 'ASCENDING', 'DESCENDING'). Defaults to None.
             cloud_cover_threshold (float, optional): Maximum cloud cover percentage to filter. Defaults to None.
             aoi_wkt (str, optional): Area of Interest in WKT format. Disclaimers: Polygon must start and end with the same point. Coordinates must be given in EPSG 4326
             start_date (str, optional): Start date for filtering (ISO 8601 format). Defaults to None.
             end_date (str, optional): End date for filtering (ISO 8601 format). Defaults to None.
-            top (int, optional): Maximum number of results to retrieve. Defaults to 100.
+            top (int, optional): Maximum number of results to retrieve. Defaults to 1000.
             order_by (str, optional): Field and direction to order results by. Defaults to "ContentDate/Start desc".
         """
         self.base_url: str = base_url
         self.config: typing.Optional[dict] = self._load_config(config_path)
         # Load configuration
         self._load_config(config_path)
-        
-        self.collection_names: typing.Optional[str] = collection_names
+
+        self.collection_names: typing.Optional[typing.List[str]] = collection_names
         for c in collection_names:
             self._validate_collection(c)
-        
+
         self.product_type: typing.Optional[str] = product_type
         self._validate_product_type()
-        
+
         self.orbit_direction: typing.Optional[str] = orbit_direction
         self._validate_orbit_direction()
-        
+
         self.cloud_cover_threshold: typing.Optional[float] = cloud_cover_threshold
         self._validate_cloud_cover_threshold()
-        
+
         self.aoi_wkt: typing.Optional[str] = aoi_wkt
         self._validate_aoi_wkt()
-        
+
         self.start_date: typing.Optional[str] = start_date
         self.end_date: typing.Optional[str] = end_date
-        
-        
+
         self.top: int = top
         self._validate_top()
-        
+
         self.order_by: str = order_by
         self._validate_order_by()
-        
 
-        
-        # Placeholders for attributes to be set later
-        self.filter_condition: typing.Optional[str] = None
-        self.query: typing.Optional[str] = None
-        self.url: typing.Optional[str] = None
-        self.response: typing.Optional[requests.Response] = None
-        self.json_data: typing.Optional[dict] = None
-        self.df: typing.Optional[pd.DataFrame] = None
+        # Initialize placeholders for attributes
+        self._initialize_placeholders()
+
     
     # - Private Methods:
     def _load_config(self, config_path=None):
@@ -151,11 +146,10 @@ class CopernicusDataSearcher:
 
         Returns:
             tuple: A tuple containing:
-                - valid_product_types (dict): A dictionary of product types filtered by the given collection names.
-                - values (list): A flattened list of all product types from the configuration.
+                - valid_product_types (list): A flattened list of all product types from the configuration.
         """
         product_types = {key: value.get('productType', None) for key, value in self.config['attributes'].items()}
-        valid_product_types = {key: value for key, value in product_types.items() if key in collection_names}
+        valid_product_types = [ptype for key, ptypes in product_types.items() if key in collection_names for ptype in (ptypes or [])]
         return valid_product_types
 
 
@@ -257,7 +251,7 @@ class CopernicusDataSearcher:
                 raise ValueError("The 'aoi_wkt' parameter cannot be empty")
             if not (self.aoi_wkt.startswith("POLYGON((") and self.aoi_wkt.endswith("))")):
                 raise ValueError("The 'aoi_wkt' parameter must be a valid WKT POLYGON")
-            coordinates = self.aoi_wkt[9:-2].split(",")
+            coordinates = [coord.strip() for coord in self.aoi_wkt[9:-2].split(",")]
             if coordinates[0] != coordinates[-1]:
                 raise ValueError("The 'aoi_wkt' polygon must start and end with the same point")
 
@@ -289,9 +283,72 @@ class CopernicusDataSearcher:
                 raise ValueError("start_date must be earlier than end_date.")
 
 
-    def build_query(self):
+    def _initialize_placeholders(self):
+        """
+        Initializes placeholder attributes for the class instance.
+
+        This method sets up several attributes with default values of `None` to 
+        serve as placeholders. These attributes include:
+
+        - `filter_condition` (Optional[str]): A string representing a filter condition.
+        - `query` (Optional[str]): A string representing the query.
+        - `url` (Optional[str]): A string representing the URL.
+        - `response` (Optional[requests.Response]): A `requests.Response` object for HTTP responses.
+        - `json_data` (Optional[dict]): A dictionary to store JSON data from the response.
+        - `df` (Optional[pd.DataFrame]): A pandas DataFrame to store tabular data.
+        """
+        self.filter_condition: typing.Optional[str] = None
+        self.query: typing.Optional[str] = None
+        self.url: typing.Optional[str] = None
+        self.response: typing.Optional[requests.Response] = None
+        self.json_data: typing.Optional[dict] = None
+        self.df: typing.Optional[pd.DataFrame] = None
+
+
+    # - Methods to build and execute the query:
+    def _build_filter(self):
+        """
+        Build the OData filter condition based on the provided parameters.
+        """
+        filters = []
+
+        if self.collection_names:
+            collection_filter = " or ".join([f"Collection/Name eq '{name}'" for name in self.collection_names])
+            filters.append(f"({collection_filter})")
+
+        if self.product_type:
+            filters.append(
+                "Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'productType' "
+                f"and att/OData.CSC.StringAttribute/Value eq '{self.product_type}')"
+            )
+
+        if self.orbit_direction:
+            filters.append(
+                "Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'orbitDirection' "
+                f"and att/OData.CSC.StringAttribute/Value eq '{self.orbit_direction}')"
+            )
+
+        if self.cloud_cover_threshold is not None:
+            filters.append(
+                "Attributes/OData.CSC.DoubleAttribute/any(att:att/Name eq 'cloudCover' "
+                f"and att/OData.CSC.DoubleAttribute/Value lt {self.cloud_cover_threshold})"
+            )
+
+        if self.aoi_wkt:
+            filters.append(f"geo.intersects(GeoFootprint, geography'{self.aoi_wkt}')")
+
+        if self.start_date:
+            filters.append(f"ContentDate/Start ge {self.start_date}")
+
+        if self.end_date:
+            filters.append(f"ContentDate/Start lt {self.end_date}")
+
+        self.filter_condition = " and ".join(filters)
+
+
+    def _build_query(self):
         """Build the full OData query URL"""
-        self.build_filter()
+        self._build_filter()
         self.query = f"?$filter={self.filter_condition}&$orderby={self.order_by}&$top={self.top}&$expand=Attributes"
         self.url = f"{self.base_url}{self.query}"
         return self.url
@@ -299,8 +356,8 @@ class CopernicusDataSearcher:
 
     def execute_query(self):
         """Execute the query and retrieve data"""
-        self.build_query()
-        self.response = requests.get(self.url)
+        url = self._build_query()
+        self.response = requests.get(url)
         self.response.raise_for_status()  # Raise an error for bad status codes
         
         self.json_data = self.response.json()
