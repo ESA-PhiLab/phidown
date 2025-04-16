@@ -372,7 +372,11 @@ class CopernicusDataSearcher:
             self.execute_query()
             
         if columns is None:
-            columns = ['Id', 'Name', 'S3Path', 'GeoFootprint']
-            
+            columns = ['Id', 'Name', 'S3Path', 'GeoFootprint','OriginDate','Attributes']
+        
+        if 'OriginDate' in self.df.columns:
+            self.df['OriginDate'] = pd.to_datetime(self.df['OriginDate']).dt.strftime('%Y-%m-%d %H:%M:%S')
+        
+        
         return self.df[columns]
 
