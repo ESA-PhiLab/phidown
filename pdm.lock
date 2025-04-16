@@ -5,7 +5,7 @@
 groups = ["default", "viz"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:8a6d1267871baa0b550fb6198ea61df99cc27e3e793f21069cf64d0b0bfedb98"
+content_hash = "sha256:1bf5334cc78bacbf96711d2f957d1bbbe7abf81902c41465de19a3aea8064cb2"
 
 [[metadata.targets]]
 requires_python = ">=3.8"
@@ -2780,6 +2780,20 @@ groups = ["viz"]
 files = [
     {file = "pure_eval-0.2.3-py3-none-any.whl", hash = "sha256:1db8e35b67b3d218d818ae653e27f06c3aa420901fa7b081ca98cbedc874e0d0"},
     {file = "pure_eval-0.2.3.tar.gz", hash = "sha256:5f4e983f40564c576c7c8635ae88db5956bb2229d7e9237d03b3c0b0190eaf42"},
+]
+
+[[package]]
+name = "pyaml"
+version = "25.1.0"
+requires_python = ">=3.8"
+summary = "PyYAML-based module to produce a bit more pretty and readable YAML-serialized data"
+groups = ["default"]
+dependencies = [
+    "PyYAML",
+]
+files = [
+    {file = "pyaml-25.1.0-py3-none-any.whl", hash = "sha256:f7b40629d2dae88035657c860f539db3525ddd0120a11e0bcb44d47d5968b3bc"},
+    {file = "pyaml-25.1.0.tar.gz", hash = "sha256:33a93ac49218f57e020b81e280d2706cea554ac5a76445ac79add760d019c709"},
 ]
 
 [[package]]

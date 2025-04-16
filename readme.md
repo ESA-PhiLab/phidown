@@ -61,7 +61,26 @@ This will install the package and its dependencies as defined in the `pyproject.
 
 ## Usage
 
-### Run the Main Script
+### Step 4: Configure Credentials
+
+To authenticate with the Copernicus Data Space Ecosystem, you need to create a `secret.yml` file containing your credentials. Follow these steps:
+
+1. Create a file named `secret.yml` in the root directory of the project.
+2. Add the following content to the file, replacing `your_username` and `your_password` with your actual credentials:
+
+   ```yaml
+   # filepath: ./phidown/secret.yml
+   copernicus:
+     username: your_username
+     password: your_password
+   ```
+
+3. Save the file.
+
+
+---
+
+# Run the Main Script
 To search and download Sentinel products:
 ```bash
 pdm run python phisenapi/main.py
@@ -72,12 +91,6 @@ The script will:
 1. Authenticate with the Copernicus Data Space Ecosystem.
 2. Search for Sentinel products within the specified AOI and date range.
 3. Download the first matching product using S3.
-
----
-
-## Project Structure
-- `phisenapi/`: Core modules including authentication, search, and download.
-- `main.py`: Entry point for executing the tool.
 
 ---
 

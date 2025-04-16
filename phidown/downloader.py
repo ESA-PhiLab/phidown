@@ -7,16 +7,18 @@ import boto3
 from tqdm import tqdm
 import time
 import json
+import yaml
 import argparse
 
 
-# Load credentials from config.json
-config_path = os.path.join(os.path.dirname(__file__), "config.json")
-with open(config_path, "r") as config_file:
-    credentials = json.load(config_file)
 
-username = credentials.get("username")
-password = credentials.get("password")
+# Load the YAML file
+with open('/Users/roberto.delprete/Library/CloudStorage/OneDrive-ESA/Desktop/phidown/phidown/secret.yml', 'r') as file:
+    secrets = yaml.safe_load(file)
+
+# Access the credentials:
+username = secrets['credentials']['username']
+password = secrets['credentials']['password']
 
 
 # Set up command line argument parser
