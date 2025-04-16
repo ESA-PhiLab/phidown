@@ -23,15 +23,13 @@ This repository provides tools for managing Sentinel data using AWS services and
 
 ## Prerequisites
 - Python 3.8 or higher
-- [PDM](https://pdm.fming.dev/) (Python Dependency Manager)
-
-
 
 ---
 
 ## Installation
 
 ### Step 1: Install PDM
+- [PDM](https://pdm.fming.dev/) (Python Dependency Manager). We gonna use pdm to simplify our life. 
 If you don't already have PDM installed, install it via pip:
 ```bash
 pip install pdm
@@ -39,8 +37,8 @@ pip install pdm
 
 ### Step 2: Clone the Repository
 ```bash
-git clone https://github.com/your-username/SentinelAPI.git
-cd SentinelAPI
+git clone https://github.com/sirbastiano/phidown.git
+cd phidown
 ```
 
 ### Step 3: Install Dependencies Using PDM

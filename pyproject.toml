@@ -10,11 +10,13 @@ dependencies = [
     "dataset-tools==0.1.6",
     "supervisely==6.73.338"
 ]
-optional-dependencies = { 
-    widgets = ["ipywidget"]
-}
+
 requires-python = ">=3.8"
 
+[project.optional-dependencies]
+viz = [
+    "ipywidgets>=8.1.6",
+]
 [build-system]
 requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -24,6 +26,9 @@ where = ["phidown"]
 
 [tool.pdm]
 distribution = true
+
+[tool.pdm.dependencies]
+ipywidgets = "*"
 
 [tool.pdm.build]
 package-dir = "phidown"
