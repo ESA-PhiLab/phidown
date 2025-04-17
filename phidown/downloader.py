@@ -50,7 +50,20 @@ def get_access_token(config, username, password):
     """
     Retrieve an access token from the authentication server.
     This token is used for subsequent API calls.
+    Save the token to a file on the machine for reuse.
     """
+    token_file = os.path.expanduser("~/.eo_access_token")
+
+    # Check if a valid token already exists
+    if os.path.exists(token_file):
+        with open(token_file, "r") as file:
+            token_data = json.load(file)
+            if time.time() < token_data.get("expires_at", 0):
+                print("Using cached access token.")
+                print(f"Access token: {token_data['access_token']}")
+                return token_data["access_token"]
+
+    # Request a new token
     auth_data = {
         "client_id": "cdse-public",
         "grant_type": "password",
@@ -59,7 +72,17 @@ def get_access_token(config, username, password):
     }
     response = requests.post(config["auth_server_url"], data=auth_data, verify=True, allow_redirects=False)
     if response.status_code == 200:
-        return json.loads(response.text)["access_token"]
+        token_response = response.json()
+        access_token = token_response["access_token"]
+        expires_in = token_response.get("expires_in", 3600)  # Default to 1 hour if not provided
+        expires_at = time.time() + expires_in
+
+        # Save the token to a file
+        with open(token_file, "w") as file:
+            json.dump({"access_token": access_token, "expires_at": expires_at}, file)
+
+        print("Access token saved to disk.")
+        return access_token
     else:
         print(f"Failed to retrieve access token. Status code: {response.status_code}")
         exit(1)
@@ -88,9 +111,18 @@ def get_temporary_s3_credentials(headers):
         print(f"access: {s3_credentials['access_id']}")
         print(f"secret: {s3_credentials['secret']}")
         return s3_credentials
+    elif credentials_response.status_code == 403:
+        response_body = credentials_response.json()
+        if "Max number of credentials reached" in response_body.get("detail", ""):
+            print("Error: Maximum number of temporary S3 credentials reached.")
+            print("Please delete unused credentials and try again.")
+        else:
+            print("Error: Access denied. Please check your permissions or access token.")
+        print(f"Response Body: {credentials_response.text}")
+        exit(1)
     else:
         print(f"Failed to create temporary S3 credentials. Status code: {credentials_response.status_code}")
-        print("Product download aborted.")
+        print(f"Response Body: {credentials_response.text}")
         exit(1)
 
 def format_filename(filename, length=40):

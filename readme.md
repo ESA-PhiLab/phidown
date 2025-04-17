@@ -1,7 +1,6 @@
-# Φ-Down: Sentinel Data Management Tool
+📦 **Φ**-Down: Sentinel Data Management Tool
 
 ![Phi-Down Logo](./assets/phidown_logo.png)
-
 
 #### This repository provides tools for managing Sentinel data using AWS services and dataset tools. It includes functionality for authentication, product search, and downloading Earth Observation (EO) products.
 
@@ -76,6 +75,7 @@ pip install pdm
 Use the `pdm.lock` file to install exact versions of dependencies:
 ```bash
 pdm add git+https://github.com/sirbastiano/phidown.git
+pdm install
 ```
 
 ### Alternative: Build from source
