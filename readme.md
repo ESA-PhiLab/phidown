@@ -1,4 +1,8 @@
-📦 **Φ**-Down: Sentinel Data Management Tool
+<div align="center">
+
+# 📦 **Φ**-Down: Copernicus Data Management Tool
+
+</div>
 
 ![Phi-Down Logo](./assets/phidown_logo.png)
 

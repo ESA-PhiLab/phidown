@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+# S3 Credentials: https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials
 import os
 import json
 import requests 
