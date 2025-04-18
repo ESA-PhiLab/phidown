@@ -203,7 +203,7 @@ For a detailed example of how to use **Φ-Down**, refer to the [usage.ipynb](./u
 - Ensure you're using Python 3.8 or higher.
 - Reinstall dependencies using `pdm install`.
 - Check logs and error messages for further insights.
-- If credentials are not deleted from S3 server you will encounter error 403.
+- If credentials are not deleted from the S3 server, you may encounter a 403 error. To resolve this, log in to the Copernicus Data Space Ecosystem, navigate to the S3 Credentials Manager, and manually delete any unused or expired credentials.
 
 ---
 
