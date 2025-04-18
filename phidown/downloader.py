@@ -166,7 +166,7 @@ def traverse_and_download_s3(s3_resource, bucket_name, base_s3_path, local_path,
 
         # Check if a file with the same name as the directory exists
         if os.path.isfile(local_dir):
-            print(f"Conflict detected: {local_dir} is a file. Removing it to create a directory.")
+            print(f"Creating a directory: {local_dir}")
             os.remove(local_dir)
 
         # Create the directory if it doesn't exist
