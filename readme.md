@@ -107,8 +107,11 @@ The following collections are currently available:
 
 ## Installation
 
+<details>
+<summary><strong>Installation Steps</strong></summary>
+
 ### Step 1: Install PDM
-We gonna use [PDM](https://pdm.fming.dev/) (Python Dependency Manager) to simplify our life. 
+We will use [PDM](https://pdm.fming.dev/) (Python Dependency Manager) to simplify our life.  
 If you don't already have PDM installed, install it via pip:
 ```bash
 pip install pdm
@@ -121,7 +124,7 @@ pdm add git+https://github.com/sirbastiano/phidown.git
 pdm install
 ```
 
-### Alternative: Build from source
+### Alternative: Build from Source
 If you prefer using pip, you can install the dependencies directly:
 ```bash
 git clone https://github.com/sirbastiano/phidown.git & cd phidown
@@ -130,27 +133,31 @@ pip install .
 
 This will install the package and its dependencies as defined in the `pyproject.toml` file.
 
+</details>
+
 ---
 
 ## Usage
 
-### Configure Credentials
+<details>
+<summary><strong>Configure Credentials</strong></summary>
 
 To authenticate with the Copernicus Data Space Ecosystem, you need to create a `secret.yml` file containing your credentials. Follow these steps:
 
 1. Create a file named `secret.yml` in the root directory of the project.
 2. Add the following content to the file, replacing `your_username` and `your_password` with your actual credentials:
 
-   ```yaml
-   # filepath: ./phidown/secret.yml
-   copernicus:
-     username: <your_username>
-     password: <your_password>
-   ```
+  ```yaml
+  # filepath: ./phidown/secret.yml
+  copernicus:
+    username: <your_username>
+    password: <your_password>
+  ```
 
 3. Save the file.
 
-```markdown
+---
+
 > **💡 Alternative: Pass Credentials at Execution**  
 >  
 > Instead of using a `secret.yml` file, you can pass your credentials directly when running the script. Use the following command:  
@@ -166,16 +173,27 @@ To authenticate with the Copernicus Data Space Ecosystem, you need to create a `
 > 1. Authenticate with the Copernicus Data Space Ecosystem.  
 > 2. Search for Sentinel products within the specified AOI and date range.  
 > 3. Download the first matching product using S3.  
-```
+</details>
+
+
 
 ### Example Notebook
 
 For a detailed example of how to use **Φ-Down**, refer to the [usage.ipynb](./usage.ipynb) notebook. It provides step-by-step instructions and practical use cases to help you get started quickly.
 
+> **⚠️ Search Optimization Tips⚠️**  
+>  
+> Crucial for the search performance is specifying the collection name. Example:  
+> `Collection/Name eq 'SENTINEL-3'`.  
+>  
+> An additional efficient way to accelerate the query performance is limiting the query by acquisition dates, e.g.:  
+> `ContentDate/Start gt 2022-05-03T00:00:00.000Z and ContentDate/Start lt 2022-05-21T00:00:00.000Z`.  
+>  
+> When searching for products and adding a wide range of dates to the query, e.g., from 2017 to 2023, we recommend splitting the query into individual years, e.g., from January 1, 2023, to December 31, 2023.
 
 
 ## Notes
-- **Credentials**: Update your username and password in `phisenapi/main.py`. Do **not** share this file publicly.
+- **Credentials**: Update your username and password in `phodown/secret.yml`. Do **not** share this file publicly.
 - **Virtual Environment**: PDM manages a dedicated virtual environment for the project.
 - **Faster Setup**: Using `pdm.lock` improves reproducibility and setup speed.
 
@@ -185,6 +203,7 @@ For a detailed example of how to use **Φ-Down**, refer to the [usage.ipynb](./u
 - Ensure you're using Python 3.8 or higher.
 - Reinstall dependencies using `pdm install`.
 - Check logs and error messages for further insights.
+- If credentials are not deleted from S3 server you will encounter error 403.
 
 ---
 
@@ -224,16 +243,6 @@ We welcome contributions to **Φ-Down**! Here's how you can get involved:
 If you encounter any issues or have questions, feel free to open an issue in the repository or join the discussion in the [Discussions](https://github.com/sirbastiano/phidown/discussions) section.
 
 We appreciate your feedback and contributions to make **Φ-Down** even better!
-
-> **⚠️ Search Optimization Tips⚠️**  
->  
-> Crucial for the search performance is specifying the collection name. Example:  
-> `Collection/Name eq 'SENTINEL-3'`.  
->  
-> An additional efficient way to accelerate the query performance is limiting the query by acquisition dates, e.g.:  
-> `ContentDate/Start gt 2022-05-03T00:00:00.000Z and ContentDate/Start lt 2022-05-21T00:00:00.000Z`.  
->  
-> When searching for products and adding a wide range of dates to the query, e.g., from 2017 to 2023, we recommend splitting the query into individual years, e.g., from January 1, 2023, to December 31, 2023.
 
 ---
 
