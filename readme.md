@@ -28,7 +28,7 @@ Effortlessly manage, search, and download Earth Observation data with **Φ-Down*
 
 - Authenticate with the Copernicus Data Space Ecosystem.
 - Search for Sentinel products using the OData API.
-- Download Sentinel products using the S3 protocol.
+- Download Sentinel products using the S3 protocol. (Your credentials are stored at: https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials)
 
 The following collections are currently available:
 
@@ -150,21 +150,28 @@ To authenticate with the Copernicus Data Space Ecosystem, you need to create a `
 
 3. Save the file.
 
-### Alternative: Pass Credentials at Execution
-
-Instead of using a `secret.yml` file, you can pass your credentials directly when running the script. Use the following command:
-
-```bash
-pdm run python phidown/downloader.py --username <your_username> --password <your_password> --eo_product_name <eo_product_name>
+```markdown
+> **💡 Alternative: Pass Credentials at Execution**  
+>  
+> Instead of using a `secret.yml` file, you can pass your credentials directly when running the script. Use the following command:  
+>  
+> ```bash
+> pdm run python phidown/downloader.py --username <your_username> --password <your_password> --eo_product_name <eo_product_name>
+> ```  
+>  
+> Replace `your_username` and `your_password` with your actual credentials.  
+> Replace `eo_product_name` with your actual product name you want to download.  
+>  
+> The script will:  
+> 1. Authenticate with the Copernicus Data Space Ecosystem.  
+> 2. Search for Sentinel products within the specified AOI and date range.  
+> 3. Download the first matching product using S3.  
 ```
 
-Replace `your_username` and `your_password` with your actual credentials.
-Replace `eo_product_name` with your actual product name you want to download.
+### Example Notebook
 
-The script will:
-1. Authenticate with the Copernicus Data Space Ecosystem.
-2. Search for Sentinel products within the specified AOI and date range.
-3. Download the first matching product using S3.
+For a detailed example of how to use **Φ-Down**, refer to the [usage.ipynb](./usage.ipynb) notebook. It provides step-by-step instructions and practical use cases to help you get started quickly.
+
 
 
 ## Notes
