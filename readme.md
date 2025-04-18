@@ -1,3 +1,15 @@
+![GitHub stars](https://img.shields.io/github/stars/sirbastiano/phidown.svg)
+![GitHub forks](https://img.shields.io/github/forks/sirbastiano/phidown.svg)
+![GitHub issues](https://img.shields.io/github/issues/sirbastiano/phidown.svg)
+![GitHub license](https://img.shields.io/github/license/sirbastiano/phidown.svg)
+![GitHub pull requests](https://img.shields.io/github/issues-pr/sirbastiano/phidown.svg)
+![GitHub last commit](https://img.shields.io/github/last-commit/sirbastiano/phidown.svg)
+![GitHub code size](https://img.shields.io/github/languages/code-size/sirbastiano/phidown.svg)
+![GitHub top language](https://img.shields.io/github/languages/top/sirbastiano/phidown.svg)
+![GitHub repo size](https://img.shields.io/github/repo-size/sirbastiano/phidown.svg)
+![GitHub contributors](https://img.shields.io/github/contributors/sirbastiano/phidown.svg)
+
+
 <div align="center">
 
 # 📦 **Φ**-Down: Copernicus Data Management Tool
@@ -8,15 +20,6 @@
 
 #### This repository provides tools for managing Sentinel data using AWS services and dataset tools. It includes functionality for authentication, product search, and downloading Earth Observation (EO) products.
 
-> **⚠️ Search Optimization Tips⚠️**  
->  
-> Crucial for the search performance is specifying the collection name. Example:  
-> `Collection/Name eq 'SENTINEL-3'`.  
->  
-> An additional efficient way to accelerate the query performance is limiting the query by acquisition dates, e.g.:  
-> `ContentDate/Start gt 2022-05-03T00:00:00.000Z and ContentDate/Start lt 2022-05-21T00:00:00.000Z`.  
->  
-> When searching for products and adding a wide range of dates to the query, e.g., from 2017 to 2023, we recommend splitting the query into individual years, e.g., from January 1, 2023, to December 31, 2023.
 
 ---
 ## Features
@@ -95,7 +98,7 @@ This will install the package and its dependencies as defined in the `pyproject.
 
 ## Usage
 
-### Step 4: Configure Credentials
+### Configure Credentials
 
 To authenticate with the Copernicus Data Space Ecosystem, you need to create a `secret.yml` file containing your credentials. Follow these steps:
 
@@ -105,8 +108,8 @@ To authenticate with the Copernicus Data Space Ecosystem, you need to create a `
    ```yaml
    # filepath: ./phidown/secret.yml
    copernicus:
-     username: your_username
-     password: your_password
+     username: <your_username>
+     password: <your_password>
    ```
 
 3. Save the file.
@@ -116,7 +119,7 @@ To authenticate with the Copernicus Data Space Ecosystem, you need to create a `
 Instead of using a `secret.yml` file, you can pass your credentials directly when running the script. Use the following command:
 
 ```bash
-pdm run python phidown/downloader.py --username your_username --password your_password --eo_product_name <eo_product_name>
+pdm run python phidown/downloader.py --username <your_username> --password <your_password> --eo_product_name <eo_product_name>
 ```
 
 Replace `your_username` and `your_password` with your actual credentials.
@@ -139,6 +142,18 @@ The script will:
 - Ensure you're using Python 3.8 or higher.
 - Reinstall dependencies using `pdm install`.
 - Check logs and error messages for further insights.
+
+
+
+> **⚠️ Search Optimization Tips⚠️**  
+>  
+> Crucial for the search performance is specifying the collection name. Example:  
+> `Collection/Name eq 'SENTINEL-3'`.  
+>  
+> An additional efficient way to accelerate the query performance is limiting the query by acquisition dates, e.g.:  
+> `ContentDate/Start gt 2022-05-03T00:00:00.000Z and ContentDate/Start lt 2022-05-21T00:00:00.000Z`.  
+>  
+> When searching for products and adding a wide range of dates to the query, e.g., from 2017 to 2023, we recommend splitting the query into individual years, e.g., from January 1, 2023, to December 31, 2023.
 
 ---
 
