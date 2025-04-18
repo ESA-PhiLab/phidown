@@ -13,7 +13,7 @@ import argparse
 
 
 # Load the YAML file
-with open('/Users/roberto.delprete/Library/CloudStorage/OneDrive-ESA/Desktop/phidown/phidown/secret.yml', 'r') as file:
+with open('secret.yml', 'r') as file:
     secrets = yaml.safe_load(file)
 
 # Access the credentials:

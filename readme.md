@@ -59,7 +59,41 @@ The following collections are currently available:
 
 <details>
 <summary><strong>Copernicus Contributing Missions (CCM)</strong></summary>
-<!-- Add CCM collections here if available -->
+
+<h4>1. Historical ESA Missions</h4>
+<ul>
+  <li><strong>ERS-1 / ERS-2</strong> – Radar and atmospheric data (1991–2011)</li>
+  <li><strong>Envisat</strong> – Multispectral and radar data for land, ocean, and atmospheric monitoring (2002–2012)</li>
+</ul>
+
+<h4>2. ESA Earth Explorer Missions</h4>
+<ul>
+  <li><strong>SMOS</strong> – Soil moisture and ocean salinity measurements</li>
+  <li><strong>CryoSat-2</strong> – Ice thickness and elevation monitoring</li>
+</ul>
+
+<h4>3. European National and Commercial Missions</h4>
+<ul>
+  <li><strong>SPOT (4/5)</strong> – High-resolution optical imagery</li>
+  <li><strong>TerraSAR-X / TanDEM-X</strong> – High-resolution SAR data</li>
+  <li><strong>COSMO-SkyMed</strong> – SAR imagery for various applications</li>
+  <li><strong>Pléiades</strong> – Very high-resolution optical data</li>
+  <li><strong>RapidEye</strong> – Multispectral imagery for vegetation monitoring</li>
+  <li><strong>DMC Constellation</strong> – Disaster monitoring with optical imagery</li>
+</ul>
+
+<h4>4. International Missions</h4>
+<ul>
+  <li><strong>Landsat (NASA/USGS)</strong> – Long-term optical data archives</li>
+  <li><strong>Radarsat-2 (Canada)</strong> – SAR data for land and marine applications</li>
+  <li><strong>GOSAT (Japan)</strong> – Greenhouse gas monitoring</li>
+  <li><strong>GHGSat</strong> – High-resolution greenhouse gas measurements</li>
+</ul>
+
+<h4>5. Emerging European Missions</h4>
+<p>Includes nine under-contract missions to deliver multispectral, hyperspectral, thermal infrared, and atmospheric composition data. These missions will be progressively integrated as part of the Copernicus data offering.</p>
+<p><a href="https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/missions/emerging-contributing-missions">More info</a></p>
+
 </details>
 
 ---
@@ -143,7 +177,44 @@ The script will:
 - Reinstall dependencies using `pdm install`.
 - Check logs and error messages for further insights.
 
+---
 
+## Contributing
+
+We welcome contributions to **Φ-Down**! Here's how you can get involved:
+
+1. **Fork the Repository**: Click the "Fork" button at the top of this repository to create your own copy.
+2. **Clone Your Fork**: Clone your forked repository to your local machine:
+  ```bash
+  git clone https://github.com/your-username/phidown.git
+  ```
+3. **Create a Branch**: Create a new branch for your feature or bug fix:
+  ```bash
+  git checkout -b feature/your-feature-name
+  ```
+4. **Make Changes**: Implement your changes and commit them with a descriptive message:
+  ```bash
+  git commit -m "Add feature: your-feature-name"
+  ```
+5. **Push Changes**: Push your branch to your forked repository:
+  ```bash
+  git push origin feature/your-feature-name
+  ```
+6. **Submit a Pull Request**: Open a pull request to the main repository and describe your changes.
+
+### Guidelines
+- Follow the existing code style and structure.
+- Write clear and concise commit messages.
+- Ensure your code passes all tests and linting checks.
+- Update documentation if your changes affect usage.
+
+---
+
+## Community Support
+
+If you encounter any issues or have questions, feel free to open an issue in the repository or join the discussion in the [Discussions](https://github.com/sirbastiano/phidown/discussions) section.
+
+We appreciate your feedback and contributions to make **Φ-Down** even better!
 
 > **⚠️ Search Optimization Tips⚠️**  
 >  
