@@ -28,7 +28,19 @@ Effortlessly manage, search, and download Earth Observation data with **Φ-Down*
 
 - Authenticate with the Copernicus Data Space Ecosystem.
 - Search for Sentinel products using the OData API.
-- Download Sentinel products using the S3 protocol. (Your credentials are stored at: https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials)
+- Download Sentinel products using the S3 protocol. 
+
+
+## Credentials
+
+> Important:
+If your credentials are not deleted automatically, you must manually revoke them here:
+
+> 🔗 Manage S3 Credentials: https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials
+
+Stay secure — always clean up your credentials!
+
+##  Supported Missions
 
 The following collections are currently available:
 
@@ -193,7 +205,7 @@ For a detailed example of how to use **Φ-Down**, refer to the [usage.ipynb](./u
 
 
 ## Notes
-- **Credentials**: Update your username and password in `phodown/secret.yml`. Do **not** share this file publicly.
+- **Credentials**: Update your username and password in `phidown/secret.yml`. Do **not** share this file publicly.
 - **Virtual Environment**: PDM manages a dedicated virtual environment for the project.
 - **Faster Setup**: Using `pdm.lock` improves reproducibility and setup speed.
 

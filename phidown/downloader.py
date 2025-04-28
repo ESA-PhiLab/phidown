@@ -9,35 +9,96 @@ import time
 import json
 import yaml
 import argparse
+import sys 
+import getpass
+
+def load_credentials(file_name: str = 'secret.yml') -> tuple[str, str]:
+    """Load username and password from a YAML file or create the file if missing.
+
+    If the file is not found, the user is prompted to input credentials, which are then saved.
+
+    Args:
+        file_name (str, optional): Name of the YAML file. Defaults to 'secret.yml'.
+
+    Returns:
+        tuple[str, str]: A tuple containing (username, password).
+
+    Raises:
+        yaml.YAMLError: If the YAML file is invalid or cannot be written properly.
+        KeyError: If expected keys are missing in the YAML structure.
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    secrets_file_path = os.path.join(script_dir, file_name)
+
+    if not os.path.isfile(secrets_file_path):
+        print(f"Secrets file not found: {secrets_file_path}")
+        username = input("Enter username: ").strip()
+        password = getpass.getpass("Enter password: ").strip()
+
+        secrets = {
+            'credentials': {
+                'username': username,
+                'password': password
+            }
+        }
+
+        try:
+            with open(secrets_file_path, 'w') as file:
+                yaml.safe_dump(secrets, file)
+            print(f"Secrets file created at: {secrets_file_path}")
+        except yaml.YAMLError as e:
+            raise yaml.YAMLError(f"Error writing secrets file: {e}")
+
+    with open(secrets_file_path, 'r') as file:
+        try:
+            secrets = yaml.safe_load(file)
+        except yaml.YAMLError as e:
+            raise yaml.YAMLError(f"Invalid YAML format: {e}")
+
+    try:
+        username = secrets['credentials']['username']
+        password = secrets['credentials']['password']
+    except KeyError as e:
+        raise KeyError(f"Missing expected key in secrets file: {e}")
+
+    return username, password
 
 
+# def load_credentials(file_name: str = 'secret.yml') -> tuple[str, str]:
+#     """Load username and password from a YAML file located in the current script directory.
 
-# Load the YAML file
-with open('./phidown/secret.yml', 'r') as file:
-    secrets = yaml.safe_load(file)
+#     Args:
+#         file_name (str, optional): Name of the YAML file. Defaults to 'secret.yml'.
 
-# Access the credentials:
-username = secrets['credentials']['username']
-password = secrets['credentials']['password']
+#     Returns:
+#         tuple[str, str]: A tuple containing (username, password).
+
+#     Raises:
+#         FileNotFoundError: If the secrets file does not exist.
+#         KeyError: If expected keys are missing in the YAML structure.
+#         yaml.YAMLError: If the YAML file is invalid.
+#     """
+#     script_dir = os.path.dirname(os.path.abspath(__file__))
+#     secrets_file_path = os.path.join(script_dir, file_name)
+
+#     if not os.path.isfile(secrets_file_path):
+#         raise FileNotFoundError(f"Secrets file not found: {secrets_file_path}")
+
+#     with open(secrets_file_path, 'r') as file:
+#         try:
+#             secrets = yaml.safe_load(file)
+#         except yaml.YAMLError as e:
+#             raise yaml.YAMLError(f"Invalid YAML format: {e}")
+
+#     try:
+#         username = secrets['credentials']['username']
+#         password = secrets['credentials']['password']
+#     except KeyError as e:
+#         raise KeyError(f"Missing expected key in secrets file: {e}")
+
+#     return username, password
 
 
-# Set up command line argument parser
-parser = argparse.ArgumentParser(
-    description="Script to download EO product using OData and S3 protocol.",
-    epilog="Example usage: python script.py -u <username> -p <password> <eo_product_name>"
-)
-# User credentials
-
-parser.add_argument('-u', '--username', type=str, default=username, help='Username for authentication')
-parser.add_argument('-p', '--password', type=str, default=password, help='Password for authentication')
-parser.add_argument('-eo_product_name', type=str, help='Name of the Earth Observation product to be downloaded (required)')
-args = parser.parse_args()
-
-# Prompt for missing credentials
-if not args.username:
-    args.username = input("Enter username: ")
-if not args.password:
-    args.password = input("Enter password: ")
 
 # Configuration parameters
 config = {
@@ -175,9 +236,20 @@ def traverse_and_download_s3(s3_resource, bucket_name, base_s3_path, local_path,
         # Download the file
         download_file_s3(s3_resource.meta.client, bucket_name, s3_key, local_path_file, failed_downloads)
 
-def main():
+def pull_down(product_name=None, args=None):
+    """
+    Main function to orchestrate the download process.
+    """
+    if product_name is None:
+        product_name = args.eo_product_name
+    
     # Step 1: Retrieve the access token
-    access_token = get_access_token(config, args.username, args.password)
+    if args is None:
+        # Usage example
+        username, password = load_credentials()
+        access_token = get_access_token(config, username, password)
+    else:
+        access_token = get_access_token(config, args.username, args.password)
 
     # Step 2: Set up headers for API calls
     headers = {
@@ -186,7 +258,7 @@ def main():
     }
 
     # Step 3: Get EO product details (including S3 path)
-    eo_product_id, s3_path = get_eo_product_details(config, headers, args.eo_product_name)
+    eo_product_id, s3_path = get_eo_product_details(config, headers, product_name)
     bucket_name, base_s3_path = s3_path.lstrip('/').split('/', 1)
 
     # Step 4: Get temporary S3 credentials
@@ -200,7 +272,7 @@ def main():
                                  aws_secret_access_key=s3_credentials["secret"])
 
     # Step 6: Create the top-level folder and start download
-    top_level_folder = args.eo_product_name
+    top_level_folder = product_name
     os.makedirs(top_level_folder, exist_ok=True)
     failed_downloads = []
     traverse_and_download_s3(s3_resource, bucket_name, base_s3_path, top_level_folder, failed_downloads)
@@ -221,4 +293,23 @@ def main():
         print(f"Failed to delete temporary S3 credentials. Status code: {delete_response.status_code}")
 
 if __name__ == "__main__":
-    main()
+    
+    # Set up command line argument parser
+    parser = argparse.ArgumentParser(
+        description="Script to download EO product using OData and S3 protocol.",
+        epilog="Example usage: python script.py -u <username> -p <password> <eo_product_name>"
+    )
+    # User credentials
+
+    parser.add_argument('-u', '--username', type=str, default=username, help='Username for authentication')
+    parser.add_argument('-p', '--password', type=str, default=password, help='Password for authentication')
+    parser.add_argument('-eo_product_name', type=str, help='Name of the Earth Observation product to be downloaded (required)')
+    args = parser.parse_args()
+
+    # Prompt for missing credentials
+    if not args.username:
+        args.username = input("Enter username: ")
+    if not args.password:
+        args.password = input("Enter password: ")
+    
+    pull_down()

@@ -4,6 +4,7 @@ import sys
 import os, json 
 import typing
 from datetime import datetime
+from downloader import pull_down
 # Write the credentials from config.json!
 
 ############################################################################
@@ -380,3 +381,12 @@ class CopernicusDataSearcher:
         
         return self.df[columns]
 
+
+    def download_product(self, eo_product_name):
+        """
+        Download the EO product using the downloader module.
+        """
+        
+        # Call the downloader function
+        pull_down(eo_product_name)
+        # You can also add logic to handle the download process here if needed
