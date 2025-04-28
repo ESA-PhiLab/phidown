@@ -170,7 +170,7 @@ To authenticate with the Copernicus Data Space Ecosystem, you need to create a `
 
 ---
 
-> **💡 Alternative: Pass Credentials at Execution**  
+> **💡 Alternative: Pass Credentials w CLI**  
 >  
 > Instead of using a `secret.yml` file, you can pass your credentials directly when running the script. Use the following command:  
 >  

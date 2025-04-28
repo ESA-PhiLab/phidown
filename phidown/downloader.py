@@ -148,6 +148,7 @@ def get_access_token(config, username, password):
         print(f"Failed to retrieve access token. Status code: {response.status_code}")
         exit(1)
 
+
 def get_eo_product_details(config, headers, eo_product_name):
     """
     Retrieve EO product details using the OData API to determine the S3 path.
@@ -160,6 +161,7 @@ def get_eo_product_details(config, headers, eo_product_name):
     else:
         print(f"Failed to retrieve EO product details. Status code: {response.status_code}")
         exit(1)
+
 
 def get_temporary_s3_credentials(headers):
     """
@@ -186,6 +188,7 @@ def get_temporary_s3_credentials(headers):
         print(f"Response Body: {credentials_response.text}")
         exit(1)
 
+
 def format_filename(filename, length=40):
     """
     Format a filename to a fixed length, truncating if necessary.
@@ -194,6 +197,7 @@ def format_filename(filename, length=40):
         return filename[:length - 3] + '...'
     else:
         return filename.ljust(length)
+
 
 def download_file_s3(s3, bucket_name, s3_key, local_path, failed_downloads):
     """
@@ -211,6 +215,7 @@ def download_file_s3(s3, bucket_name, s3_key, local_path, failed_downloads):
     except Exception as e:
         print(f"Failed to download {s3_key}. Error: {e}")
         failed_downloads.append(s3_key)
+
 
 def traverse_and_download_s3(s3_resource, bucket_name, base_s3_path, local_path, failed_downloads):
     """
@@ -235,6 +240,7 @@ def traverse_and_download_s3(s3_resource, bucket_name, base_s3_path, local_path,
 
         # Download the file
         download_file_s3(s3_resource.meta.client, bucket_name, s3_key, local_path_file, failed_downloads)
+
 
 def pull_down(product_name=None, args=None):
     """
@@ -300,7 +306,8 @@ if __name__ == "__main__":
         epilog="Example usage: python script.py -u <username> -p <password> <eo_product_name>"
     )
     # User credentials
-
+    username, password = load_credentials()
+    # Add command line arguments
     parser.add_argument('-u', '--username', type=str, default=username, help='Username for authentication')
     parser.add_argument('-p', '--password', type=str, default=password, help='Password for authentication')
     parser.add_argument('-eo_product_name', type=str, help='Name of the Earth Observation product to be downloaded (required)')
@@ -312,4 +319,4 @@ if __name__ == "__main__":
     if not args.password:
         args.password = input("Enter password: ")
     
-    pull_down()
+    pull_down(product_name=args.eo_product_name, args=args)
