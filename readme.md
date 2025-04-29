@@ -302,4 +302,4 @@ We appreciate your feedback and contributions to make **Φ-Down** even better!
 ---
 
 ## License
-This project is licensed under the CC by 2.0 License.
+This project is licensed under the GNU License.
