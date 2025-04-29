@@ -27,10 +27,8 @@ Effortlessly manage, search, and download Earth Observation data with **Φ-Down*
 
 
 <div align="center">
-  <video width="1200" controls autoplay muted>
-    <source src="./assets/record.mov" type="video/mp4">
-    Your browser does not support the video tag.
-  </video>
+  <img src="./assets/record.gif" alt="Phi-Down Demo" width="800"/>
+  <p><em>Demo of Phi-Down searching and downloading Sentinel data</em></p>
 </div>
 
 
