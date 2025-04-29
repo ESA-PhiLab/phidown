@@ -31,6 +31,34 @@ Effortlessly manage, search, and download Earth Observation data with **Φ-Down*
 - Download Sentinel products using the S3 protocol. 
 
 
+Here's a quick example of how to use Φ-Down to search and download Sentinel data:
+
+```python
+from phidown.search import CopernicusDataSearcher
+# You can modify these parameters as needed
+
+searcher = CopernicusDataSearcher(
+    collection_name='SENTINEL-1',
+    product_type='SLC',
+    orbit_direction=None,
+    cloud_cover_threshold=None,
+    aoi_wkt=None,
+    start_date='2023-05-03T00:00:00.000Z',
+    end_date='2024-05-03T04:00:00.000Z',
+    top=1000,
+    # attributes={'swathIdentifier': 'WV1,WV2'}, # Swath identifier
+    attributes={'swathIdentifier': 'S1'}, # Swath identifier Stripmap: S1, ..., S6
+)
+
+df = searcher.execute_query()
+print(f"Number of results: {len(df)}")
+# Display the first few rows of the DataFrame
+searcher.display_results(top_n=15)
+```
+
+For more advanced use cases, including searching with geographical filters and batch downloading, see the [usage notebook](./how_to_start.ipynb).
+
+
 ## Credentials
 
 > Important:
