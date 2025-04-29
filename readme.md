@@ -1,14 +1,17 @@
 ![GitHub stars](https://img.shields.io/github/stars/ESA-PhiLab/phidown.svg)
 ![GitHub forks](https://img.shields.io/github/forks/ESA-PhiLab/phidown.svg)
 ![GitHub issues](https://img.shields.io/github/issues/ESA-PhiLab/phidown.svg)
-![GitHub license](https://img.shields.io/github/license/ESA-PhiLab/phidown.svg)
 ![GitHub pull requests](https://img.shields.io/github/issues-pr/ESA-PhiLab/phidown.svg)
 ![GitHub last commit](https://img.shields.io/github/last-commit/ESA-PhiLab/phidown.svg)
 ![GitHub code size](https://img.shields.io/github/languages/code-size/ESA-PhiLab/phidown.svg)
 ![GitHub top language](https://img.shields.io/github/languages/top/ESA-PhiLab/phidown.svg)
 ![GitHub repo size](https://img.shields.io/github/repo-size/ESA-PhiLab/phidown.svg)
 ![GitHub contributors](https://img.shields.io/github/contributors/ESA-PhiLab/phidown.svg)
-
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Documentation Status](https://img.shields.io/badge/docs-latest-green.svg)](https://github.com/ESA-PhiLab/phidown/wiki)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.placeholder.svg)](https://doi.org/10.5281/zenodo.placeholder)
 
 <div align="center">
 
