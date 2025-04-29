@@ -27,10 +27,11 @@ class CopernicusDataSearcher:
         self,
         base_url: str = "https://catalogue.dataspace.copernicus.eu/odata/v1/Products",
         config_path: typing.Optional[str] = None,
-        collection_names: typing.Optional[typing.List[str]] = ['SENTINEL-1'],
+        collection_name: typing.Optional[str] = 'SENTINEL-1',
         product_type: typing.Optional[str] = None,
         orbit_direction: typing.Optional[str] = None,
         cloud_cover_threshold: typing.Optional[float] = None,
+        attributes: typing.Optional[typing.Dict[str, typing.Union[str, int, float]]] = None,
         aoi_wkt: typing.Optional[str] = None,
         start_date: typing.Optional[str] = None,
         end_date: typing.Optional[str] = None,
@@ -43,7 +44,7 @@ class CopernicusDataSearcher:
         Args:
             base_url (str): The base URL for the OData API.
             config_path (str, optional): Path to the configuration file. Defaults to None.
-            collection_names (List[str], optional): Name of the collection to search. Defaults to ['SENTINEL-1'].
+            collection_name (List[str], optional): Name of the collection to search. Defaults to ['SENTINEL-1'].
             product_type (str, optional): Type of product to filter. Defaults to None.
             orbit_direction (str, optional): Orbit direction to filter (e.g., 'ASCENDING', 'DESCENDING'). Defaults to None.
             cloud_cover_threshold (float, optional): Maximum cloud cover percentage to filter. Defaults to None.
@@ -58,9 +59,8 @@ class CopernicusDataSearcher:
         # Load configuration
         self._load_config(config_path)
 
-        self.collection_names: typing.Optional[typing.List[str]] = collection_names
-        for c in collection_names:
-            self._validate_collection(c)
+        self.collection_name: typing.Optional[str] = collection_name
+        self._validate_collection(collection_name)
 
         self.product_type: typing.Optional[str] = product_type
         self._validate_product_type()
@@ -83,8 +83,18 @@ class CopernicusDataSearcher:
         self.order_by: str = order_by
         self._validate_order_by()
 
-        # Initialize placeholders for attributes
+
+        # Initialize placeholders for query results
         self._initialize_placeholders()
+
+
+        # Validate and set attributes
+        self.attributes: typing.Optional[typing.Dict[str]] = attributes
+        if self.attributes is not None:
+            self._validate_attributes()
+
+
+
 
     
     # - Private Methods:
@@ -136,22 +146,19 @@ class CopernicusDataSearcher:
             raise ValueError(f"Invalid collection name: {collection_name}. Must be one of: {', '.join(valid_collections)}")
 
 
-    def _get_valid_product_types(self, collection_names):
+    def _get_valid_product_types(self, collection_name):
         """
-        Extracts and filters valid product types from a configuration dictionary based on given collection names.
+        Extracts and filters valid product types from a configuration dictionary based on the given collection name.
 
         Args:
-            config (dict): A dictionary containing configuration data. It must include an 'attributes' key,
-                        where each value is a dictionary that may contain a 'productType' key.
-            collection_names (iterable): A collection of names to filter the product types. (e.g, SENTINEL-1, SENTINEL-2)
+            collection_name (str): The name of the collection to filter the product types. (e.g., SENTINEL-1, SENTINEL-2)
 
         Returns:
-            tuple: A tuple containing:
-                - valid_product_types (list): A flattened list of all product types from the configuration.
+            list: A list of valid product types for the given collection name.
         """
         product_types = {key: value.get('productType', None) for key, value in self.config['attributes'].items()}
-        valid_product_types = [ptype for key, ptypes in product_types.items() if key in collection_names for ptype in (ptypes or [])]
-        return valid_product_types
+        valid_product_types = product_types.get(collection_name, [])
+        return valid_product_types or []
 
 
     def _validate_product_type(self):
@@ -162,7 +169,7 @@ class CopernicusDataSearcher:
             TypeError: If the product type is not a string.
         """
 
-        valid_product_types = self._get_valid_product_types(self.collection_names)
+        valid_product_types = self._get_valid_product_types(self.collection_name)
         if self.product_type is None:
             raise ValueError("Product type cannot be None")
         if not isinstance(self.product_type, str):
@@ -284,6 +291,23 @@ class CopernicusDataSearcher:
                 raise ValueError("start_date must be earlier than end_date.")
 
 
+    def _validate_attributes(self):
+        """
+        Validate the 'attributes' parameter to ensure it is a dictionary with valid key-value pairs.
+
+        Raises:
+            TypeError: If 'attributes' is not a dictionary, or if its keys are not strings,
+                    or if its values are not strings, integers, or floats.
+        """
+        if not isinstance(self.attributes, dict):
+            raise TypeError("Attributes must be a dictionary")
+        for key, value in self.attributes.items():
+            if not isinstance(key, str):
+                raise TypeError("Attribute keys must be strings")
+            if not isinstance(value, (str, int, float)):
+                raise TypeError("Attribute values must be strings, integers, or floats")
+
+
     def _initialize_placeholders(self):
         """
         Initializes placeholder attributes for the class instance.
@@ -313,8 +337,8 @@ class CopernicusDataSearcher:
         """
         filters = []
 
-        if self.collection_names:
-            collection_filter = " or ".join([f"Collection/Name eq '{name}'" for name in self.collection_names])
+        if self.collection_name:
+            collection_filter = f"Collection/Name eq '{self.collection_name}'"
             filters.append(f"({collection_filter})")
 
         if self.product_type:
@@ -344,6 +368,32 @@ class CopernicusDataSearcher:
         if self.end_date:
             filters.append(f"ContentDate/Start lt {self.end_date}")
 
+
+        if self.attributes:
+            for key, value in self.attributes.items():
+                if isinstance(value, str):
+                    filters.append(
+                        f"Attributes/OData.CSC.StringAttribute/any(att:att/Name eq '{key}' "
+                        f"and att/OData.CSC.StringAttribute/Value eq '{value}')"
+                    )
+                elif isinstance(value, int):
+                    filters.append(
+                        f"Attributes/OData.CSC.IntegerAttribute/any(att:att/Name eq '{key}' "
+                        f"and att/OData.CSC.IntegerAttribute/Value eq {value})"
+                    )
+                elif isinstance(value, float):
+                    filters.append(
+                        f"Attributes/OData.CSC.DoubleAttribute/any(att:att/Name eq '{key}' "
+                        f"and att/OData.CSC.DoubleAttribute/Value eq {value})"
+                    )
+                else:
+                    raise TypeError(f"Unsupported attribute type for {key}: {type(value)}")
+        
+
+        # Combine all filters into a single filter condition
+        if not filters:
+            raise ValueError("No valid filters provided. At least one filter is required.")
+
         self.filter_condition = " and ".join(filters)
 
 
@@ -367,19 +417,27 @@ class CopernicusDataSearcher:
         return self.df
 
 
-    def display_results(self, columns=None):
+    def display_results(self, columns=None, top_n=10):
         """Display the query results with selected columns"""
         if self.df is None:
             self.execute_query()
             
         if columns is None:
-            columns = ['Id', 'Name', 'S3Path', 'GeoFootprint','OriginDate','Attributes']
+            columns = ['Id', 'Name', 'S3Path', 'GeoFootprint', 'OriginDate', 'Attributes']
         
         if 'OriginDate' in self.df.columns:
             self.df['OriginDate'] = pd.to_datetime(self.df['OriginDate']).dt.strftime('%Y-%m-%d %H:%M:%S')
         
+        if self.df is None:
+            raise ValueError("No data available. Please execute the query first.")
+        if not isinstance(columns, list):
+            raise TypeError("Columns must be a list of strings")
         
-        return self.df[columns]
+        if self.df.empty:
+            print("The DataFrame is empty.")
+            return None
+        else:
+            return self.df[columns].head(top_n)
 
 
     def download_product(self, eo_product_name):

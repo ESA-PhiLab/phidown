@@ -35,7 +35,7 @@
             "orbitDirection": ["ASCENDING", "DESCENDING"],
             "processingDate": null,
             "operationalMode": null,
-            "processingLevel": "L1",
+            "processingLevel": ["RAW", "L1"],
             "swathIdentifier": ["IW", "EW", "SM", "WV"],
             "processingCenter": null,
             "processorVersion": null,
