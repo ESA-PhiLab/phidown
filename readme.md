@@ -265,5 +265,13 @@ We appreciate your feedback and contributions to make **Φ-Down** even better!
 
 ---
 
+## Contact
+
+**Roberto Del Prete**  
+🌐 [LinkedIn](https://www.linkedin.com/in/roberto-del-prete/)  
+✉️ roberto.delprete@esa.int
+
+---
+
 ## License
 This project is licensed under the CC by 2.0 License.

@@ -20,6 +20,10 @@ viz = [
     "ipywidgets>=8.1.6",
     "folium>=0.18.0",
 ]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-mock>=3.10.0",
+]
 
 [build-system]
 requires = ["setuptools>=61", "wheel"]
