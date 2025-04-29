@@ -36,7 +36,7 @@
             "processingDate": null,
             "operationalMode": null,
             "processingLevel": ["RAW", "L1"],
-            "swathIdentifier": ["IW", "EW", "SM", "WV"],
+            "swathIdentifier": ["IW", "EW", "S1", "S2", "S3", "S4", "S5", "S6", "WV"],
             "processingCenter": null,
             "processorVersion": null,
             "segmentStartTime": null,

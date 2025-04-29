@@ -136,6 +136,13 @@ pdm add git+https://github.com/sirbastiano/phidown.git
 pdm install
 ```
 
+### Step 2b: Install All Dependencies (Including Optional)
+To install all dependencies, including optional ones, run the following command:
+
+```bash
+pdm install -G all
+```
+
 ### Alternative: Build from Source
 If you prefer using pip, you can install the dependencies directly:
 ```bash

@@ -9,7 +9,8 @@ dependencies = [
     "pandas==1.5.2",
     "dataset-tools==0.1.6",
     "supervisely==6.73.338",
-    "pyaml>=25.1.0"
+    "pyaml>=25.1.0",
+    "ipykernel>=6.29.5"
 ]
 
 requires-python = ">=3.8"
@@ -17,7 +18,9 @@ requires-python = ">=3.8"
 [project.optional-dependencies]
 viz = [
     "ipywidgets>=8.1.6",
+    "folium>=0.18.0",
 ]
+
 [build-system]
 requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
