@@ -6,7 +6,7 @@ authors = [{ name = "Roberto Del Prete", email = "roberto.delprete@esa.int" }]
 dependencies = [
     "boto3==1.37.34",
     "numpy==1.24.3",
-    "pandas==1.5.2",
+    "pandas>=1.5.2",
     "dataset-tools==0.1.6",
     "supervisely==6.73.338",
     "pyaml>=25.1.0",
