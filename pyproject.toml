@@ -13,7 +13,7 @@ dependencies = [
     "ipykernel>=6.29.5"
 ]
 
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 
 [project.optional-dependencies]
 viz = [
@@ -23,6 +23,7 @@ viz = [
 dev = [
     "pytest>=8.0.0",
     "pytest-mock>=3.10.0",
+    "flake8>=7.0.0",  # Add flake8
 ]
 
 [build-system]

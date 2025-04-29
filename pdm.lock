@@ -5,7 +5,7 @@
 groups = ["default", "viz"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:2c252fa0cfdd395453e2aa38d6ef575a85ec75b1800ae666cc6416cb225598bf"
+content_hash = "sha256:4ff843fbce2a9f9bfe70206e7b6bcb3d03a3238f2e22daf0f967cf57519b00a8"
 
 [[metadata.targets]]
 requires_python = ">=3.8"
