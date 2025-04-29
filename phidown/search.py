@@ -44,7 +44,7 @@ class CopernicusDataSearcher:
         Args:
             base_url (str): The base URL for the OData API.
             config_path (str, optional): Path to the configuration file. Defaults to None.
-            collection_name (List[str], optional): Name of the collection to search. Defaults to ['SENTINEL-1'].
+            collection_name (str, optional): Name of the collection to search. Defaults to 'SENTINEL-1'.
             product_type (str, optional): Type of product to filter. Defaults to None.
             orbit_direction (str, optional): Orbit direction to filter (e.g., 'ASCENDING', 'DESCENDING'). Defaults to None.
             cloud_cover_threshold (float, optional): Maximum cloud cover percentage to filter. Defaults to None.
@@ -428,8 +428,6 @@ class CopernicusDataSearcher:
         if 'OriginDate' in self.df.columns:
             self.df['OriginDate'] = pd.to_datetime(self.df['OriginDate']).dt.strftime('%Y-%m-%d %H:%M:%S')
         
-        if self.df is None:
-            raise ValueError("No data available. Please execute the query first.")
         if not isinstance(columns, list):
             raise TypeError("Columns must be a list of strings")
         
