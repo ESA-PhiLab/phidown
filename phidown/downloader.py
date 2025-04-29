@@ -11,8 +11,9 @@ import yaml
 import argparse
 import sys 
 import getpass
+from typing import Tuple  # Import Tuple from typing
 
-def load_credentials(file_name: str = 'secret.yml') -> tuple[str, str]:
+def load_credentials(file_name: str = 'secret.yml') -> Tuple[str, str]:
     """Load username and password from a YAML file or create the file if missing.
 
     If the file is not found, the user is prompted to input credentials, which are then saved.
