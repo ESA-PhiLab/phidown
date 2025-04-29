@@ -1,13 +1,13 @@
-![GitHub stars](https://img.shields.io/github/stars/sirbastiano/phidown.svg)
-![GitHub forks](https://img.shields.io/github/forks/sirbastiano/phidown.svg)
-![GitHub issues](https://img.shields.io/github/issues/sirbastiano/phidown.svg)
-![GitHub license](https://img.shields.io/github/license/sirbastiano/phidown.svg)
-![GitHub pull requests](https://img.shields.io/github/issues-pr/sirbastiano/phidown.svg)
-![GitHub last commit](https://img.shields.io/github/last-commit/sirbastiano/phidown.svg)
-![GitHub code size](https://img.shields.io/github/languages/code-size/sirbastiano/phidown.svg)
-![GitHub top language](https://img.shields.io/github/languages/top/sirbastiano/phidown.svg)
-![GitHub repo size](https://img.shields.io/github/repo-size/sirbastiano/phidown.svg)
-![GitHub contributors](https://img.shields.io/github/contributors/sirbastiano/phidown.svg)
+![GitHub stars](https://img.shields.io/github/stars/ESA-PhiLab/phidown.svg)
+![GitHub forks](https://img.shields.io/github/forks/ESA-PhiLab/phidown.svg)
+![GitHub issues](https://img.shields.io/github/issues/ESA-PhiLab/phidown.svg)
+![GitHub license](https://img.shields.io/github/license/ESA-PhiLab/phidown.svg)
+![GitHub pull requests](https://img.shields.io/github/issues-pr/ESA-PhiLab/phidown.svg)
+![GitHub last commit](https://img.shields.io/github/last-commit/ESA-PhiLab/phidown.svg)
+![GitHub code size](https://img.shields.io/github/languages/code-size/ESA-PhiLab/phidown.svg)
+![GitHub top language](https://img.shields.io/github/languages/top/ESA-PhiLab/phidown.svg)
+![GitHub repo size](https://img.shields.io/github/repo-size/ESA-PhiLab/phidown.svg)
+![GitHub contributors](https://img.shields.io/github/contributors/ESA-PhiLab/phidown.svg)
 
 
 <div align="center">
@@ -132,7 +132,7 @@ pip install pdm
 ### Step 2: Install Dependencies Using PDM
 Use the `pdm.lock` file to install exact versions of dependencies:
 ```bash
-pdm add git+https://github.com/sirbastiano/phidown.git
+pdm add git+https://github.com/ESA-PhiLab/phidown.git
 pdm install
 ```
 
@@ -146,7 +146,7 @@ pdm install -G all
 ### Alternative: Build from Source
 If you prefer using pip, you can install the dependencies directly:
 ```bash
-git clone https://github.com/sirbastiano/phidown.git & cd phidown
+git clone https://github.com/ESA-PhiLab/phidown.git & cd phidown
 pip install .
 ```
 
@@ -259,7 +259,7 @@ We welcome contributions to **Φ-Down**! Here's how you can get involved:
 
 ## Community Support
 
-If you encounter any issues or have questions, feel free to open an issue in the repository or join the discussion in the [Discussions](https://github.com/sirbastiano/phidown/discussions) section.
+If you encounter any issues or have questions, feel free to open an issue in the repository or join the discussion in the [Discussions](https://github.com/ESA-PhiLab/phidown/discussions) section.
 
 We appreciate your feedback and contributions to make **Φ-Down** even better!
 
