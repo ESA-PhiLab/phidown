@@ -1,33 +1,32 @@
-# This workflow publishes a Python package to PyPI when a release is created.
-name: Upload Python Package to PyPI when a Release is Created
+# GitHub Actions workflow for publishing a Python package to PyPI upon release.
+name: Publish Python Package to PyPI on Release
 
 on:
-    push:
-        branches:
-            - pypi
+    workflow_dispatch:
 
 jobs:
     pypi-publish:
-        name: Publish release to PyPI
+        name: PyPI Release Publication
         runs-on: ubuntu-latest
         permissions:
-            id-token: write # IMPORTANT: mandatory for trusted publishing
+            id-token: write # Required for trusted publishing
         steps:
-            - uses: actions/checkout@v4
+          - name: Checkout Repository
+            uses: actions/checkout@v4
 
-            - name: Set up Python
-                uses: actions/setup-python@v4
-                with:
-                    python-version: "3.x"
+          - name: Configure Python Environment
+            uses: actions/setup-python@v4
+            with:
+              python-version: "3.x"
 
-            - name: Set up PDM
-                uses: pdm-project/setup-pdm@v4
-                with:
-                    python-version: "3.x"
-                    cache: true
+          - name: Configure PDM Environment
+            uses: pdm-project/setup-pdm@v4
+            with:
+              python-version: "3.x"
+              cache: true
 
-            - name: Build package
-                run: pdm build
+          - name: Build Python Package
+            run: pdm build
 
-            - name: Publish package distributions to PyPI
-                uses: pypa/gh-action-pypi-publish@release/v1
+          - name: Upload Distributions to PyPI
+            uses: pypa/gh-action-pypi-publish@release/v1
