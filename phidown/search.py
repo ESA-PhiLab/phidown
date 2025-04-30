@@ -1,10 +1,11 @@
 import requests
 import pandas as pd
-import sys 
-import os, json 
+import os
+import json
 import typing
 from datetime import datetime
 from downloader import pull_down
+
 # Write the credentials from config.json!
 
 ############################################################################
@@ -32,7 +33,7 @@ class CopernicusDataSearcher:
         orbit_direction: typing.Optional[str] = None,
         cloud_cover_threshold: typing.Optional[float] = None,
         attributes: typing.Optional[typing.Dict[str, typing.Union[str, int, float]]] = None,
-        aoi_wkt: typing.Optional[str] = None,
+        aoi_wkt: typing.Optional[str] = None,  # Disclaimers: Polygon must start and end with the same point. Coordinates must be given in EPSG 4326
         start_date: typing.Optional[str] = None,
         end_date: typing.Optional[str] = None,
         top: int = 1000,
@@ -48,7 +49,7 @@ class CopernicusDataSearcher:
             product_type (str, optional): Type of product to filter. Defaults to None.
             orbit_direction (str, optional): Orbit direction to filter (e.g., 'ASCENDING', 'DESCENDING'). Defaults to None.
             cloud_cover_threshold (float, optional): Maximum cloud cover percentage to filter. Defaults to None.
-            aoi_wkt (str, optional): Area of Interest in WKT format. Disclaimers: Polygon must start and end with the same point. Coordinates must be given in EPSG 4326
+            aoi_wkt (str, optional): Area of Interest in WKT format.
             start_date (str, optional): Start date for filtering (ISO 8601 format). Defaults to None.
             end_date (str, optional): End date for filtering (ISO 8601 format). Defaults to None.
             top (int, optional): Maximum number of results to retrieve. Defaults to 1000.
@@ -56,8 +57,6 @@ class CopernicusDataSearcher:
         """
         self.base_url: str = base_url
         self.config: typing.Optional[dict] = self._load_config(config_path)
-        # Load configuration
-        self._load_config(config_path)
 
         self.collection_name: typing.Optional[str] = collection_name
         self._validate_collection(collection_name)
@@ -83,46 +82,39 @@ class CopernicusDataSearcher:
         self.order_by: str = order_by
         self._validate_order_by()
 
-
         # Initialize placeholders for query results
         self._initialize_placeholders()
-
 
         # Validate and set attributes
         self.attributes: typing.Optional[typing.Dict[str]] = attributes
         if self.attributes is not None:
             self._validate_attributes()
 
-
-
-
-    
     # - Private Methods:
     def _load_config(self, config_path=None):
-            """
-            Load the configuration file.
+        """
+        Load the configuration file.
 
-            Args:
-                config_path (str, optional): Path to the configuration file. Defaults to None.
+        Args:
+            config_path (str, optional): Path to the configuration file. Defaults to None.
 
-            Raises:
-                FileNotFoundError: If the configuration file is not found.
-                ValueError: If the configuration file is not a valid JSON file.
-            """
-            if config_path is None:
-                config_path = os.path.join(os.path.dirname(__file__), "config.json")
-            
-            try:
-                with open(config_path, "r") as config_file:
-                    config: dict = json.load(config_file)
-                    return config
-            except FileNotFoundError:
-                raise FileNotFoundError(f"Configuration file not found at {config_path}")
-            except json.JSONDecodeError:
-                raise ValueError(f"Configuration file at {config_path} is not a valid JSON file")
-            except Exception as e:
-                raise Exception(f"An error occurred while loading the configuration file: {e}")
+        Raises:
+            FileNotFoundError: If the configuration file is not found.
+            ValueError: If the configuration file is not a valid JSON file.
+        """
+        if config_path is None:
+            config_path = os.path.join(os.path.dirname(__file__), "config.json")
 
+        try:
+            with open(config_path, "r") as config_file:
+                config: dict = json.load(config_file)
+                return config
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Configuration file not found at {config_path}")
+        except json.JSONDecodeError:
+            raise ValueError(f"Configuration file at {config_path} is not a valid JSON file")
+        except Exception as e:
+            raise Exception(f"An error occurred while loading the configuration file: {e}")
 
     def _validate_collection(self, collection_name):
         """
@@ -145,7 +137,6 @@ class CopernicusDataSearcher:
         if collection_name not in valid_collections:
             raise ValueError(f"Invalid collection name: {collection_name}. Must be one of: {', '.join(valid_collections)}")
 
-
     def _get_valid_product_types(self, collection_name):
         """
         Extracts and filters valid product types from a configuration dictionary based on the given collection name.
@@ -160,15 +151,14 @@ class CopernicusDataSearcher:
         valid_product_types = product_types.get(collection_name, [])
         return valid_product_types or []
 
-
     def _validate_product_type(self):
         """
         Validates the provided product type against a list of valid product types.
+
         Raises:
             ValueError: If the product type is None, empty, or not in the list of valid product types.
             TypeError: If the product type is not a string.
         """
-
         valid_product_types = self._get_valid_product_types(self.collection_name)
         if self.product_type is None:
             raise ValueError("Product type cannot be None")
@@ -178,7 +168,6 @@ class CopernicusDataSearcher:
             raise ValueError("Product type cannot be empty")
         if self.product_type not in valid_product_types:
             raise ValueError(f"Invalid product type: {self.product_type}. Must be one of: {', '.join(valid_product_types)}")
-
 
     def _validate_order_by(self):
         """
@@ -208,7 +197,6 @@ class CopernicusDataSearcher:
         else:
             self.order_by = default_order_by
 
-
     def _validate_top(self):
         """
         Validate the 'top' parameter to ensure it is within the allowed range.
@@ -219,7 +207,6 @@ class CopernicusDataSearcher:
         if not (1 <= self.top <= 1000):
             raise ValueError("The 'top' parameter must be between 1 and 1000")
 
-
     def _validate_cloud_cover_threshold(self):
         """
         Validate the 'cloud_cover_threshold' parameter to ensure it is between 0 and 100.
@@ -229,7 +216,6 @@ class CopernicusDataSearcher:
         """
         if self.cloud_cover_threshold is not None and not (0 <= self.cloud_cover_threshold <= 100):
             raise ValueError("The 'cloud_cover_threshold' parameter must be between 0 and 100")
-
 
     def _validate_orbit_direction(self):
         """
@@ -243,7 +229,6 @@ class CopernicusDataSearcher:
             raise ValueError(
                 f"Invalid orbit direction: {self.orbit_direction}. Must be one of: {', '.join(valid_orbit_directions)}"
             )
-
 
     def _validate_aoi_wkt(self):
         """
@@ -263,7 +248,6 @@ class CopernicusDataSearcher:
             if coordinates[0] != coordinates[-1]:
                 raise ValueError("The 'aoi_wkt' polygon must start and end with the same point")
 
-
     def _validate_time(self):
         """
         Validate the 'start_date' and 'end_date' parameters to ensure they are in ISO 8601 format
@@ -272,7 +256,6 @@ class CopernicusDataSearcher:
         Raises:
             ValueError: If the dates are not in ISO 8601 format or if the start date is not earlier than the end date.
         """
-
         def is_iso8601(date_str):
             try:
                 datetime.fromisoformat(date_str)
@@ -290,7 +273,6 @@ class CopernicusDataSearcher:
             if self.start_date >= self.end_date:
                 raise ValueError("start_date must be earlier than end_date.")
 
-
     def _validate_attributes(self):
         """
         Validate the 'attributes' parameter to ensure it is a dictionary with valid key-value pairs.
@@ -306,7 +288,6 @@ class CopernicusDataSearcher:
                 raise TypeError("Attribute keys must be strings")
             if not isinstance(value, (str, int, float)):
                 raise TypeError("Attribute values must be strings, integers, or floats")
-
 
     def _initialize_placeholders(self):
         """
@@ -329,46 +310,44 @@ class CopernicusDataSearcher:
         self.json_data: typing.Optional[dict] = None
         self.df: typing.Optional[pd.DataFrame] = None
 
-
     # - Methods to build and execute the query:
-    def _build_filter(self):
-        """
-        Build the OData filter condition based on the provided parameters.
-        """
-        filters = []
-
+    def _add_collection_filter(self, filters):
         if self.collection_name:
             collection_filter = f"Collection/Name eq '{self.collection_name}'"
             filters.append(f"({collection_filter})")
 
+    def _add_product_type_filter(self, filters):
         if self.product_type:
             filters.append(
                 "Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'productType' "
                 f"and att/OData.CSC.StringAttribute/Value eq '{self.product_type}')"
             )
 
+    def _add_orbit_direction_filter(self, filters):
         if self.orbit_direction:
             filters.append(
                 "Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'orbitDirection' "
                 f"and att/OData.CSC.StringAttribute/Value eq '{self.orbit_direction}')"
             )
 
+    def _add_cloud_cover_filter(self, filters):
         if self.cloud_cover_threshold is not None:
             filters.append(
                 "Attributes/OData.CSC.DoubleAttribute/any(att:att/Name eq 'cloudCover' "
                 f"and att/OData.CSC.DoubleAttribute/Value lt {self.cloud_cover_threshold})"
             )
 
+    def _add_aoi_filter(self, filters):
         if self.aoi_wkt:
             filters.append(f"OData.CSC.Intersects(area=geography'SRID=4326;{self.aoi_wkt}')")
 
+    def _add_date_filters(self, filters):
         if self.start_date:
             filters.append(f"ContentDate/Start ge {self.start_date}")
-
         if self.end_date:
             filters.append(f"ContentDate/Start lt {self.end_date}")
 
-
+    def _add_attribute_filters(self, filters):
         if self.attributes:
             for key, value in self.attributes.items():
                 if isinstance(value, str):
@@ -388,14 +367,25 @@ class CopernicusDataSearcher:
                     )
                 else:
                     raise TypeError(f"Unsupported attribute type for {key}: {type(value)}")
-        
+
+    def _build_filter(self):
+        """
+        Build the OData filter condition based on the provided parameters.
+        """
+        filters = []
+        self._add_collection_filter(filters)
+        self._add_product_type_filter(filters)
+        self._add_orbit_direction_filter(filters)
+        self._add_cloud_cover_filter(filters)
+        self._add_aoi_filter(filters)
+        self._add_date_filters(filters)
+        self._add_attribute_filters(filters)
 
         # Combine all filters into a single filter condition
         if not filters:
             raise ValueError("No valid filters provided. At least one filter is required.")
 
         self.filter_condition = " and ".join(filters)
-
 
     def _build_query(self):
         """Build the full OData query URL"""
@@ -404,45 +394,41 @@ class CopernicusDataSearcher:
         self.url = f"{self.base_url}{self.query}"
         return self.url
 
-
     def execute_query(self):
         """Execute the query and retrieve data"""
         url = self._build_query()
         self.response = requests.get(url)
         self.response.raise_for_status()  # Raise an error for bad status codes
-        
+
         self.json_data = self.response.json()
         self.df = pd.DataFrame.from_dict(self.json_data['value'])
-        
-        return self.df
 
+        return self.df
 
     def display_results(self, columns=None, top_n=10):
         """Display the query results with selected columns"""
         if self.df is None:
             self.execute_query()
-            
+
         if columns is None:
             columns = ['Id', 'Name', 'S3Path', 'GeoFootprint', 'OriginDate', 'Attributes']
-        
+
         if 'OriginDate' in self.df.columns:
             self.df['OriginDate'] = pd.to_datetime(self.df['OriginDate']).dt.strftime('%Y-%m-%d %H:%M:%S')
-        
+
         if not isinstance(columns, list):
             raise TypeError("Columns must be a list of strings")
-        
+
         if self.df.empty:
             print("The DataFrame is empty.")
             return None
         else:
             return self.df[columns].head(top_n)
 
-
     def download_product(self, eo_product_name):
         """
         Download the EO product using the downloader module.
         """
-        
         # Call the downloader function
         pull_down(eo_product_name)
         # You can also add logic to handle the download process here if needed
