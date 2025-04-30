@@ -167,34 +167,42 @@ The following collections are currently available:
 <details>
 <summary><strong>Installation Steps</strong></summary>
 
-### Step 1: Install PDM
-We will use [PDM](https://pdm.fming.dev/) (Python Dependency Manager) to simplify our life.  
+### Option 1: Install from PyPI (Recommended)
+You can install it directly using pip:
+```bash
+pip install phidown
+```
+
+### Option 2: Install with PDM (Using Lock File)
+We recommend using [PDM](https://pdm.fming.dev/) (Python Dependency Manager) for managing dependencies, especially for development or ensuring exact versions.
+
+#### Step 1: Install PDM
 If you don't already have PDM installed, install it via pip:
 ```bash
 pip install pdm
 ```
 
-### Step 2: Install Dependencies Using PDM
-Use the `pdm.lock` file to install exact versions of dependencies:
+#### Step 2: Install Dependencies Using PDM
+Clone the repository and install dependencies using the `pdm.lock` file:
 ```bash
-pdm add git+https://github.com/ESA-PhiLab/phidown.git
+git clone https://github.com/ESA-PhiLab/phidown.git
+cd phidown
 pdm install
 ```
 
-### Step 2b: Install All Dependencies (Including Optional)
-To install all dependencies, including optional ones, run the following command:
-
+#### Step 3: Install All Dependencies (Including Optional)
+To install all dependencies, including optional ones for development or specific features:
 ```bash
 pdm install -G all
 ```
 
-### Alternative: Build from Source
-If you prefer using pip, you can install the dependencies directly:
+### Option 3: Build from Source (Using pip)
+If you prefer using pip without PDM, you can clone the repository and install directly:
 ```bash
-git clone https://github.com/ESA-PhiLab/phidown.git & cd phidown
+git clone https://github.com/ESA-PhiLab/phidown.git
+cd phidown
 pip install .
 ```
-
 This will install the package and its dependencies as defined in the `pyproject.toml` file.
 
 </details>
