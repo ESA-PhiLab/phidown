@@ -39,7 +39,8 @@ Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy
   <p><em>Demo of Phi-Down searching and downloading Sentinel data</em></p>
 </div>
 </div>
----
+
+
 ## Features
 
 - Authenticate with the Copernicus Data Space Ecosystem.
