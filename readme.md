@@ -32,11 +32,13 @@
 
 Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy to incorporate satellite data into your workflows without dealing with complex APIs or authentication processes.
 
+
 <div align="center">
-  <img src="./assets/record.gif" alt="Phi-Down Demo" width="500"/>
+<div style="overflow:hidden;width:500px;height:auto;">
+  <img src="./assets/record.gif" style="margin-left:-15px;" />
   <p><em>Demo of Phi-Down searching and downloading Sentinel data</em></p>
 </div>
-
+</div>
 ---
 ## Features
 
