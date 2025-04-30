@@ -17,7 +17,7 @@
 
 # 🌍 **Φ-Down**: Your Gateway to Copernicus Data
 
-Effortlessly manage, search, and download Earth Observation data with **Φ-Down**. Unlock the full potential of Copernicus datasets with ease and efficiency.
+*Effortlessly manage, search, and download Earth Observation data with **Φ-Down**. Unlock the full potential of Copernicus datasets with ease and efficiency.*
 
 </div>
 
@@ -26,18 +26,16 @@ Effortlessly manage, search, and download Earth Observation data with **Φ-Down*
 #### This repository provides tools for managing Sentinel data using AWS services and dataset tools. It includes functionality for authentication, product search, and downloading Earth Observation (EO) products.
 
 
-<div align="center">
-  <img src="./assets/record.gif" alt="Phi-Down Demo" width="800"/>
-  <p><em>Demo of Phi-Down searching and downloading Sentinel data</em></p>
-</div>
-
-
-
 ## Overview
 
 **Φ-Down** is a Python library that simplifies accessing Earth Observation data from the Copernicus Data Space Ecosystem. It provides a streamlined interface for searching, filtering, and downloading satellite imagery from various Sentinel missions and contributing datasets.
 
 Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy to incorporate satellite data into your workflows without dealing with complex APIs or authentication processes.
+
+<div align="center">
+  <img src="./assets/record.gif" alt="Phi-Down Demo" width="500"/>
+  <p><em>Demo of Phi-Down searching and downloading Sentinel data</em></p>
+</div>
 
 ---
 ## Features
