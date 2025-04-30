@@ -360,7 +360,7 @@ class CopernicusDataSearcher:
             )
 
         if self.aoi_wkt:
-            filters.append(f"geo.intersects(GeoFootprint, geography'{self.aoi_wkt}')")
+            filters.append(f"OData.CSC.Intersects(area=geography'SRID=4326;{self.aoi_wkt}')")
 
         if self.start_date:
             filters.append(f"ContentDate/Start ge {self.start_date}")
