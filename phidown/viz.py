@@ -4,6 +4,7 @@ import xml.etree.ElementTree as ET
 import folium
 import argparse
 
+
 def plot_kml_coordinates(kml_file, output_html="map_overlay.html"):
     """
     Extracts coordinates from a KML file and plots them on a map.
@@ -49,8 +50,7 @@ def plot_kml_coordinates(kml_file, output_html="map_overlay.html"):
     # Save the map to an HTML file
     m.save(output_html)
     print(f"Map has been saved as '{output_html}'. Open it in a browser to view.")
-    return m 
-
+    return m
 
 
 if __name__ == "__main__":
@@ -70,4 +70,3 @@ if __name__ == "__main__":
 
     # Call the function with the provided arguments
     plot_kml_coordinates(args.kml, args.output_html)
-    

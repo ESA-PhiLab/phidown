@@ -1,6 +1,6 @@
 [project]
 name = "phidown"
-version = "0.1.2"
+version = "0.1.3"
 description = "A project using AWS services and dataset tools for Sentinel data"
 authors = [{ name = "Roberto Del Prete", email = "roberto.delprete@esa.int" }]
 dependencies = [
@@ -10,7 +10,7 @@ dependencies = [
     "dataset-tools==0.1.6",
     "supervisely==6.73.338",
     "pyaml>=25.1.0",
-    "ipykernel>=6.29.5"
+    "ipykernel>=6.29.5",
 ]
 
 requires-python = ">=3.9"
@@ -23,7 +23,7 @@ viz = [
 dev = [
     "pytest>=8.0.0",
     "pytest-mock>=3.10.0",
-    "flake8>=7.0.0",  # Add flake8
+    "flake8>=7.2.0"
 ]
 
 [build-system]
@@ -36,8 +36,8 @@ where = ["phidown"]
 [tool.pdm]
 distribution = true
 
-[tool.pdm.dependencies]
-ipywidgets = "*"
+# Removed redundant [tool.pdm.dependencies] section
+# ipywidgets = "*"
 
 [tool.pdm.build]
 package-dir = "phidown"

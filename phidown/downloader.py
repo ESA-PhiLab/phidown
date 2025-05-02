@@ -2,16 +2,15 @@
 # S3 Credentials: https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials
 import os
 import json
-import requests 
+import requests
 import boto3
 from tqdm import tqdm
 import time
-import json
 import yaml
 import argparse
-import sys 
 import getpass
-from typing import Tuple  # Import Tuple from typing
+from typing import Tuple
+
 
 def load_credentials(file_name: str = 'secret.yml') -> Tuple[str, str]:
     """Load username and password from a YAML file or create the file if missing.
@@ -65,48 +64,13 @@ def load_credentials(file_name: str = 'secret.yml') -> Tuple[str, str]:
     return username, password
 
 
-# def load_credentials(file_name: str = 'secret.yml') -> tuple[str, str]:
-#     """Load username and password from a YAML file located in the current script directory.
-
-#     Args:
-#         file_name (str, optional): Name of the YAML file. Defaults to 'secret.yml'.
-
-#     Returns:
-#         tuple[str, str]: A tuple containing (username, password).
-
-#     Raises:
-#         FileNotFoundError: If the secrets file does not exist.
-#         KeyError: If expected keys are missing in the YAML structure.
-#         yaml.YAMLError: If the YAML file is invalid.
-#     """
-#     script_dir = os.path.dirname(os.path.abspath(__file__))
-#     secrets_file_path = os.path.join(script_dir, file_name)
-
-#     if not os.path.isfile(secrets_file_path):
-#         raise FileNotFoundError(f"Secrets file not found: {secrets_file_path}")
-
-#     with open(secrets_file_path, 'r') as file:
-#         try:
-#             secrets = yaml.safe_load(file)
-#         except yaml.YAMLError as e:
-#             raise yaml.YAMLError(f"Invalid YAML format: {e}")
-
-#     try:
-#         username = secrets['credentials']['username']
-#         password = secrets['credentials']['password']
-#     except KeyError as e:
-#         raise KeyError(f"Missing expected key in secrets file: {e}")
-
-#     return username, password
-
-
-
 # Configuration parameters
 config = {
     "auth_server_url": "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token",
     "odata_base_url": "https://catalogue.dataspace.copernicus.eu/odata/v1/Products",
     "s3_endpoint_url": "https://eodata.dataspace.copernicus.eu",
 }
+
 
 def get_access_token(config, username, password):
     """
@@ -208,7 +172,13 @@ def download_file_s3(s3, bucket_name, s3_key, local_path, failed_downloads):
     try:
         file_size = s3.head_object(Bucket=bucket_name, Key=s3_key)['ContentLength']
         formatted_filename = format_filename(os.path.basename(local_path))
-        with tqdm(total=file_size, unit='B', unit_scale=True, desc=formatted_filename, ncols=80, bar_format='{desc:.40}|{bar:20}| {percentage:3.0f}% {n_fmt}/{total_fmt}B') as pbar:
+        progress_bar_format = (
+            '{desc:.40}|{bar:20}| '
+            '{percentage:3.0f}% {n_fmt}/{total_fmt}B'
+        )
+        with tqdm(total=file_size, unit='B', unit_scale=True,
+                  desc=formatted_filename, ncols=80,
+                  bar_format=progress_bar_format) as pbar:
             def progress_callback(bytes_transferred):
                 pbar.update(bytes_transferred)
 
@@ -249,7 +219,7 @@ def pull_down(product_name=None, args=None):
     """
     if product_name is None:
         product_name = args.eo_product_name
-    
+
     # Step 1: Retrieve the access token
     if args is None:
         # Usage example
@@ -293,14 +263,19 @@ def pull_down(product_name=None, args=None):
             print(f"- {failed_file}")
 
     # Step 7: Delete the temporary S3 credentials
-    delete_response = requests.delete(f"https://s3-keys-manager.cloudferro.com/api/user/credentials/access_id/{s3_credentials['access_id']}", headers=headers)
+    delete_url = (
+        "https://s3-keys-manager.cloudferro.com/api/user/credentials/"
+        f"access_id/{s3_credentials['access_id']}"
+    )
+    delete_response = requests.delete(delete_url, headers=headers)
     if delete_response.status_code == 204:
         print("Temporary S3 credentials deleted successfully.")
     else:
         print(f"Failed to delete temporary S3 credentials. Status code: {delete_response.status_code}")
 
+
 if __name__ == "__main__":
-    
+
     # Set up command line argument parser
     parser = argparse.ArgumentParser(
         description="Script to download EO product using OData and S3 protocol.",
@@ -319,5 +294,5 @@ if __name__ == "__main__":
         args.username = input("Enter username: ")
     if not args.password:
         args.password = input("Enter password: ")
-    
+
     pull_down(product_name=args.eo_product_name, args=args)

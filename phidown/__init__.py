@@ -1,8 +1,8 @@
 # __init__.py
 
 """
-PhiSenAPI Package Initialization
+Package Initialization
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.2"
 __author__ = "Roberto Del Prete"

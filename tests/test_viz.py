@@ -1,6 +1,4 @@
 import pytest
-import os
-import folium
 from unittest.mock import patch, mock_open, MagicMock
 import xml.etree.ElementTree as ET
 from phidown.viz import plot_kml_coordinates
@@ -19,6 +17,7 @@ SAMPLE_KML_CONTENT = """
   </Document>
 </kml>
 """
+
 
 # Test successful plotting from KML
 @patch('builtins.open', new_callable=mock_open, read_data=SAMPLE_KML_CONTENT)
@@ -45,7 +44,7 @@ def test_plot_kml_coordinates_success(mock_polygon, mock_map, mock_parse, mock_f
     result_map = plot_kml_coordinates('dummy.kml', output_html='test_map.html')
 
     # Assertions
-    mock_file.assert_called_once_with('dummy.kml', 'r') # Assuming default read mode
+    mock_file.assert_called_once_with('dummy.kml', 'r')  # Add spaces before inline comment
     mock_parse.assert_called_once()
     mock_root.find.assert_called_once_with('.//gx:LatLonQuad/coordinates', {
         "gx": "http://www.google.com/kml/ext/2.2",
@@ -69,11 +68,13 @@ def test_plot_kml_coordinates_success(mock_polygon, mock_map, mock_parse, mock_f
     mock_map_instance.save.assert_called_once_with('test_map.html')
     assert result_map == mock_map_instance
 
+
 # Test KML file not found
 @patch('builtins.open', side_effect=FileNotFoundError("File not found"))
 def test_plot_kml_coordinates_file_not_found(mock_file):
     with pytest.raises(FileNotFoundError):
         plot_kml_coordinates('nonexistent.kml')
+
 
 # Test KML parsing error (e.g., invalid XML)
 @patch('builtins.open', new_callable=mock_open, read_data="<kml><invalid></kml>")
@@ -82,8 +83,10 @@ def test_plot_kml_coordinates_parse_error(mock_parse, mock_file):
     with pytest.raises(ET.ParseError):
         plot_kml_coordinates('invalid.kml')
 
+
 # Test KML missing coordinates tag
-@patch('builtins.open', new_callable=mock_open, read_data='<kml xmlns:gx="http://www.google.com/kml/ext/2.2"><gx:LatLonQuad></gx:LatLonQuad></kml>')
+@patch('builtins.open', new_callable=mock_open,
+       read_data='<kml xmlns:gx="http://www.google.com/kml/ext/2.2"><gx:LatLonQuad></gx:LatLonQuad></kml>')
 @patch('xml.etree.ElementTree.parse')
 def test_plot_kml_coordinates_missing_coords(mock_parse, mock_file):
     # Mock the ElementTree parsing to return None for find
@@ -93,5 +96,5 @@ def test_plot_kml_coordinates_missing_coords(mock_parse, mock_file):
     mock_tree.getroot.return_value = mock_root
     mock_parse.return_value = mock_tree
 
-    with pytest.raises(AttributeError): # Expect AttributeError when trying to access .text
+    with pytest.raises(AttributeError):  # Add spaces before inline comment
         plot_kml_coordinates('missing_coords.kml')

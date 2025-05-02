@@ -7,6 +7,7 @@ from phidown.downloader import load_credentials
 # Define the path to the directory where the test file is located
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
 # Test loading credentials when the file exists
 @patch('builtins.open', new_callable=mock_open, read_data='credentials:\n  username: testuser\n  password: testpass\n')
 @patch('os.path.isfile', return_value=True)
@@ -18,6 +19,7 @@ def test_load_credentials_file_exists(mock_isfile, mock_file):
     mock_file.assert_called_once_with(expected_path, 'r')
     assert username == 'testuser'
     assert password == 'testpass'
+
 
 # Test creating credentials file when it doesn't exist
 @patch('builtins.open', new_callable=mock_open)
@@ -45,12 +47,14 @@ def test_load_credentials_file_not_found(mock_safe_dump, mock_getpass, mock_inpu
     # For simplicity, we assume the read after write works as intended by the function logic.
     # A better approach might involve separate mocks for write and read.
 
+
 # Test invalid YAML format
 @patch('builtins.open', new_callable=mock_open, read_data='invalid yaml:')
 @patch('os.path.isfile', return_value=True)
 def test_load_credentials_invalid_yaml(mock_isfile, mock_file):
     with pytest.raises(yaml.YAMLError):
         load_credentials(file_name='invalid.yml')
+
 
 # Test missing keys in YAML
 @patch('builtins.open', new_callable=mock_open, read_data='credentials:\n  user: testuser\n')
