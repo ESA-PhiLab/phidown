@@ -249,6 +249,10 @@
         "S2GLC": {
             "productType": ["S2GLC"],
             "processorVersion": null
+        },
+        "CCM": {
+            "productType": ["NAO_MS4_2A_07B6"],
+            "processorVersion": null
         }
     }
 }
