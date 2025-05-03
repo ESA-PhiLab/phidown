@@ -8,6 +8,7 @@ from downloader import pull_down
 
 # Write the credentials from config.json!
 
+
 ############################################################################
 # Copernicus Data Searcher
 ############################################################################
@@ -22,6 +23,7 @@ from downloader import pull_down
 # configuration file based on the collection names provided.
 # The search results are returned as a pandas DataFrame, and you can
 # display specific columns of interest.
+
 
 class CopernicusDataSearcher:
     def __init__(
