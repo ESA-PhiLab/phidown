@@ -30,6 +30,14 @@ dev = [
 requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+where = ["phidown"]
+
 [tool.pdm]
 distribution = true
-packages = ["phidown"]
+
+# Removed redundant [tool.pdm.dependencies] section
+# ipywidgets = "*"
+
+[tool.pdm.build]
+package-dir = "phidown"
