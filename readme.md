@@ -339,9 +339,13 @@ We appreciate your feedback and contributions to make **Φ-Down** even better!
 
 Have questions, suggestions, or just want to connect? Reach out to the author:
 
-**Roberto Del Prete**
-*   [![LinkedIn](https://img.shields.io/badge/LinkedIn-%230A66C2.svg?&style=for-the-badge&logo=LinkedIn&logoColor=white)](https://www.linkedin.com/in/roberto-del-prete-8175a7147/)
-*   [![Email](https://img.shields.io/badge/Email-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:roberto.delprete@esa.int)
+**Dr. Roberto Del Prete**
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-%230A66C2.svg?&style=for-the-badge&logo=LinkedIn&logoColor=white)](https://www.linkedin.com/in/roberto-del-prete-8175a7147/)
+[![Email](https://img.shields.io/badge/Email-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:roberto.delprete@esa.int)
+<a href="https://scholar.google.com/citations?user=Dwc8YxwAAAAJ&hl=en" target="_blank" style="text-decoration: none;">
+    <img src="https://img.shields.io/badge/Google_Scholar-%234285F4.svg?&style=for-the-badge&logo=google-scholar&logoColor=white" alt="Google Scholar" style="margin: 0px;" />
+  </a>
 
 ---
 
