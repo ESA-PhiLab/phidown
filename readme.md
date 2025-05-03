@@ -211,7 +211,7 @@ pdm install
 #### Step 3: Install All Dependencies (Including Optional)
 To install all dependencies, including optional ones for development or specific features:
 ```bash
-pdm install -G all
+pdm install -G :all
 ```
 
 ### Option 3: Build from Source (Using pip)
