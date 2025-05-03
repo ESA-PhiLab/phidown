@@ -1,6 +1,6 @@
 [project]
 name = "phidown"
-version = "0.1.4"
+version = "0.1.5"
 description = "A project using AWS services and dataset tools for Sentinel data"
 authors = [{ name = "Roberto Del Prete", email = "roberto.delprete@esa.int" }]
 dependencies = [
@@ -30,14 +30,6 @@ dev = [
 requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools.packages.find]
-where = ["phidown"]
-
 [tool.pdm]
 distribution = true
-
-# Removed redundant [tool.pdm.dependencies] section
-# ipywidgets = "*"
-
-[tool.pdm.build]
-package-dir = "phidown"
+packages = ["phidown"]
