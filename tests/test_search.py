@@ -1,6 +1,9 @@
 import pytest
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+
 from phidown.search import CopernicusDataSearcher
-import os
 
 # Define the path to the config file relative to the test file
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'phidown', 'config.json')

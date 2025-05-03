@@ -1,7 +1,10 @@
 import pytest
-import os
+import os, sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import yaml
 from unittest.mock import patch, mock_open
+
 from phidown.downloader import load_credentials
 
 # Define the path to the directory where the test file is located
