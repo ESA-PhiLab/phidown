@@ -6,7 +6,7 @@ import typing
 from datetime import datetime
 from downloader import pull_down
 
-# Write the credentials from config.json!
+# Write the credentials in secret.yml!
 
 
 ############################################################################
