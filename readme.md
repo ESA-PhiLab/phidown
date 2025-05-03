@@ -344,5 +344,28 @@ We appreciate your feedback and contributions to make **Φ-Down** even better!
 
 ---
 
+## Citing
+
+If you use **Φ-Down** in your research or work, please cite it as follows:
+
+[1] R. Del Prete, “phidown: A Python Tool for Streamlined Data Downloading from CDSE”. Zenodo, May 03, 2025. doi: 10.5281/zenodo.15332053.
+
+### BibTeX Entry
+
+```bibtex
+@misc{delprete2025phidown,
+  author       = {Del Prete, Roberto},
+  title        = {phidown: A Python Tool for Streamlined Data Downloading from CDSE},
+  year         = {2025},
+  month        = {May},
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.15332053},
+  url          = {https://doi.org/10.5281/zenodo.15332053}
+}
+```
+
+
+---
+
 ## License
 This project is licensed under the GNU License.
