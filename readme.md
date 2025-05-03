@@ -17,18 +17,36 @@
 
 # 🌍 **Φ-Down**: Your Gateway to Copernicus Data
 
-*Effortlessly manage, search, and download Earth Observation data with **Φ-Down**. Unlock the full potential of Copernicus datasets with ease and efficiency.*
+*Effortlessly search and download Earth Observation data with **Φ-Down** - your simple gateway to Copernicus data.*
 
 </div>
 
 ![Phi-Down Logo](./assets/phidown_logo.png)
 
-#### This repository provides tools for managing Sentinel data using AWS services and dataset tools. It includes functionality for authentication, product search, and downloading Earth Observation (EO) products.
+<div align="center" style="margin-top: 20px; margin-bottom: 20px;">
+  <h3>🌐 Connect with Φ-Lab & the Author</h3>
+  <p style="margin-bottom: 10px;">Follow updates, join discussions, and explore research.</p>
+  <a href="https://philab.esa.int" target="_blank" style="text-decoration: none;">
+    <img src="https://img.shields.io/badge/PhiLab-%230B3D91.svg?&style=for-the-badge&logo=esa&logoColor=white" alt="PhiLab Website" style="margin: 5px;" />
+  </a>
+  <a href="https://www.linkedin.com/groups/8984375/" target="_blank" style="text-decoration: none;">
+    <img src="https://img.shields.io/badge/LinkedIn_Group-%230A66C2.svg?&style=for-the-badge&logo=LinkedIn&logoColor=white" alt="PhiLab Group on LinkedIn" style="margin: 5px;" />
+  </a>
+  <a href="https://www.linkedin.com/in/roberto-del-prete-8175a7147/" target="_blank" style="text-decoration: none;">
+    <img src="https://img.shields.io/badge/LinkedIn-%230A66C2.svg?&style=for-the-badge&logo=LinkedIn&logoColor=white" alt="Roberto Del Prete LinkedIn" style="margin: 5px;" />
+  </a>
+  <a href="https://scholar.google.com/citations?user=Dwc8YxwAAAAJ&hl=en" target="_blank" style="text-decoration: none;">
+    <img src="https://img.shields.io/badge/Google_Scholar-%234285F4.svg?&style=for-the-badge&logo=google-scholar&logoColor=white" alt="Google Scholar" style="margin: 5px;" />
+  </a>
+</div>
+
+
+
 
 
 ## Overview
 
-**Φ-Down** is a Python library that simplifies accessing Earth Observation data from the Copernicus Data Space Ecosystem. It provides a streamlined interface for searching, filtering, and downloading satellite imagery from various Sentinel missions and contributing datasets.
+**Φ-Down** is a Python library that simplifies accessing Earth Observation data from the Copernicus Data Space Ecosystem using AWS services and dataset tools. It provides a streamlined interface for searching, filtering, and downloading satellite imagery from various Sentinel missions and contributing datasets.
 
 Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy to incorporate satellite data into your workflows without dealing with complex APIs or authentication processes.
 
