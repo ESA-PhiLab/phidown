@@ -7,12 +7,11 @@
 ![GitHub top language](https://img.shields.io/github/languages/top/ESA-PhiLab/phidown.svg)
 ![GitHub repo size](https://img.shields.io/github/repo-size/ESA-PhiLab/phidown.svg)
 ![GitHub contributors](https://img.shields.io/github/contributors/ESA-PhiLab/phidown.svg)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Documentation Status](https://img.shields.io/badge/docs-latest-green.svg)](https://github.com/ESA-PhiLab/phidown/wiki)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15332053.svg)](https://doi.org/10.5281/zenodo.15332053)
-
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 <div align="center">
 
 # 🌍 **Φ-Down**: Your Gateway to Copernicus Data
@@ -176,7 +175,7 @@ The following collections are currently available:
 ---
 
 ## Prerequisites
-- Python 3.9 or higher
+- Python >= 3.9
 
 ---
 
@@ -269,7 +268,7 @@ To authenticate with the Copernicus Data Space Ecosystem, you need to create a `
 
 ### Example Notebook
 
-For a detailed example of how to use **Φ-Down**, refer to the [usage.ipynb](./usage.ipynb) notebook. It provides step-by-step instructions and practical use cases to help you get started quickly.
+For a detailed example of how to use **Φ-Down**, refer to the [how_to_start.ipynb](./how_to_start.ipynb) notebook. It provides step-by-step instructions and practical use cases to help you get started quickly.
 
 > **⚠️ Search Optimization Tips⚠️**  
 >  
@@ -336,21 +335,25 @@ We appreciate your feedback and contributions to make **Φ-Down** even better!
 
 ---
 
-## Contact
+## Connect with the Author
 
-**Roberto Del Prete**  
-🌐 [LinkedIn](https://www.linkedin.com/in/roberto-del-prete/)  
-✉️ roberto.delprete@esa.int
+Have questions, suggestions, or just want to connect? Reach out to the author:
+
+**Roberto Del Prete**
+*   [![LinkedIn](https://img.shields.io/badge/LinkedIn-%230A66C2.svg?&style=for-the-badge&logo=LinkedIn&logoColor=white)](https://www.linkedin.com/in/roberto-del-prete-8175a7147/)
+*   [![Email](https://img.shields.io/badge/Email-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:roberto.delprete@esa.int)
 
 ---
 
-## Citing
+## Citing Φ-Down
 
-If you use **Φ-Down** in your research or work, please cite it as follows:
+If **Φ-Down** has contributed to your research, project, or publication, we kindly ask that you cite it. Your citation helps support the tool's development and recognition within the scientific community! 🙏
 
-[1] R. Del Prete, “phidown: A Python Tool for Streamlined Data Downloading from CDSE”. Zenodo, May 03, 2025. doi: 10.5281/zenodo.15332053.
+**Please use the following citation:**
 
-### BibTeX Entry
+> Del Prete, R. (2025). *phidown: A Python Tool for Streamlined Data Downloading from CDSE*. Zenodo. doi: 10.5281/zenodo.15332053.
+
+**BibTeX Entry:**
 
 ```bibtex
 @misc{delprete2025phidown,
@@ -366,6 +369,15 @@ If you use **Φ-Down** in your research or work, please cite it as follows:
 
 
 ---
-
 ## License
-This project is licensed under the GNU License.
+
+**Φ-Down** is proudly licensed under the **GNU General Public License v3.0 (GPLv3)**.
+
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
+This license ensures that the software remains free and open-source, allowing you to:
+- **Use** the software freely for any purpose.
+- **Share** the software with others.
+- **Modify** the software and share your modifications under the same license terms.
+
+For full details, please refer to the [GPLv3 License Text](https://www.gnu.org/licenses/gpl-3.0.en.html).
