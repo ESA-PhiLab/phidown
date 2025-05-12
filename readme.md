@@ -71,17 +71,20 @@ Here's a quick example of how to use Φ-Down to search and download Sentinel dat
 from phidown.search import CopernicusDataSearcher
 # You can modify these parameters as needed
 
-searcher = CopernicusDataSearcher(
+searcher = CopernicusDataSearcher()
+# Configure the search parameters
+searcher._query_by_filter(
     collection_name='SENTINEL-1',
     product_type='SLC',
     orbit_direction=None,
     cloud_cover_threshold=None,
     aoi_wkt=None,
-    start_date='2023-05-03T00:00:00.000Z',
-    end_date='2024-05-03T04:00:00.000Z',
+    start_date='2023-05-03T00:00:00',
+    end_date='2024-05-03T04:00:00',
     top=1000,
-    # attributes={'swathIdentifier': 'WV1,WV2'}, # Swath identifier
-    attributes={'swathIdentifier': 'S1'}, # Swath identifier Stripmap: S1, ..., S6
+    attributes={'swathIdentifier': 'S1'} # Swath identifier Stripmap: S1, ..., S6
+    # The 'order_by' parameter defaults to "ContentDate/Start desc"
+    # The 'base_url' parameter defaults to "https://catalogue.dataspace.copernicus.eu/odata/v1/Products"
 )
 
 df = searcher.execute_query()
