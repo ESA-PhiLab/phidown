@@ -26,10 +26,35 @@ from downloader import pull_down
 
 
 class CopernicusDataSearcher:
-    def __init__(
+    def __init__(self) -> None:
+        """
+        Initialize the CopernicusDataSearcher.
+        Configuration is loaded from the default path.
+        Call _query_by_filter() to set search parameters before executing a query.
+        """
+        self.base_url: str = "https://catalogue.dataspace.copernicus.eu/odata/v1/Products"
+        self.config: typing.Optional[dict] = self._load_config()  # Load config from default path
+
+        # Initialize attributes to be set by _query_by_filter
+        self.collection_name: typing.Optional[str] = None
+        self.product_type: typing.Optional[str] = None
+        self.orbit_direction: typing.Optional[str] = None
+        self.cloud_cover_threshold: typing.Optional[float] = None
+        self.attributes: typing.Optional[typing.Dict[str, typing.Union[str, int, float]]] = None
+        self.aoi_wkt: typing.Optional[str] = None
+        self.start_date: typing.Optional[str] = None
+        self.end_date: typing.Optional[str] = None
+        
+        # Set default values for top and order_by
+        self.top: int = 1000
+        self.order_by: str = "ContentDate/Start desc"
+
+        # Initialize placeholders for query results
+        self._initialize_placeholders()
+
+    def _query_by_filter(
         self,
         base_url: str = "https://catalogue.dataspace.copernicus.eu/odata/v1/Products",
-        config_path: typing.Optional[str] = None,
         collection_name: typing.Optional[str] = 'SENTINEL-1',
         product_type: typing.Optional[str] = None,
         orbit_direction: typing.Optional[str] = None,
@@ -42,55 +67,55 @@ class CopernicusDataSearcher:
         order_by: str = "ContentDate/Start desc"
     ) -> None:
         """
-        Initialize the CopernicusDataSearcher with default parameters.
+        Set and validate search parameters for the Copernicus data query.
 
         Args:
             base_url (str): The base URL for the OData API.
-            config_path (str, optional): Path to the configuration file. Defaults to None.
             collection_name (str, optional): Name of the collection to search. Defaults to 'SENTINEL-1'.
             product_type (str, optional): Type of product to filter. Defaults to None.
             orbit_direction (str, optional): Orbit direction to filter (e.g., 'ASCENDING', 'DESCENDING'). Defaults to None.
             cloud_cover_threshold (float, optional): Maximum cloud cover percentage to filter. Defaults to None.
-            aoi_wkt (str, optional): Area of Interest in WKT format.
+            attributes (typing.Dict[str, typing.Union[str, int, float]], optional): Additional attributes for filtering. Defaults to None.
+            aoi_wkt (str, optional): Area of Interest in WKT format. Defaults to None.
             start_date (str, optional): Start date for filtering (ISO 8601 format). Defaults to None.
             end_date (str, optional): End date for filtering (ISO 8601 format). Defaults to None.
             top (int, optional): Maximum number of results to retrieve. Defaults to 1000.
             order_by (str, optional): Field and direction to order results by. Defaults to "ContentDate/Start desc".
         """
-        self.base_url: str = base_url
-        self.config: typing.Optional[dict] = self._load_config(config_path)
+        self.base_url = base_url  # Set or override base_url
 
-        self.collection_name: typing.Optional[str] = collection_name
-        self._validate_collection(collection_name)
+        # Assign and validate parameters
+        self.collection_name = collection_name
+        self._validate_collection(self.collection_name) # Validate collection name
 
-        self.product_type: typing.Optional[str] = product_type
-        self._validate_product_type()
+        self.product_type = product_type
+        self._validate_product_type() # Validate product type (depends on collection_name and config)
 
-        self.orbit_direction: typing.Optional[str] = orbit_direction
+        self.orbit_direction = orbit_direction
         self._validate_orbit_direction()
 
-        self.cloud_cover_threshold: typing.Optional[float] = cloud_cover_threshold
+        self.cloud_cover_threshold = cloud_cover_threshold
         self._validate_cloud_cover_threshold()
 
-        self.aoi_wkt: typing.Optional[str] = aoi_wkt
+        self.aoi_wkt = aoi_wkt
         self._validate_aoi_wkt()
 
-        self.start_date: typing.Optional[str] = start_date
-        self.end_date: typing.Optional[str] = end_date
+        self.start_date = start_date
+        self.end_date = end_date
+        self._validate_time() # Validate start and end dates
 
-        self.top: int = top
+        self.top = top
         self._validate_top()
 
-        self.order_by: str = order_by
+        self.order_by = order_by
         self._validate_order_by()
 
-        # Initialize placeholders for query results
-        self._initialize_placeholders()
-
-        # Validate and set attributes
-        self.attributes: typing.Optional[typing.Dict[str]] = attributes
+        self.attributes = attributes
         if self.attributes is not None:
             self._validate_attributes()
+        # Note: _initialize_placeholders() is called in __init__ to ensure attributes exist.
+        # If _query_by_filter is meant to reset for a brand new query, consider if it needs to be called here too.
+        # For now, assuming execute_query will populate them based on new parameters.
 
     # - Private Methods:
     def _load_config(self, config_path=None):
