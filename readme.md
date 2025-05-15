@@ -22,10 +22,17 @@
 
 ![Phi-Down Logo](./assets/phidown_logo.png)
 
+
 <div align="center" style="margin-top: 20px; margin-bottom: 20px;">
   <h3>🌐 Connect with Φ-Lab & the Author</h3>
   <p style="margin-bottom: 10px;">Follow updates, join discussions, and explore research.</p>
   <a href="https://philab.esa.int" target="_blank" style="text-decoration: none;">
+<div align="center">
+<div style="overflow:hidden;width:400px;height:auto;">
+  <img src="./assets/logo.png" style="margin-left:-15px;" />
+  <p><em></em></p>
+</div>
+</div>
     <img src="https://img.shields.io/badge/PhiLab-%230B3D91.svg?&style=for-the-badge&logo=esa&logoColor=white" alt="PhiLab Website" style="margin: 5px;" />
   </a>
   <a href="https://www.linkedin.com/groups/8984375/" target="_blank" style="text-decoration: none;">
@@ -38,6 +45,10 @@
     <img src="https://img.shields.io/badge/Google_Scholar-%234285F4.svg?&style=for-the-badge&logo=google-scholar&logoColor=white" alt="Google Scholar" style="margin: 5px;" />
   </a>
 </div>
+
+
+
+
 
 
 
@@ -219,16 +230,27 @@ The following collections are currently available:
 
 ## Installation
 
-<details>
-<summary><strong>Installation Steps</strong></summary>
-
 ### Option 1: Install from PyPI (Recommended)
+
+<div align="right" style="margin-right: 100px;">
+  <a href="https://pypi.org/project/phidown/" target="_blank">
+    <img src="https://img.shields.io/pypi/v/phidown.svg?color=blue&style=for-the-badge" alt="PyPI Version" width="100px"/>
+  </a>
+</div>
+
+<img src="./assets/pypi.png" alt="PyPI" width="400px"/>
+
 You can install it directly using pip:
 ```bash
 pip install phidown
 ```
 
-### Option 2: Install with PDM (Using Lock File)
+
+
+<details>
+<summary><strong>Build from source</strong></summary>
+
+### Install with PDM (Using Lock File)
 We recommend using [PDM](https://pdm.fming.dev/) (Python Dependency Manager) for managing dependencies, especially for development or ensuring exact versions.
 
 #### Step 1: Install PDM
