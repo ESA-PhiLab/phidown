@@ -432,6 +432,172 @@ class CopernicusDataSearcher:
 
         return self.df
 
+    def query_by_name(self, product_name: str) -> pd.DataFrame:
+        """
+        Query Copernicus data by a specific product name.
+        The results (DataFrame) are stored in self.df.
+
+        Args:
+            product_name (str): The exact name of the product to search for.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing the product details.
+                          Returns an empty DataFrame if the product is not found or an error occurs.
+        
+        Raises:
+            ValueError: If product_name is empty or not a string.
+        """
+        if not product_name or not isinstance(product_name, str):
+            raise ValueError("Product name must be a non-empty string.")
+
+        # Initialize placeholders to ensure a clean state for this specific query type
+        self._initialize_placeholders()
+
+        # Construct the query URL, including $expand=Attributes for consistency
+        self.url = f"{self.base_url}?$filter=Name eq '{product_name}'&$expand=Attributes"
+        
+        try:
+            self.response = requests.get(self.url)
+            self.response.raise_for_status()  # Raise an error for bad status codes (4xx or 5xx)
+
+            self.json_data = self.response.json()
+            
+            if 'value' in self.json_data:
+                self.df = pd.DataFrame.from_dict(self.json_data['value'])
+            else:
+                print(f"Warning: 'value' field not found in response for product name query: {product_name}")
+                self.df = pd.DataFrame()
+
+        except requests.exceptions.HTTPError as http_err:
+            print(f"HTTP error occurred while querying by name '{product_name}': {http_err} (URL: {self.url})")
+            if self.response is not None and self.response.status_code == 404:
+                print(f"Product '{product_name}' not found (404).")
+            self.df = pd.DataFrame() 
+            # Optionally re-raise for non-404 errors if stricter error handling is needed
+            # if self.response is None or self.response.status_code != 404:
+            #     raise
+        except json.JSONDecodeError as json_err:
+            print(f"JSON decode error while querying by name '{product_name}': {json_err} (URL: {self.url})")
+            self.df = pd.DataFrame()
+        except Exception as e:
+            print(f"An unexpected error occurred while querying by name '{product_name}': {e} (URL: {self.url})")
+            self.df = pd.DataFrame()
+            # Optionally re-raise 
+            # raise
+
+        return self.df
+
+    def search_products_by_name_pattern(
+        self,
+        name_pattern: str,
+        match_type: str,
+        collection_name_filter: typing.Optional[str] = None,
+        top: typing.Optional[int] = None,
+        order_by: typing.Optional[str] = None
+    ) -> pd.DataFrame:
+        """
+        Searches for Copernicus products by a name pattern using 'exact', 'contains', 'startswith', or 'endswith'.
+        Optionally filters by a specific collection name or uses the instance's current collection if set.
+        The results (DataFrame) are stored in self.df.
+
+        Args:
+            name_pattern (str): The pattern to search for in the product name.
+            match_type (str): The type of match. Must be one of 'exact', 'contains', 'startswith', 'endswith'.
+            collection_name_filter (str, optional): Specific collection to filter this search by.
+                                                If None, and self.collection_name (instance attribute) is set,
+                                                self.collection_name will be used. If both are None, no collection
+                                                filter based on collection name is applied for this specific search.
+            top (int, optional): Maximum number of results. If None, uses self.top (instance default).
+                                 Must be between 1 and 1000.
+            order_by (str, optional): Field and direction to order results (e.g., 'ContentDate/Start desc').
+                                      If None, uses self.order_by (instance default).
+
+        Returns:
+            pd.DataFrame: DataFrame with product details. Empty if no match or error.
+
+        Raises:
+            ValueError: If name_pattern is empty, match_type is invalid, or effective 'top' is out of range.
+                        Also if 'collection_name_filter' is provided and is invalid.
+        """
+        if not name_pattern or not isinstance(name_pattern, str):
+            raise ValueError("Name pattern must be a non-empty string.")
+
+        valid_match_types = ['exact', 'contains', 'startswith', 'endswith']
+        if match_type not in valid_match_types:
+            raise ValueError(f"Invalid match_type: {match_type}. Must be one of: {', '.join(valid_match_types)}")
+
+        self._initialize_placeholders()  # Reset previous results
+
+        filters = []
+
+        # 1. Name filter based on match_type
+        if match_type == 'exact':
+            name_filter_str = f"Name eq '{name_pattern}'"
+        elif match_type == 'contains':
+            name_filter_str = f"contains(Name,'{name_pattern}')"
+        elif match_type == 'startswith':
+            name_filter_str = f"startswith(Name,'{name_pattern}')"
+        elif match_type == 'endswith':
+            name_filter_str = f"endswith(Name,'{name_pattern}')"
+        filters.append(name_filter_str)
+
+        # 2. Collection filter
+        final_collection_name_to_use = None
+        if collection_name_filter:
+            try:
+                # Validate the explicitly passed collection name
+                self._validate_collection(collection_name_filter)
+                final_collection_name_to_use = collection_name_filter
+            except ValueError as e:
+                raise ValueError(f"Invalid 'collection_name_filter' provided: '{collection_name_filter}'. Validation error: {e}")
+        elif self.collection_name: # If no specific collection is passed, use instance's collection_name if set
+            final_collection_name_to_use = self.collection_name
+
+        if final_collection_name_to_use:
+            filters.append(f"Collection/Name eq '{final_collection_name_to_use}'")
+
+        filter_condition = " and ".join(filters)
+
+        # Determine effective top and order_by values
+        query_top = top if top is not None else self.top
+        query_order_by = order_by if order_by is not None else self.order_by
+
+        # Validate effective top value
+        if not (1 <= query_top <= 1000):
+            raise ValueError(f"The 'top' parameter for the query must be between 1 and 1000. Effective value: {query_top}")
+        
+        # Note: query_order_by uses instance default or passed argument.
+        # self.order_by is validated when set by _query_by_filter.
+        # If query_order_by is passed as an argument, its format is trusted here.
+
+        self.query = f"?$filter={filter_condition}&$orderby={query_order_by}&$top={query_top}&$expand=Attributes"
+        self.url = f"{self.base_url}{self.query}"
+
+        try:
+            self.response = requests.get(self.url)
+            self.response.raise_for_status()
+            self.json_data = self.response.json()
+
+            if 'value' in self.json_data:
+                self.df = pd.DataFrame.from_dict(self.json_data['value'])
+            else:
+                print(f"Warning: 'value' field not found in response for name pattern query: '{name_pattern}', type: '{match_type}'")
+                self.df = pd.DataFrame()
+
+        except requests.exceptions.HTTPError as http_err:
+            print(f"HTTP error for name pattern '{name_pattern}' ({match_type}): {http_err} (URL: {self.url})")
+            if self.response is not None and self.response.status_code == 404:
+                print(f"No products found matching pattern '{name_pattern}' ({match_type}) with current filters.")
+            self.df = pd.DataFrame()
+        except json.JSONDecodeError as json_err:
+            print(f"JSON decode error for name pattern '{name_pattern}' ({match_type}): {json_err} (URL: {self.url})")
+            self.df = pd.DataFrame()
+        except Exception as e:
+            print(f"Unexpected error for name pattern '{name_pattern}' ({match_type}): {e} (URL: {self.url})")
+            self.df = pd.DataFrame()
+
+        return self.df
+
     def display_results(self, columns=None, top_n=10):
         """Display the query results with selected columns"""
         if self.df is None:

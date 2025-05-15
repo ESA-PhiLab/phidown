@@ -14,6 +14,8 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 <div align="center">
 
+
+
 # 🌍 **Φ-Down**: Your Gateway to Copernicus Data
 
 *Effortlessly search and download Earth Observation data with **Φ-Down** - your simple gateway to Copernicus data.*
@@ -22,10 +24,15 @@
 
 ![Phi-Down Logo](./assets/phidown_logo.png)
 
+
+
 <div align="center" style="margin-top: 20px; margin-bottom: 20px;">
   <h3>🌐 Connect with Φ-Lab & the Author</h3>
+<div align="center">
+
   <p style="margin-bottom: 10px;">Follow updates, join discussions, and explore research.</p>
   <a href="https://philab.esa.int" target="_blank" style="text-decoration: none;">
+</div>
     <img src="https://img.shields.io/badge/PhiLab-%230B3D91.svg?&style=for-the-badge&logo=esa&logoColor=white" alt="PhiLab Website" style="margin: 5px;" />
   </a>
   <a href="https://www.linkedin.com/groups/8984375/" target="_blank" style="text-decoration: none;">
@@ -40,28 +47,29 @@
 </div>
 
 
-
-
-
 ## Overview
 
 **Φ-Down** is a Python library that simplifies accessing Earth Observation data from the Copernicus Data Space Ecosystem using AWS services and dataset tools. It provides a streamlined interface for searching, filtering, and downloading satellite imagery from various Sentinel missions and contributing datasets.
 
 Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy to incorporate satellite data into your workflows without dealing with complex APIs or authentication processes.
 
+| Feature | Description |
+|---------|-------------|
+| <div style="align:center;overflow:hidden;width:220px;height:auto;"><img src="./assets/logo.png" style="margin-left:-55px;"><p><em></em></p></div> |  |
+| Python Support | [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/) |
+| PyPi | [![PyPI Version](https://img.shields.io/pypi/v/phidown.svg?color=blue)](https://pypi.org/project/phidown/) |
+| License | [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) |
+| Documentation | [![Documentation Status](https://img.shields.io/badge/docs-latest-green.svg)](https://github.com/ESA-PhiLab/phidown/wiki) |
+| Contributions | [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com) |
 
-<div align="center">
-<div style="overflow:hidden;width:500px;height:auto;">
-  <img src="./assets/record.gif" style="margin-left:-15px;" />
-  <p><em>Demo of Phi-Down searching and downloading Sentinel data</em></p>
-</div>
-</div>
+
 
 
 ## Features
 
 - Authenticate with the Copernicus Data Space Ecosystem.
-- Search for Sentinel products using the OData API.
+- Search for Sentinel products using the OData API with various filters `_query_by_filter` (collection, product type, date, AOI, cloud cover, etc.).
+- Search for products by exact name using `_query_by_name`.
 - Download Sentinel products using the S3 protocol. 
 
 
@@ -83,8 +91,6 @@ searcher._query_by_filter(
     end_date='2024-05-03T04:00:00',
     top=1000,
     attributes={'swathIdentifier': 'S1'} # Swath identifier Stripmap: S1, ..., S6
-    # The 'order_by' parameter defaults to "ContentDate/Start desc"
-    # The 'base_url' parameter defaults to "https://catalogue.dataspace.copernicus.eu/odata/v1/Products"
 )
 
 df = searcher.execute_query()
@@ -184,16 +190,30 @@ The following collections are currently available:
 
 ## Installation
 
-<details>
-<summary><strong>Installation Steps</strong></summary>
-
 ### Option 1: Install from PyPI (Recommended)
+
+<div align="right" style="margin-right: 100px;">
+  <a href="https://pypi.org/project/phidown/" target="_blank">
+    <img src="https://img.shields.io/pypi/v/phidown.svg?color=blue&style=for-the-badge" alt="PyPI Version" width="100px"/>
+  </a>
+</div>
+<div style="margin-left: 200px;">
+  <img src="./assets/pypi.png" alt="PyPI" width="400px"/>
+</div>
+
+
+
 You can install it directly using pip:
 ```bash
 pip install phidown
 ```
 
-### Option 2: Install with PDM (Using Lock File)
+
+
+<details>
+<summary><strong>Build from source</strong></summary>
+
+### Install with PDM (Using Lock File)
 We recommend using [PDM](https://pdm.fming.dev/) (Python Dependency Manager) for managing dependencies, especially for development or ensuring exact versions.
 
 #### Step 1: Install PDM
@@ -279,7 +299,7 @@ For a detailed example of how to use **Φ-Down**, refer to the [how_to_start.ipy
 > `Collection/Name eq 'SENTINEL-3'`.  
 >  
 > An additional efficient way to accelerate the query performance is limiting the query by acquisition dates, e.g.:  
-> `ContentDate/Start gt 2022-05-03T00:00:00.000Z and ContentDate/Start lt 2022-05-21T00:00:00.000Z`.  
+> `ContentDate/Start gt 2022-05-03T00:00:00 and ContentDate/Start lt 2022-05-21T00:00:00`.  
 >  
 > When searching for products and adding a wide range of dates to the query, e.g., from 2017 to 2023, we recommend splitting the query into individual years, e.g., from January 1, 2023, to December 31, 2023.
 
@@ -292,7 +312,7 @@ For a detailed example of how to use **Φ-Down**, refer to the [how_to_start.ipy
 ---
 
 ## Troubleshooting
-- Ensure you're using Python 3.8 or higher.
+- Ensure you're using Python 3.9 or higher.
 - Reinstall dependencies using `pdm install`.
 - Check logs and error messages for further insights.
 - If credentials are not deleted from the S3 server, you may encounter a 403 error. To resolve this, log in to the Copernicus Data Space Ecosystem, navigate to the S3 Credentials Manager, and manually delete any unused or expired credentials.
@@ -306,7 +326,7 @@ We welcome contributions to **Φ-Down**! Here's how you can get involved:
 1. **Fork the Repository**: Click the "Fork" button at the top of this repository to create your own copy.
 2. **Clone Your Fork**: Clone your forked repository to your local machine:
   ```bash
-  git clone https://github.com/your-username/phidown.git
+  git clone https://github.com/ESA-PhiLab/phidown.git
   ```
 3. **Create a Branch**: Create a new branch for your feature or bug fix:
   ```bash
