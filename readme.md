@@ -14,6 +14,8 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 <div align="center">
 
+
+
 # 🌍 **Φ-Down**: Your Gateway to Copernicus Data
 
 *Effortlessly search and download Earth Observation data with **Φ-Down** - your simple gateway to Copernicus data.*
@@ -23,15 +25,16 @@
 ![Phi-Down Logo](./assets/phidown_logo.png)
 
 
+
 <div align="center" style="margin-top: 20px; margin-bottom: 20px;">
   <h3>🌐 Connect with Φ-Lab & the Author</h3>
-  <p style="margin-bottom: 10px;">Follow updates, join discussions, and explore research.</p>
-  <a href="https://philab.esa.int" target="_blank" style="text-decoration: none;">
 <div align="center">
 <div style="overflow:hidden;width:400px;height:auto;">
   <img src="./assets/logo.png" style="margin-left:-15px;" />
   <p><em></em></p>
 </div>
+  <p style="margin-bottom: 10px;">Follow updates, join discussions, and explore research.</p>
+  <a href="https://philab.esa.int" target="_blank" style="text-decoration: none;">
 </div>
     <img src="https://img.shields.io/badge/PhiLab-%230B3D91.svg?&style=for-the-badge&logo=esa&logoColor=white" alt="PhiLab Website" style="margin: 5px;" />
   </a>
@@ -45,13 +48,6 @@
     <img src="https://img.shields.io/badge/Google_Scholar-%234285F4.svg?&style=for-the-badge&logo=google-scholar&logoColor=white" alt="Google Scholar" style="margin: 5px;" />
   </a>
 </div>
-
-
-
-
-
-
-
 
 
 ## Overview
