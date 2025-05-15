@@ -106,39 +106,6 @@ print(f"Number of results: {len(df)}")
 searcher.display_results(top_n=15)
 ```
 
-Here's an example of searching for products by a name pattern:
-
-```python
-from phidown.search import CopernicusDataSearcher
-
-searcher = CopernicusDataSearcher()
-
-# Search for products whose names contain 'SLC' and are part of 'SENTINEL-1'
-df_pattern_search = searcher.search_products_by_name_pattern(
-    name_pattern='SLC',
-    match_type='contains', # Can be 'exact', 'startswith', 'endswith'
-    collection_name_filter='SENTINEL-1', # Optional: filter by collection
-    top=50 # Optional: limit results
-)
-
-if not df_pattern_search.empty:
-    print(f"Found {len(df_pattern_search)} products matching the pattern:")
-    searcher.display_results(top_n=5) # Display results from the latest search
-else:
-    print("No products found matching the pattern.")
-
-# Example of searching for a product by its exact name
-exact_product_name = 'S1A_IW_GRDH_1SDV_20230503T052602_20230503T052627_048390_05D0B4_6B4C.SAFE'
-df_exact_name = searcher.query_by_name(product_name=exact_product_name)
-
-if not df_exact_name.empty:
-    print(f"\nFound product by exact name: {exact_product_name}")
-    searcher.display_results(top_n=1)
-else:
-    print(f"\nProduct with name {exact_product_name} not found.")
-
-```
-
 For more advanced use cases, including searching with geographical filters and batch downloading, see the [usage notebook](./how_to_start.ipynb).
 
 
