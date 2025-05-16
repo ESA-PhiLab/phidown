@@ -55,7 +55,7 @@ Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy
 
 | Feature | Description |
 |---------|-------------|
-| <div style="align:center;overflow:hidden;width:220px;height:auto;"><img src="./assets/logo.png" style="margin-left:-55px;"><p><em></em></p></div> |  |
+| <img src="./assets/logo.png" width="180"> |  |
 | Python Support | [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/) |
 | PyPi | [![PyPI Version](https://img.shields.io/pypi/v/phidown.svg?color=blue)](https://pypi.org/project/phidown/) |
 | License | [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) |
