@@ -7,7 +7,7 @@ CONDA_EXE := $(shell which conda || echo "/usr/bin/env conda")
 CONDA_BASE := $(shell $(CONDA_EXE) info --base || echo "$$HOME/anaconda3")
 
 # Phony targets
-.PHONY: all env activate install_pdm install_deps dev test clean help
+.PHONY: all env activate install_pdm install_deps dev test clean build help
 
 # Default target shows help
 all: env install_pdm install_deps
@@ -25,6 +25,7 @@ help:
 	@echo "    test        - Run tests"
 	@echo "    clean       - Remove conda environment"
 	@echo "    activate    - Show instructions to activate environment"
+	@echo "    build       - Build source and universal wheel distributions"
 	@echo "    help        - Show this help message"
 
 # Check if conda is available
@@ -85,8 +86,15 @@ test:
 # Clean the conda environment
 clean: check_conda
 	@echo "🧹 Removing conda environment $(ENV_NAME)..."
-	@$(CONDA_EXE) deactivate && @$(CONDA_EXE) env remove -n $(ENV_NAME) -y || \
+	@$(CONDA_EXE) env remove -n $(ENV_NAME) -y || \
 		(echo "❌ Failed to remove conda environment '$(ENV_NAME)'."; \
 		 echo "   This can happen if the environment does not exist or if there are other issues with conda."; \
 		 exit 1)
 	@echo "✅ Conda environment '$(ENV_NAME)' has been removed."
+
+# Build source and universal wheel distributions
+build:
+	@echo "📦 Building sdist and universal wheel..."
+	@$(CONDA_EXE) run -n $(ENV_NAME) pdm build || \
+		(echo "❌ Build failed"; exit 1)
+	@echo "✅ Build complete. Distributions are in the dist/ directory."
