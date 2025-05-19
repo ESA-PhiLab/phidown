@@ -1,6 +1,6 @@
 [project]
 name = "phidown"
-version = "0.1.7"
+version = "0.1.8"
 description = "A project using AWS services and dataset tools for Sentinel data"
 authors = [
   { name = "Roberto Del Prete", email = "roberto.delprete@esa.int" }
@@ -37,4 +37,4 @@ build-backend = "pdm.backend"
 distribution = true
 
 [tool.pdm.build]
-includes = ["phidown/**/*"]
+includes = ["phidown/**"]
