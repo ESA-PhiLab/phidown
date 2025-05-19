@@ -11,9 +11,12 @@ dependencies = [
     "supervisely==6.73.338",
     "pyaml>=25.1.0",
     "ipykernel>=6.29.5",
+    "zstandard>=0.23.0",
 ]
 
 requires-python = ">=3.9"
+readme = "README.md"
+license = { text = "GPLv3" } 
 
 [project.optional-dependencies]
 viz = [
@@ -31,13 +34,11 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["phidown"]
+where = ["."]
+include = ["phidown*"]
 
 [tool.pdm]
 distribution = true
-
-# Removed redundant [tool.pdm.dependencies] section
-# ipywidgets = "*"
 
 [tool.pdm.build]
 package-dir = "phidown"
