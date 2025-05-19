@@ -2,7 +2,7 @@
 
 # Configuration variables
 ENV_NAME := phidown-env
-PYTHON_VERSION := 3.12
+PYTHON_VERSION := 3.9
 CONDA_EXE := $(shell which conda || echo "/usr/bin/env conda")
 CONDA_BASE := $(shell $(CONDA_EXE) info --base || echo "$$HOME/anaconda3")
 
