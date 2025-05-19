@@ -1,44 +1,41 @@
 [project]
 name = "phidown"
-version = "0.1.6"
+version = "0.1.7"
 description = "A project using AWS services and dataset tools for Sentinel data"
-authors = [{ name = "Roberto Del Prete", email = "roberto.delprete@esa.int" }]
-dependencies = [
-    "boto3==1.37.34",
-    "numpy==1.24.3",
-    "pandas>=1.5.2",
-    "dataset-tools==0.1.6",
-    "supervisely==6.73.338",
-    "pyaml>=25.1.0",
-    "ipykernel>=6.29.5",
-    "zstandard>=0.23.0",
+authors = [
+  { name = "Roberto Del Prete", email = "roberto.delprete@esa.int" }
 ]
-
+dependencies = [
+  "boto3==1.37.34",
+  "numpy==1.24.3",
+  "pandas>=1.5.2",
+  "dataset-tools==0.1.6",
+  "supervisely==6.73.338",
+  "pyaml>=25.1.0",
+  "ipykernel>=6.29.5",
+  "zstandard>=0.23.0",
+]
 requires-python = ">=3.9"
 readme = "README.md"
-license = { text = "GPLv3" } 
+license = { text = "GPLv3" }
 
 [project.optional-dependencies]
 viz = [
-    "ipywidgets>=8.1.6",
-    "folium>=0.18.0",
+  "ipywidgets>=8.1.6",
+  "folium>=0.18.0",
 ]
 dev = [
-    "pytest>=8.0.0",
-    "pytest-mock>=3.10.0",
-    "flake8>=7.2.0"
+  "pytest>=8.0.0",
+  "pytest-mock>=3.10.0",
+  "flake8>=7.2.0",
 ]
 
 [build-system]
-requires = ["setuptools>=61", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["phidown*"]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
 
 [tool.pdm]
 distribution = true
 
 [tool.pdm.build]
-package-dir = "phidown"
+includes = ["phidown/**/*"]

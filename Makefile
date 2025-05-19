@@ -78,6 +78,7 @@ test:
 # Clean the conda environment
 clean: check_conda
 	@echo "🧹 Removing conda environment $(ENV_NAME)..."
+	conda deactivate
 	@$(CONDA_EXE) remove -n $(ENV_NAME) --all -y || \
 		(echo "❌ Failed to remove conda environment '$(ENV_NAME)'."; \
 		 echo "   This can happen if the environment does not exist or if there are other issues with conda."; \
