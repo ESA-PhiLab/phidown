@@ -27,13 +27,24 @@ def load_credentials(file_name: str = 'secret.yml') -> Tuple[str, str]:
         yaml.YAMLError: If the YAML file is invalid or cannot be written properly.
         KeyError: If expected keys are missing in the YAML structure.
     """
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    secrets_file_path = os.path.join(script_dir, file_name)
+    # First, check for secret.yml in the current working directory
+    cwd_secrets_file_path = os.path.join(os.getcwd(), file_name)
+    if os.path.isfile(cwd_secrets_file_path):
+        secrets_file_path = cwd_secrets_file_path
+    else:
+        # Fallback: check for secret.yml in the script directory
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        secrets_file_path = os.path.join(script_dir, file_name)
 
+    # Always prompt if not found, even in Jupyter or import context
     if not os.path.isfile(secrets_file_path):
-        print(f"Secrets file not found: {secrets_file_path}")
-        username = input("Enter username: ").strip()
-        password = getpass.getpass("Enter password: ").strip()
+        try:
+            # For Jupyter, input and getpass work as expected
+            print(f"Secrets file not found: {secrets_file_path}")
+            username = input("Enter username: ").strip()
+            password = getpass.getpass("Enter password: ").strip()
+        except Exception as e:
+            raise RuntimeError(f"Could not prompt for credentials: {e}")
 
         secrets = {
             'credentials': {
@@ -281,6 +292,7 @@ if __name__ == "__main__":
         description="Script to download EO product using OData and S3 protocol.",
         epilog="Example usage: python script.py -u <username> -p <password> <eo_product_name>"
     )
+    parser.add_argument('--init-secret', action='store_true', help='Prompt for credentials and create/overwrite secret.yml, then exit')
     # User credentials
     username, password = load_credentials()
     # Add command line arguments
@@ -288,6 +300,21 @@ if __name__ == "__main__":
     parser.add_argument('-p', '--password', type=str, default=password, help='Password for authentication')
     parser.add_argument('-eo_product_name', type=str, help='Name of the Earth Observation product to be downloaded (required)')
     args = parser.parse_args()
+
+    if args.init_secret:
+        # Force prompt and overwrite secret.yml
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        secrets_file_path = os.path.join(script_dir, 'secret.yml')
+        username = input("Enter username: ").strip()
+        password = getpass.getpass("Enter password: ").strip()
+        secrets = {'credentials': {'username': username, 'password': password}}
+        try:
+            with open(secrets_file_path, 'w') as file:
+                yaml.safe_dump(secrets, file)
+            print(f"Secrets file created/updated at: {secrets_file_path}")
+        except yaml.YAMLError as e:
+            print(f"Error writing secrets file: {e}")
+        exit(0)
 
     # Prompt for missing credentials
     if not args.username:
