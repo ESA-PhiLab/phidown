@@ -2,9 +2,9 @@
 
 # Configuration variables
 ENV_NAME := phidown-env
-PYTHON_VERSION := 3.9
-CONDA_EXE := $(shell which conda)
-CONDA_BASE := $(shell conda info --base 2>/dev/null)
+PYTHON_VERSION := 3.12
+CONDA_EXE := $(shell which conda || echo "/usr/bin/env conda")
+CONDA_BASE := $(shell $(CONDA_EXE) info --base || echo "$$HOME/anaconda3")
 
 # Phony targets
 .PHONY: all env activate install_pdm install_deps dev test clean help
@@ -29,10 +29,17 @@ help:
 
 # Check if conda is available
 check_conda:
-	@if [ -z "$(CONDA_EXE)" ]; then \
-		echo "❌ Error: conda not found in PATH"; \
+	@command -v conda || { \
+		echo "❌ Error: conda not found. Please install conda first."; \
+		echo "   Visit: https://docs.conda.io/projects/conda/en/latest/user-guide/install/"; \
 		exit 1; \
-	fi
+	}
+	@$(CONDA_EXE) --version || { \
+		echo "❌ Error: conda command not working. Try initializing it first:"; \
+		echo "   For bash: eval \"$$($(shell dirname $(CONDA_EXE))/conda shell.bash hook)\""; \
+		echo "   For zsh:  eval \"$$($(shell dirname $(CONDA_EXE))/conda shell.zsh hook)\""; \
+		exit 1; \
+	}
 
 # Create conda environment
 env: check_conda
@@ -78,9 +85,8 @@ test:
 # Clean the conda environment
 clean: check_conda
 	@echo "🧹 Removing conda environment $(ENV_NAME)..."
-	@$(CONDA_EXE) deactivate
-	@$(CONDA_EXE) remove -n $(ENV_NAME) --all -y || \
+	@$(CONDA_EXE) deactivate && @$(CONDA_EXE) env remove -n $(ENV_NAME) -y || \
 		(echo "❌ Failed to remove conda environment '$(ENV_NAME)'."; \
 		 echo "   This can happen if the environment does not exist or if there are other issues with conda."; \
 		 exit 1)
-	@echo "✅ Conda environment '$(ENV_NAME)' has been processed for removal."
+	@echo "✅ Conda environment '$(ENV_NAME)' has been removed."
