@@ -9,6 +9,7 @@ import time
 import yaml
 import argparse
 import getpass
+import sys
 from typing import Tuple
 
 
@@ -308,7 +309,7 @@ if __name__ == "__main__":
             print("Secrets file created/updated successfully.")
         except Exception as e:
             print(f"Error creating/updating secrets file: {e}")
-        exit(0)
+        sys.exit(0)
 
     # Prompt for missing credentials
     if not args.username:
