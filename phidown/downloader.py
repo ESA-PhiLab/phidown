@@ -309,7 +309,7 @@ if __name__ == "__main__":
             print("Secrets file created/updated successfully.")
         except Exception as e:
             print(f"Error creating/updating secrets file: {e}")
-        sys.exit(0)
+            sys.exit(1)
 
     # Prompt for missing credentials
     if not args.username:
@@ -318,3 +318,4 @@ if __name__ == "__main__":
         args.password = input("Enter password: ")
 
     pull_down(product_name=args.eo_product_name, args=args)
+    sys.exit(0)
