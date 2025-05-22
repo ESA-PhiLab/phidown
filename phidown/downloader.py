@@ -9,6 +9,7 @@ import time
 import yaml
 import argparse
 import getpass
+import sys
 from typing import Tuple
 
 
@@ -27,13 +28,24 @@ def load_credentials(file_name: str = 'secret.yml') -> Tuple[str, str]:
         yaml.YAMLError: If the YAML file is invalid or cannot be written properly.
         KeyError: If expected keys are missing in the YAML structure.
     """
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    secrets_file_path = os.path.join(script_dir, file_name)
+    # First, check for secret.yml in the current working directory
+    cwd_secrets_file_path = os.path.join(os.getcwd(), file_name)
+    if os.path.isfile(cwd_secrets_file_path):
+        secrets_file_path = cwd_secrets_file_path
+    else:
+        # Fallback: check for secret.yml in the script directory
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        secrets_file_path = os.path.join(script_dir, file_name)
 
+    # Always prompt if not found, even in Jupyter or import context
     if not os.path.isfile(secrets_file_path):
-        print(f"Secrets file not found: {secrets_file_path}")
-        username = input("Enter username: ").strip()
-        password = getpass.getpass("Enter password: ").strip()
+        try:
+            # For Jupyter, input and getpass work as expected
+            print(f"Secrets file not found: {secrets_file_path}")
+            username = input("Enter username: ").strip()
+            password = getpass.getpass("Enter password: ").strip()
+        except Exception as e:
+            raise RuntimeError(f"Could not prompt for credentials: {e}")
 
         secrets = {
             'credentials': {
@@ -111,7 +123,7 @@ def get_access_token(config, username, password):
         return access_token
     else:
         print(f"Failed to retrieve access token. Status code: {response.status_code}")
-        exit(1)
+        sys.exit(1)
 
 
 def get_eo_product_details(config, headers, eo_product_name):
@@ -125,7 +137,7 @@ def get_eo_product_details(config, headers, eo_product_name):
         return eo_product_data["Id"], eo_product_data["S3Path"]
     else:
         print(f"Failed to retrieve EO product details. Status code: {response.status_code}")
-        exit(1)
+        sys.exit(1)
 
 
 def get_temporary_s3_credentials(headers):
@@ -147,11 +159,11 @@ def get_temporary_s3_credentials(headers):
         else:
             print("Error: Access denied. Please check your permissions or access token.")
         print(f"Response Body: {credentials_response.text}")
-        exit(1)
+        sys.exit(1)
     else:
         print(f"Failed to create temporary S3 credentials. Status code: {credentials_response.status_code}")
         print(f"Response Body: {credentials_response.text}")
-        exit(1)
+        sys.exit(1)
 
 
 def format_filename(filename, length=40):
@@ -281,6 +293,7 @@ if __name__ == "__main__":
         description="Script to download EO product using OData and S3 protocol.",
         epilog="Example usage: python script.py -u <username> -p <password> <eo_product_name>"
     )
+    parser.add_argument('--init-secret', action='store_true', help='Prompt for credentials and create/overwrite secret.yml, then exit')
     # User credentials
     username, password = load_credentials()
     # Add command line arguments
@@ -289,6 +302,15 @@ if __name__ == "__main__":
     parser.add_argument('-eo_product_name', type=str, help='Name of the Earth Observation product to be downloaded (required)')
     args = parser.parse_args()
 
+    if args.init_secret:
+        # Force prompt and overwrite secret.yml using load_credentials
+        try:
+            username, password = load_credentials(file_name='secret.yml')
+            print("Secrets file created/updated successfully.")
+        except Exception as e:
+            print(f"Error creating/updating secrets file: {e}")
+            sys.exit(1)
+
     # Prompt for missing credentials
     if not args.username:
         args.username = input("Enter username: ")
@@ -296,3 +318,4 @@ if __name__ == "__main__":
         args.password = input("Enter password: ")
 
     pull_down(product_name=args.eo_product_name, args=args)
+    sys.exit(0)
