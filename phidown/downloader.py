@@ -302,18 +302,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.init_secret:
-        # Force prompt and overwrite secret.yml
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        secrets_file_path = os.path.join(script_dir, 'secret.yml')
-        username = input("Enter username: ").strip()
-        password = getpass.getpass("Enter password: ").strip()
-        secrets = {'credentials': {'username': username, 'password': password}}
+        # Force prompt and overwrite secret.yml using load_credentials
         try:
-            with open(secrets_file_path, 'w') as file:
-                yaml.safe_dump(secrets, file)
-            print(f"Secrets file created/updated at: {secrets_file_path}")
-        except yaml.YAMLError as e:
-            print(f"Error writing secrets file: {e}")
+            username, password = load_credentials(file_name='secret.yml')
+            print("Secrets file created/updated successfully.")
+        except Exception as e:
+            print(f"Error creating/updating secrets file: {e}")
         exit(0)
 
     # Prompt for missing credentials

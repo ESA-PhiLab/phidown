@@ -182,9 +182,10 @@ class CopernicusDataSearcher:
     def _validate_product_type(self):
         """
         Validates the provided product type against a list of valid product types.
+        If the product type is None, the validation is skipped.
 
         Raises:
-            ValueError: If the product type is None, empty, or not in the list of valid product types.
+            ValueError: If the product type is not in the list of valid product types.
             TypeError: If the product type is not a string.
         """
         if self.product_type is not None:
