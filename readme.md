@@ -260,7 +260,7 @@ To authenticate with the Copernicus Data Space Ecosystem, you need to create a `
 2. Add the following content to the file, replacing `your_username` and `your_password` with your actual credentials:
 
   ```yaml
-  # filepath: ./phidown/secret.yml
+  # filepath: ./phidown/secret.yml or current dir launching phidown
   copernicus:
     username: <your_username>
     password: <your_password>
