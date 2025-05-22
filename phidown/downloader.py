@@ -123,7 +123,7 @@ def get_access_token(config, username, password):
         return access_token
     else:
         print(f"Failed to retrieve access token. Status code: {response.status_code}")
-        exit(1)
+        sys.exit(1)
 
 
 def get_eo_product_details(config, headers, eo_product_name):
@@ -137,7 +137,7 @@ def get_eo_product_details(config, headers, eo_product_name):
         return eo_product_data["Id"], eo_product_data["S3Path"]
     else:
         print(f"Failed to retrieve EO product details. Status code: {response.status_code}")
-        exit(1)
+        sys.exit(1)
 
 
 def get_temporary_s3_credentials(headers):
@@ -159,11 +159,11 @@ def get_temporary_s3_credentials(headers):
         else:
             print("Error: Access denied. Please check your permissions or access token.")
         print(f"Response Body: {credentials_response.text}")
-        exit(1)
+        sys.exit(1)
     else:
         print(f"Failed to create temporary S3 credentials. Status code: {credentials_response.status_code}")
         print(f"Response Body: {credentials_response.text}")
-        exit(1)
+        sys.exit(1)
 
 
 def format_filename(filename, length=40):

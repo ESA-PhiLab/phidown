@@ -1,6 +1,6 @@
 [project]
 name = "phidown"
-version = "0.1.11"
+version = "0.1.12"
 description = "A project using AWS services and dataset tools for Sentinel data"
 authors = [
   { name = "Roberto Del Prete", email = "roberto.delprete@esa.int" }
@@ -10,11 +10,10 @@ dependencies = [
   "boto3>=1.37.34",       # changed from exact to minimum version
   "numpy>=1.6",           # changed from >1.6 (not typical) to >=1.6
   "pandas>=1.5.2",        # keep as is, already minimum version
-  "dataset-tools>=0.1.6", # changed from exact to minimum
   "supervisely>=6.73.338",# changed from exact to minimum
-  "pyaml>=25.1.0",        # keep as is
-  "ipykernel>=6.29.5",    # keep as is
-  "zstandard>=0.23.0",    # keep as is
+  "pyaml>=25.1.0",        
+  "ipykernel>=6.29.5",    
+  "zstandard>=0.23.0", 
 ]
 
 requires-python = ">=3.9"
