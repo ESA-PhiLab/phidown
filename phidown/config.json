@@ -21,7 +21,7 @@
     "valid_order_by_fields": ["ContentDate/Start", "ContentDate/End", "PublicationDate", "ModificationDate"],
     "attributes": {
         "SENTINEL-1": {
-            "productType": ["SLC", "GRD", "OCN"],
+            "productType": ["SLC", "GRD", "OCN", "IW_RAW__0S"],
             "origin": "ESA",
             "datatakeID": null,
             "timeliness": ["NRT", "NTC"],

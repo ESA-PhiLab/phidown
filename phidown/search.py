@@ -187,15 +187,14 @@ class CopernicusDataSearcher:
             ValueError: If the product type is None, empty, or not in the list of valid product types.
             TypeError: If the product type is not a string.
         """
-        valid_product_types = self._get_valid_product_types(self.collection_name)
-        if self.product_type is None:
-            raise ValueError("Product type cannot be None")
-        if not isinstance(self.product_type, str):
-            raise TypeError("Product type must be a string")
-        if not self.product_type:
-            raise ValueError("Product type cannot be empty")
-        if self.product_type not in valid_product_types:
-            raise ValueError(f"Invalid product type: {self.product_type}. Must be one of: {', '.join(valid_product_types)}")
+        if self.product_type is not None:
+            valid_product_types = self._get_valid_product_types(self.collection_name)
+            if not isinstance(self.product_type, str):
+                raise TypeError("Product type must be a string")
+            if not self.product_type:
+                raise ValueError("Product type cannot be empty")
+            if self.product_type not in valid_product_types:
+                raise ValueError(f"Invalid product type: {self.product_type}. Must be one of: {', '.join(valid_product_types)}")
 
     def _validate_order_by(self):
         """
