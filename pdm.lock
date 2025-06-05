@@ -5,7 +5,7 @@
 groups = ["default", "dev", "viz"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:5b04d1bf6f1e57e2ce2b9d6b2803d3a45b3d97e5c44f91275081a92d91e86b27"
+content_hash = "sha256:029cac5f9da82882f8589bccd9b72f7bf529feefb88abf22216dbf65db62af19"
 
 [[metadata.targets]]
 requires_python = ">=3.9"
@@ -178,7 +178,7 @@ name = "branca"
 version = "0.8.1"
 requires_python = ">=3.7"
 summary = "Generate complex HTML+JS pages with Python"
-groups = ["viz"]
+groups = ["default", "viz"]
 dependencies = [
     "jinja2>=3",
 ]
@@ -821,6 +821,24 @@ files = [
 ]
 
 [[package]]
+name = "ipyleaflet"
+version = "0.19.2"
+requires_python = ">=3.8"
+summary = "A Jupyter widget for dynamic Leaflet maps"
+groups = ["default"]
+dependencies = [
+    "branca>=0.5.0",
+    "ipywidgets<9,>=7.6.0",
+    "jupyter-leaflet<0.20,>=0.19",
+    "traittypes<3,>=0.2.1",
+    "xyzservices>=2021.8.1",
+]
+files = [
+    {file = "ipyleaflet-0.19.2-py3-none-any.whl", hash = "sha256:7cc9157848baca2e1793b96e79f8bdb1aa7340521d2b7d8a62aa8bc30eab5278"},
+    {file = "ipyleaflet-0.19.2.tar.gz", hash = "sha256:b3b83fe3460e742964c2a5924ea7934365a3749bb75310ce388d45fd751372d2"},
+]
+
+[[package]]
 name = "ipython"
 version = "8.18.1"
 requires_python = ">=3.9"
@@ -849,7 +867,7 @@ name = "ipywidgets"
 version = "8.1.7"
 requires_python = ">=3.7"
 summary = "Jupyter interactive widgets"
-groups = ["viz"]
+groups = ["default", "viz"]
 dependencies = [
     "comm>=0.1.3",
     "ipython>=6.1.0",
@@ -995,11 +1013,22 @@ files = [
 ]
 
 [[package]]
+name = "jupyter-leaflet"
+version = "0.19.2"
+requires_python = ">=3.8"
+summary = "ipyleaflet extensions for JupyterLab and Jupyter Notebook"
+groups = ["default"]
+files = [
+    {file = "jupyter_leaflet-0.19.2-py3-none-any.whl", hash = "sha256:0d57e15e80c08a4360f0cde0b4c490beddc5d422bb0e9bc1c0b4479d3fb725a6"},
+    {file = "jupyter_leaflet-0.19.2.tar.gz", hash = "sha256:b09b5ba48b1488cb61da37a6f558347269eb53ff6d64dc1a73e005ffc4420063"},
+]
+
+[[package]]
 name = "jupyterlab-widgets"
 version = "3.0.15"
 requires_python = ">=3.7"
 summary = "Jupyter interactive widgets for JupyterLab"
-groups = ["viz"]
+groups = ["default", "viz"]
 files = [
     {file = "jupyterlab_widgets-3.0.15-py3-none-any.whl", hash = "sha256:d59023d7d7ef71400d51e6fee9a88867f6e65e10a4201605d2d7f3e8f012a31c"},
     {file = "jupyterlab_widgets-3.0.15.tar.gz", hash = "sha256:2920888a0c2922351a9202817957a68c07d99673504d6cd37345299e971bb08b"},
@@ -2546,6 +2575,19 @@ files = [
 ]
 
 [[package]]
+name = "traittypes"
+version = "0.2.1"
+summary = "Scipy trait types"
+groups = ["default"]
+dependencies = [
+    "traitlets>=4.2.2",
+]
+files = [
+    {file = "traittypes-0.2.1-py2.py3-none-any.whl", hash = "sha256:1340af133810b6eee1a2eb2e988f862b0d12b6c2d16f282aaf3207b782134c2e"},
+    {file = "traittypes-0.2.1.tar.gz", hash = "sha256:be6fa26294733e7489822ded4ae25da5b4824a8a7a0e0c2dccfde596e3489bd6"},
+]
+
+[[package]]
 name = "trimesh"
 version = "4.5.0"
 requires_python = ">=3.8"
@@ -2867,7 +2909,7 @@ name = "widgetsnbextension"
 version = "4.0.14"
 requires_python = ">=3.7"
 summary = "Jupyter interactive widgets for Jupyter Notebook"
-groups = ["viz"]
+groups = ["default", "viz"]
 files = [
     {file = "widgetsnbextension-4.0.14-py3-none-any.whl", hash = "sha256:4875a9eaf72fbf5079dc372a51a9f268fc38d46f767cbf85c43a36da5cb9b575"},
     {file = "widgetsnbextension-4.0.14.tar.gz", hash = "sha256:a3629b04e3edb893212df862038c7232f62973373869db5084aed739b437b5af"},
@@ -2878,7 +2920,7 @@ name = "xyzservices"
 version = "2025.4.0"
 requires_python = ">=3.8"
 summary = "Source of XYZ tiles providers"
-groups = ["viz"]
+groups = ["default", "viz"]
 files = [
     {file = "xyzservices-2025.4.0-py3-none-any.whl", hash = "sha256:8d4db9a59213ccb4ce1cf70210584f30b10795bff47627cdfb862b39ff6e10c9"},
     {file = "xyzservices-2025.4.0.tar.gz", hash = "sha256:6fe764713648fac53450fbc61a3c366cb6ae5335a1b2ae0c3796b495de3709d8"},
