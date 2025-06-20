@@ -1,5 +1,6 @@
 # ALL Folders starting with S
 S*/
+*.s5cfg
 
 *.DS_store
 

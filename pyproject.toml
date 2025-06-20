@@ -15,6 +15,7 @@ dependencies = [
   "ipykernel>=6.29.5",    
   "zstandard>=0.23.0",    
   "ipyleaflet>=0.19.2", 
+  "s5cmd",
 ]
 
 requires-python = ">=3.9"
