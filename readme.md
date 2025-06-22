@@ -14,11 +14,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 
-
-
-
-
-![Phi-Down Logo](./assets/phidown_logo.png)
+![Phi-Down Logo](./assets/banner_phidown.svg)
 
 #  **Φ-Down**: Your Gateway to Copernicus Data <a href="https://github.com/ESA-PhiLab/phidown"><img src="./assets/logo.png" align="right" height="170em" alt="website" /></a>
 
