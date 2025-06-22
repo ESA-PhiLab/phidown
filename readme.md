@@ -12,20 +12,17 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15332053.svg)](https://doi.org/10.5281/zenodo.15332053)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-<div align="center">
 
 
 
-# 🌍 **Φ-Down**: Your Gateway to Copernicus Data
 
-*Effortlessly search and download Earth Observation data with **Φ-Down** - your simple gateway to Copernicus data.*
 
-</div>
 
 ![Phi-Down Logo](./assets/phidown_logo.png)
 
+#  **Φ-Down**: Your Gateway to Copernicus Data <a href="https://github.com/ESA-PhiLab/phidown"><img src="./assets/logo.png" align="right" height="220" alt="website" /></a>
 
-
+---
 <div align="center" style="margin-top: 20px; margin-bottom: 20px;">
   <h3>🌐 Connect with Φ-Lab & the Author</h3>
 <div align="center">
@@ -46,6 +43,7 @@
   </a>
 </div>
 
+---
 
 ## Overview 
 
@@ -72,8 +70,8 @@ Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy
 ## Features
 
 - Authenticate with the Copernicus Data Space Ecosystem.
-- Search for Sentinel products using the OData API with various filters `_query_by_filter` (collection, product type, date, AOI, cloud cover, etc.).
-- Search for products by exact name using `_query_by_name`.
+- Search for Sentinel products using the OData API with various filters `query_by_filter` (collection, product type, date, AOI, cloud cover, etc.).
+- Search for products by exact name using `query_by_name`.
 - Download Sentinel products using the S3 protocol. 
 
 
@@ -85,7 +83,7 @@ from phidown.search import CopernicusDataSearcher
 
 searcher = CopernicusDataSearcher()
 # Configure the search parameters
-searcher._query_by_filter(
+searcher.query_by_filter(
     collection_name='SENTINEL-1',
     product_type='SLC',
     orbit_direction=None,
@@ -258,16 +256,23 @@ This will install the package and its dependencies as defined in the `pyproject.
 <details>
 <summary><strong>Configure Credentials</strong></summary>
 
-To authenticate with the Copernicus Data Space Ecosystem, you need to create a `secret.yml` file containing your credentials. Follow these steps:
+To authenticate with the Copernicus Data Space Ecosystem, you need to create a `.s5cfg` file containing your credentials. 
 
-1. Create a file named `secret.yml` in the root directory of the project.
-2. Add the following content to the file, replacing `your_username` and `your_password` with your actual credentials:
+Log to https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials, create your keys them follow these steps:
+
+1. Create a file named `.s5cfg` in the root directory of the project.
+2. Add the following content to the file, replacing `aws_access_key_id` and `aws_secret_access_key` with your actual credentials:
 
   ```yaml
-  # filepath: ./phidown/secret.yml or the current working directory where phidown is launched
-  copernicus:
-    username: <your_username>
-    password: <your_password>
+  # filepath: the current working directory where phidown is launched
+  [default]
+  aws_access_key_id = your_access_key
+  aws_secret_access_key = access_key_secret
+  aws_region = eu-central-1
+  host_base = eodata.dataspace.copernicus.eu
+  host_bucket = eodata.dataspace.copernicus.eu
+  use_https = true
+  check_ssl_certificate = true
   ```
 
 3. Save the file.
