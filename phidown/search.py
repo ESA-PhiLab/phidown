@@ -4,6 +4,7 @@ import os
 import json
 import typing
 from datetime import datetime
+import copy 
 
 from .downloader import pull_down
 
@@ -48,12 +49,13 @@ class CopernicusDataSearcher:
         
         # Set default values for top and order_by
         self.top: int = 1000
+        self.count: bool = False
         self.order_by: str = "ContentDate/Start desc"
 
         # Initialize placeholders for query results
         self._initialize_placeholders()
 
-    def _query_by_filter(
+    def query_by_filter(
         self,
         base_url: str = "https://catalogue.dataspace.copernicus.eu/odata/v1/Products",
         collection_name: typing.Optional[str] = 'SENTINEL-1',
@@ -65,6 +67,7 @@ class CopernicusDataSearcher:
         start_date: typing.Optional[str] = None,
         end_date: typing.Optional[str] = None,
         top: int = 1000,
+        count: bool = False,  
         order_by: str = "ContentDate/Start desc"
     ) -> None:
         """
@@ -84,7 +87,8 @@ class CopernicusDataSearcher:
             order_by (str, optional): Field and direction to order results by. Defaults to "ContentDate/Start desc".
         """
         self.base_url = base_url  # Set or override base_url
-
+        self.count = count  # Set or override count option
+        
         # Assign and validate parameters
         self.collection_name = collection_name
         self._validate_collection(self.collection_name) # Validate collection name
@@ -419,16 +423,19 @@ class CopernicusDataSearcher:
         """Build the full OData query URL"""
         self._build_filter()
         self.query = f"?$filter={self.filter_condition}&$orderby={self.order_by}&$top={self.top}&$expand=Attributes"
+        if self.count:
+            self.query += "&$count=true"
         self.url = f"{self.base_url}{self.query}"
         return self.url
 
     def execute_query(self):
         """Execute the query and retrieve data"""
         url = self._build_query()
-        self.response = requests.get(url)
+        self.response = copy.deepcopy(requests.get(url))
         self.response.raise_for_status()  # Raise an error for bad status codes
 
         self.json_data = self.response.json()
+        self.num_results = self.json_data.get('@odata.count', 0)
         self.df = pd.DataFrame.from_dict(self.json_data['value'])
 
         return self.df
@@ -619,10 +626,24 @@ class CopernicusDataSearcher:
         else:
             return self.df[columns].head(top_n)
 
-    def download_product(self, eo_product_name):
+    def download_product(self, eo_product_name: str, output_dir: str, verbose=True):
         """
         Download the EO product using the downloader module.
         """
+        res = self.query_by_name(eo_product_name)
+        if res.empty:
+            print(f"No product found with name: {eo_product_name}")
+            return False
+        
+        # Ensure output_dir is an absolute path
+        abs_output_dir = os.path.abspath(output_dir)
+
+        if verbose:
+            print(f"Downloading product: {eo_product_name}")
+            print(f"Output directory: {abs_output_dir}")
+        
+        s3path = res['S3Path'].iloc[0]
         # Call the downloader function
-        pull_down(eo_product_name)
-        # You can also add logic to handle the download process here if needed
+        pull_down(s3path, 
+                abs_output_dir,
+                verbose=True)

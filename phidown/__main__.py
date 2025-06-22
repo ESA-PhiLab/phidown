@@ -6,5 +6,5 @@ This prevents the RuntimeWarning about module execution conflicts.
 
 if __name__ == '__main__':
     # Import and run the downloader directly
-    from .downloader import main
+    from .downloader_boto3 import main
     main()
