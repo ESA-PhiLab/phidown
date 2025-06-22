@@ -60,6 +60,13 @@ Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy
 | Contributions | [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com) |
 
 
+> ## 🚀 **What's Next & Feature Status**
+> 
+> - ✔️ **Done:** Replace `s3` with `s5cmd` for data transfers  
+> - ✔️ **Done:** Add a visualisation tool  
+> - [x] **Coming soon:** Implement a `count` option for search results more than 1000
+> - [x] **Coming soon:** Add a parallel download executor
+
 
 
 ## Features
