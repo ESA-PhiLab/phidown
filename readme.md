@@ -20,7 +20,7 @@
 
 ![Phi-Down Logo](./assets/phidown_logo.png)
 
-#  **Φ-Down**: Your Gateway to Copernicus Data <a href="https://github.com/ESA-PhiLab/phidown"><img src="./assets/logo.png" align="right" height="200em" alt="website" /></a>
+#  **Φ-Down**: Your Gateway to Copernicus Data <a href="https://github.com/ESA-PhiLab/phidown"><img src="./assets/logo.png" align="right" height="150em" alt="website" /></a>
 
 ---
 <div align="center" style="margin-top: 20px; margin-bottom: 20px;">
