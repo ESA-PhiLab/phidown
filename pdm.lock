@@ -5,7 +5,7 @@
 groups = ["default", "dev", "viz"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:029cac5f9da82882f8589bccd9b72f7bf529feefb88abf22216dbf65db62af19"
+content_hash = "sha256:a43ad00bb485add3a9a098dbaa0731b1e4ec12cbefe19fdd8bfdab09138dc648"
 
 [[metadata.targets]]
 requires_python = ">=3.9"
@@ -2283,6 +2283,28 @@ dependencies = [
 files = [
     {file = "s3transfer-0.13.0-py3-none-any.whl", hash = "sha256:0148ef34d6dd964d0d8cf4311b2b21c474693e57c2e069ec708ce043d2b527be"},
     {file = "s3transfer-0.13.0.tar.gz", hash = "sha256:f5e6db74eb7776a37208001113ea7aa97695368242b364d73e91c981ac522177"},
+]
+
+[[package]]
+name = "s5cmd"
+version = "0.2.0"
+requires_python = ">=3.8"
+summary = "This project provides the infrastructure to build s5cmd Python wheels."
+groups = ["default"]
+files = [
+    {file = "s5cmd-0.2.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:cb797e43fe2a2687a341a57b7795fd7ecebbfb1aa59451bd9b086073e606d445"},
+    {file = "s5cmd-0.2.0-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:045844878f2ca345f159333abc321c3d1bcf0acb436778c43c90b10393f6a818"},
+    {file = "s5cmd-0.2.0-py3-none-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:a4dc3c19cee6e0447bcc68554bb39ed9ab3aeaf463b1c823cb61a175b6254fa9"},
+    {file = "s5cmd-0.2.0-py3-none-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:5befb0461ad7dd57ba80d6d35b688a4ac9c34179e0690faeec3aad0243adb127"},
+    {file = "s5cmd-0.2.0-py3-none-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:fc07ded42370ec931aa6b642a70274669d11a332a81f825eaa1093f65245034e"},
+    {file = "s5cmd-0.2.0-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:fb992f69dcf019e89a9e025c9105d2340b694f68234e4fb86ebbb1827f6046bf"},
+    {file = "s5cmd-0.2.0-py3-none-musllinux_1_2_i686.whl", hash = "sha256:65fe3aad880625c61b3e210a17c2ddf110d1e3da5f7c63c9d091ce40db28952f"},
+    {file = "s5cmd-0.2.0-py3-none-musllinux_1_2_ppc64le.whl", hash = "sha256:b6974bc842baa6bfec31121e798fbe08f8a254a617afbdbc47f166c232070b26"},
+    {file = "s5cmd-0.2.0-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:6de4ce8d3ee3c92522fcfd98460bece854026b5f43020c59e0a209c8bcdc083a"},
+    {file = "s5cmd-0.2.0-py3-none-win32.whl", hash = "sha256:2589d2cf6eab6d06fb5dc7e53160daa46c0d5295d971c3ab7567d74001799e44"},
+    {file = "s5cmd-0.2.0-py3-none-win_amd64.whl", hash = "sha256:8d1b8b08e5aabd81473bc8826d403ffe17d435f8972ec05c0c22b29999fef491"},
+    {file = "s5cmd-0.2.0-py3-none-win_arm64.whl", hash = "sha256:1cda970814aa2e15e4add42a3005a1a6ea7bd23212fc704d7273e7372fb228db"},
+    {file = "s5cmd-0.2.0.tar.gz", hash = "sha256:2e8055e2579ae11d8f251afbdc2baac93333f2305f953b080f92ce9629675f76"},
 ]
 
 [[package]]
