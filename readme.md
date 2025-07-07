@@ -4,7 +4,7 @@
 ![GitHub last commit](https://img.shields.io/github/last-commit/ESA-PhiLab/phidown.svg)
 ![GitHub code size](https://img.shields.io/github/languages/code-size/ESA-PhiLab/phidown.svg)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Documentation Status](https://img.shields.io/badge/docs-latest-green.svg)](https://github.com/ESA-PhiLab/phidown/wiki)
+[![Documentation Status](https://img.shields.io/badge/docs-sphinx-blue.svg)](https://esa-philab.github.io/phidown)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15332053.svg)](https://doi.org/10.5281/zenodo.15332053)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
@@ -97,6 +97,17 @@ searcher.display_results(top_n=15)
 ```
 
 For more advanced use cases, including searching with geographical filters and batch downloading, see the [usage notebook](./how_to_start.ipynb).
+
+## 📚 Documentation
+
+Comprehensive documentation is available at: **[https://esa-philab.github.io/phidown](https://esa-philab.github.io/phidown)**
+
+- **[Getting Started](https://esa-philab.github.io/phidown/getting_started.html)** - Quick start guide
+- **[Installation](https://esa-philab.github.io/phidown/installation.html)** - Detailed installation instructions
+- **[User Guide](https://esa-philab.github.io/phidown/user_guide.html)** - Complete usage guide
+- **[API Reference](https://esa-philab.github.io/phidown/api_reference.html)** - Full API documentation
+- **[Examples](https://esa-philab.github.io/phidown/examples.html)** - Code examples and tutorials
+- **[Contributing](https://esa-philab.github.io/phidown/contributing.html)** - How to contribute
 
 
 ## Credentials
