@@ -14,7 +14,7 @@ Dependencies
 
 Core dependencies (automatically installed):
 
-* ``boto3`` - AWS S3 client for data downloads
+* ``s5cmd`` - High-performance S3 client for data downloads
 * ``numpy`` - Numerical computing
 * ``pandas`` - Data manipulation and analysis
 * ``requests`` - HTTP library for API calls

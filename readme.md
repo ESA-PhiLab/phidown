@@ -287,17 +287,17 @@ Log to https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials
 
 > **💡 Alternative: Pass Credentials w CLI**  
 >  
-> Instead of using a `secret.yml` file, you can pass your credentials directly when running the script. Use the following command:  
+> Instead of using a `.s5cfg` file, you can pass your S3 credentials directly when running the script. Use the following command:  
 >  
 > ```bash
 > pdm run python phidown/downloader.py --username <your_username> --password <your_password> --eo_product_name <eo_product_name>
 > ```  
 >  
-> Replace `your_username` and `your_password` with your actual credentials.  
+> Replace `your_username` and `your_password` with your actual S3 credentials.  
 > Replace `eo_product_name` with your actual product name you want to download.  
 >  
 > The script will:  
-> 1. Authenticate with the Copernicus Data Space Ecosystem.  
+> 1. Authenticate with the Copernicus Data Space Ecosystem using S3 credentials.  
 > 2. Search for Sentinel products within the specified AOI and date range.  
 > 3. Download the first matching product using S3.  
 </details>
@@ -320,7 +320,7 @@ For a detailed example of how to use **Φ-Down**, refer to the [how_to_start.ipy
 
 
 ## Notes
-- **Credentials**: Update your username and password in `phidown/secret.yml`. Do **not** share this file publicly.
+- **Credentials**: S3 credentials are required and must be configured in the `.s5cfg` file. Do **not** share this file publicly.
 - **Virtual Environment**: PDM manages a dedicated virtual environment for the project.
 - **Faster Setup**: Using `pdm.lock` improves reproducibility and setup speed.
 

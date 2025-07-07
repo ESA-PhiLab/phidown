@@ -144,4 +144,5 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 phidown/secret.yml
+.s5cfg
 .pdm-python

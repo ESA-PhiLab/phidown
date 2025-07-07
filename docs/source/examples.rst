@@ -419,7 +419,7 @@ Tips for Using Examples
 
 1. **Modify coordinates**: Replace the example coordinates with your area of interest
 2. **Adjust date ranges**: Use appropriate date ranges for your analysis
-3. **Handle credentials**: Ensure your ``secret.yml`` file is properly configured
+3. **Handle credentials**: Ensure your `.s5cfg` file is properly configured with S3 credentials
 4. **Monitor API limits**: Be respectful of API rate limits when processing large datasets
 5. **Error handling**: Always include proper error handling in production code
 6. **Data storage**: Organize downloaded data in a structured manner

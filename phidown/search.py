@@ -8,7 +8,7 @@ import copy
 
 from .downloader import pull_down
 
-# Write the credentials in secret.yml!
+# Set up S3 credentials in .s5cfg file!
 
 
 ############################################################################

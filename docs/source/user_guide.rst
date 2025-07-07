@@ -3,40 +3,28 @@ User Guide
 
 This guide provides detailed instructions for using Φ-Down to search and download Copernicus satellite data.
 
-Setting Up Credentials
------------------------
+Setting Up S3 Credentials
+--------------------------
 
-Before using Φ-Down, you need to set up your Copernicus Data Space credentials.
+Before using Φ-Down, you need to set up your S3 credentials for accessing the Copernicus Data Space Ecosystem. S3 credentials are required for downloading data.
 
-Method 1: Configuration File
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Configuration File Method
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Create a ``secret.yml`` file in your working directory:
+Create a `.s5cfg` file in your working directory:
 
 .. code-block:: yaml
 
-   username: your_username
-   password: your_password
+   [default]
+   aws_access_key_id = your_access_key
+   aws_secret_access_key = access_key_secret
+   aws_region = eu-central-1
+   host_base = eodata.dataspace.copernicus.eu
+   host_bucket = eodata.dataspace.copernicus.eu
+   use_https = true
+   check_ssl_certificate = true
 
-Method 2: Interactive Setup
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-If no configuration file is found, Φ-Down will prompt you for credentials:
-
-.. code-block:: python
-
-   from phidown.downloader import load_credentials
-   username, password = load_credentials()
-
-Method 3: Environment Variables
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Set environment variables (useful for CI/CD):
-
-.. code-block:: bash
-
-   export COPERNICUS_USERNAME=your_username
-   export COPERNICUS_PASSWORD=your_password
+Replace `your_access_key` and `access_key_secret` with your actual S3 credentials obtained from the `S3 Key Manager <https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials>`_.
 
 Searching for Data
 ------------------
@@ -211,9 +199,10 @@ For faster downloads, use S3 credentials:
 
 .. code-block:: python
 
-   # Set up S3 credentials in secret.yml
-   # s3_access_key: your_s3_access_key
-   # s3_secret_key: your_s3_secret_key
+   # Set up S3 credentials in .s5cfg
+   # [default]
+   # aws_access_key_id = your_access_key
+   # aws_secret_access_key = access_key_secret
    
    pull_down(product_id, download_dir='./data', use_s3=True)
 

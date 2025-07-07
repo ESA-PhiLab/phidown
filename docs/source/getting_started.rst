@@ -15,7 +15,7 @@ Before using Φ-Down, you'll need:
 
 1. **Python 3.9+** - Φ-Down requires Python 3.9 or later
 2. **Copernicus Data Space Account** - Register at `<https://dataspace.copernicus.eu/>`_
-3. **S3 Credentials** (optional) - For faster downloads, get S3 credentials from the `S3 Key Manager <https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials>`_
+3. **S3 Credentials** (required) - Get S3 credentials from the `S3 Key Manager <https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials>`_
 
 First Steps
 -----------
@@ -26,16 +26,22 @@ First Steps
 
       pip install phidown
 
-2. **Set up your credentials**:
+2. **Set up your S3 credentials**:
 
-   Create a ``secret.yml`` file in your working directory:
+   Create a `.s5cfg` file in your working directory:
 
    .. code-block:: yaml
 
-      username: your_username
-      password: your_password
+      [default]
+      aws_access_key_id = your_access_key
+      aws_secret_access_key = access_key_secret
+      aws_region = eu-central-1
+      host_base = eodata.dataspace.copernicus.eu
+      host_bucket = eodata.dataspace.copernicus.eu
+      use_https = true
+      check_ssl_certificate = true
 
-   Or let Φ-Down prompt you for credentials on first use.
+   Replace `your_access_key` and `access_key_secret` with your actual S3 credentials.
 
 3. **Your first search**:
 
