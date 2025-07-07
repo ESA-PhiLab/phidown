@@ -58,6 +58,7 @@ Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy
 > - ✔️ **Done:** Replace `s3` with `s5cmd` for data transfers  
 > - ✔️ **Done:** Add a visualisation tool  
 > - ✔️ **Done:** Add a S-1 reference in docs.  
+> - ✔️ **Done:** Removed old boto3 dep.
 > - [x] **Coming soon:** Implement a `count` option for search results more than 1000
 > - [x] **Coming soon:** Add a parallel download executor
 > - [x] **Coming soon:** Improve docs for ALL missions.
