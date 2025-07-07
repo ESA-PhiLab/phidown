@@ -42,8 +42,10 @@ jobs:
     - name: Build documentation
       run: |
         # Build from the repository root using full paths
-        sphinx-build -b html docs/source docs/build/html -v
-        
+        # sphinx-build -b html docs/source docs/build/html -v
+        sphinx-build -b html docs/source docs/build/html -v || (cat /tmp/sphinx-err-*.log && exit 1)
+
+
     - name: Create .nojekyll file
       run: |
         touch docs/build/html/.nojekyll
