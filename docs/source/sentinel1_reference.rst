@@ -18,6 +18,31 @@ Sentinel-1 is a constellation of two polar-orbiting satellites (Sentinel-1A and 
 Search Parameters
 -----------------
 
+**Parameter Types**
+
+When searching for Sentinel-1 data, parameters are passed in two ways:
+
+1. **Direct Parameters:** Passed directly to the ``search()`` method
+   - ``collection_name`` - Mission/collection identifier
+   - ``product_type`` - Product type (GRD, SLC, OCN, etc.)
+   - ``orbit_direction`` - Orbit direction (ASCENDING/DESCENDING)
+   - ``aoi_wkt`` - Area of interest in WKT format
+   - ``start_date`` / ``end_date`` - Temporal range
+   - ``top`` - Maximum number of results
+
+2. **Attributes:** Passed in the ``attributes`` dictionary
+   - ``sensorMode`` - Acquisition mode (IW, EW, SM, WV)
+   - ``platform`` - Satellite platform (S1A, S1B)
+   - ``polarisation`` - Polarization combination
+   - ``processingLevel`` - Processing level
+   - ``relativeOrbitNumber`` - Relative orbit number
+   - ``orbitNumber`` - Absolute orbit number
+   - ``instrument`` - Instrument type
+   - ``status`` - Product availability status
+   - ``timeliness`` - Data delivery timeliness
+   - ``processingBaseline`` - Processing baseline version
+   - ``swathIdentifier`` - Specific swath identifier
+
 Basic Parameters
 ^^^^^^^^^^^^^^^^
 
@@ -45,39 +70,6 @@ Region of Interest defined in Well Known Text (WKT) format with coordinates in d
        aoi_wkt=aoi_wkt
    )
 
-Bounding Box
-""""""""""""
-Alternative to geometry, defined by 'west, south, east, north' coordinates.
-
-.. code-block:: python
-
-   # Box format: west, south, east, north
-   bbox = '12.4,41.9,12.5,42.0'
-
-Point with Radius
-"""""""""""""""""
-Search around a specific point with a radius in meters.
-
-.. code-block:: python
-
-   # Center point with 10km radius
-   lon, lat = 12.45, 41.95
-   radius = 10000  # meters
-
-Temporal Parameters
-^^^^^^^^^^^^^^^^^^^
-
-Date Range
-""""""""""
-Specify the acquisition time range using RFC-3339 format.
-
-.. code-block:: python
-
-   results = searcher.search(
-       collection_name='SENTINEL-1',
-       start_date='2023-06-01T00:00:00Z',
-       end_date='2023-06-30T23:59:59Z'
-   )
 
 Product Parameters
 ^^^^^^^^^^^^^^^^^^
@@ -153,9 +145,10 @@ Available processing levels:
 
 .. code-block:: python
 
+   # Search for LEVEL1 products
    results = searcher.search(
        collection_name='SENTINEL-1',
-       processing_level='LEVEL1'
+       attributes={'processingLevel': 'LEVEL1'}
    )
 
 Platform
@@ -170,12 +163,37 @@ Sentinel-1 constellation satellites:
    # Search for Sentinel-1A data only
    results = searcher.search(
        collection_name='SENTINEL-1',
-       platform='S1A'
+       attributes={'platform': 'S1A'}
+   )
+
+Swath Identifier
+""""""""""""""""
+Filter by specific swath. This is an attribute-based search.
+
+* Stripmap (SM): ``S1`` to ``S6``
+* Interferometric Wide (IW): ``IW1``, ``IW2``, ``IW3``
+* Extra Wide (EW): ``EW1`` to ``EW5``
+* Wave (WV): ``WV1``, ``WV2``
+
+.. code-block:: python
+
+   # Search for data from Stripmap swath S1
+   results = searcher.search(
+       collection_name='SENTINEL-1',
+       attributes={'swathIdentifier': 'S1'}
    )
 
 Instrument
 """"""""""
 * ``SAR`` - Synthetic Aperture Radar
+
+.. code-block:: python
+
+   # Search for SAR instrument data
+   results = searcher.search(
+       collection_name='SENTINEL-1',
+       attributes={'instrument': 'SAR'}
+   )
 
 Sensor Mode
 """""""""""
@@ -191,7 +209,7 @@ Sentinel-1 acquisition modes:
    # Search for Interferometric Wide swath data
    results = searcher.search(
        collection_name='SENTINEL-1',
-       sensor_mode='IW'
+       attributes={'sensorMode': 'IW'}
    )
 
 **Mode Characteristics:**
@@ -225,7 +243,7 @@ Absolute orbit number (integer value or range).
    # Single orbit
    results = searcher.search(
        collection_name='SENTINEL-1',
-       orbit_number=12345
+       attributes={'orbitNumber': 12345}
    )
 
 Relative Orbit Number
@@ -315,6 +333,10 @@ Product availability status:
    # Search for immediately available products
    results = searcher.search(
        collection_name='SENTINEL-1',
+       attributes={'status': 'ONLINE'}
+   )
+   results = searcher.search(
+       collection_name='SENTINEL-1',
        status='ONLINE'
    )
 
@@ -334,11 +356,11 @@ Example 1: Basic IW GRD Search
    results = searcher.search(
        collection_name='SENTINEL-1',
        product_type='GRD',
-       sensor_mode='IW',
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
        start_date='2023-06-01',
        end_date='2023-06-30',
-       orbit_direction='DESCENDING'
+       orbit_direction='DESCENDING',
+       attributes={'sensorMode': 'IW'}
    )
    
    print(f"Found {len(results)} IW GRD products")
@@ -356,12 +378,12 @@ Example 2: Interferometric SLC Search
    results = searcher.search(
        collection_name='SENTINEL-1',
        product_type='SLC',
-       sensor_mode='IW',
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
        start_date='2023-06-01',
        end_date='2023-06-30',
        orbit_direction='DESCENDING',
        attributes={
+           'sensorMode': 'IW',
            'polarisation': 'VV%26VH',
            'relativeOrbitNumber': 87
        }
@@ -390,10 +412,10 @@ Example 3: Ocean Applications
    wave_results = searcher.search(
        collection_name='SENTINEL-1',
        product_type='GRD',
-       sensor_mode='WV',
        aoi_wkt='POLYGON((0 35, 10 35, 10 45, 0 45, 0 35))',
        start_date='2023-06-01',
-       end_date='2023-06-30'
+       end_date='2023-06-30',
+       attributes={'sensorMode': 'WV'}
    )
    
    print(f"Found {len(ocean_results)} ocean products and {len(wave_results)} wave mode products")
@@ -412,12 +434,12 @@ Example 4: Time Series Analysis
    results = searcher.search(
        collection_name='SENTINEL-1',
        product_type='GRD',
-       sensor_mode='IW',
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
        start_date='2023-01-01',
        end_date='2023-12-31',
        orbit_direction='DESCENDING',
        attributes={
+           'sensorMode': 'IW',
            'relativeOrbitNumber': 87,
            'polarisation': 'VV%26VH'
        }
@@ -442,19 +464,19 @@ Example 5: Multi-Platform Search
    s1a_results = searcher.search(
        collection_name='SENTINEL-1',
        product_type='GRD',
-       platform='S1A',
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
        start_date='2023-06-01',
-       end_date='2023-06-30'
+       end_date='2023-06-30',
+       attributes={'platform': 'S1A'}
    )
    
    s1b_results = searcher.search(
        collection_name='SENTINEL-1',
        product_type='GRD',
-       platform='S1B',
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
        start_date='2023-06-01',
-       end_date='2023-06-30'
+       end_date='2023-06-30',
+       attributes={'platform': 'S1B'}
    )
    
    print(f"Sentinel-1A: {len(s1a_results)} products")
@@ -472,11 +494,11 @@ Search Optimization Tips
 4. **Consider Processing Baseline:** Newer baselines generally provide better quality but may not be available for historical data.
 
 5. **Use Sensor Mode Appropriately:**
-   - IW for most land applications
-   - EW for wide-area monitoring
-   - WV for ocean wave analysis
+   - IW for most land applications (use ``attributes={'sensorMode': 'IW'}``)
+   - EW for wide-area monitoring (use ``attributes={'sensorMode': 'EW'}``)
+   - WV for ocean wave analysis (use ``attributes={'sensorMode': 'WV'}``)
 
-6. **Check Product Status:** Use ``status='ONLINE'`` for immediate download needs.
+6. **Check Product Status:** Use ``attributes={'status': 'ONLINE'}`` for immediate download needs.
 
 Common Use Cases
 ----------------
