@@ -8,7 +8,7 @@ Welcome to Φ-Down Documentation
 .. image:: ../../assets/logo.png
    :alt: Φ-Down Logo
    :align: center
-   :width: 200px
+   :width: 500px
 
 .. toctree::
    :maxdepth: 2
