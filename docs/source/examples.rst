@@ -423,5 +423,6 @@ Tips for Using Examples
 4. **Monitor API limits**: Be respectful of API rate limits when processing large datasets
 5. **Error handling**: Always include proper error handling in production code
 6. **Data storage**: Organize downloaded data in a structured manner
+7. **Sentinel-1 parameters**: For detailed Sentinel-1 search parameters, see the :doc:`sentinel1_reference` guide
 
 For more examples and use cases, check the `notebooks/` directory in the repository.
