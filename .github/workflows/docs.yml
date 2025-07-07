@@ -39,11 +39,22 @@ jobs:
         pip install -r docs/requirements.txt
         pip install -e .
         
+    - name: Debug workspace
+      run: |
+        echo "Current directory: $(pwd)"
+        echo "Contents of current directory:"
+        ls -la
+        echo "Contents of docs directory:"
+        ls -la docs/
+        echo "Contents of docs/source directory:"
+        ls -la docs/source/
+        
     - name: Build documentation
       run: |
+        # Create build directory if it doesn't exist
+        mkdir -p docs/build/html
         # Build from the repository root using full paths
-        # sphinx-build -b html docs/source docs/build/html -v
-        sphinx-build -b html docs/source docs/build/html -v || (cat /tmp/sphinx-err-*.log && exit 1)
+        sphinx-build -b html docs/source docs/build/html -v
 
 
     - name: Create .nojekyll file
