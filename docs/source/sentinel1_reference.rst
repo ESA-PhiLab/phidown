@@ -78,54 +78,29 @@ Product Types
 """""""""""""
 Sentinel-1 offers various product types for different applications:
 
-**Main Product Types:**
+.. table:: Sentinel-1 Product Types
+    :widths: 20 60 20
+    :header-rows: 1
 
-* ``GRD`` - Ground Range Detected (most common for applications)
-* ``SLC`` - Single Look Complex (for interferometry)
-* ``OCN`` - Ocean products
-* ``RAW`` - Raw data
+    * - Category
+      - Description
+      - Identifier
+    * - **GRD**
+      - **Ground Range Detected:** Multi-looked, projected to ground range. The most common product for general applications. Can be in standard or Cloud-Optimized GeoTIFF (COG) format.
+      - ``GRD``, ``GRD-COG``
+    * - **SLC**
+      - **Single Look Complex:** Georeferenced complex imagery with phase information preserved. Essential for interferometry (InSAR).
+      - ``SLC``
+    * - **OCN**
+      - **Ocean:** Derived products for ocean applications, providing information on swell spectra, wind speed, and direction.
+      - ``OCN``
+    * - **RAW**
+      - **Raw Data:** Level-0 data, unprocessed instrument data. For expert use.
+      - ``RAW``
+    * - **AUX**
+      - **Auxiliary Data:** Supporting data files like orbit information, calibration parameters, and processing parameters.
+      - ``AUX_PP1``, ``AUX_CAL``, etc.
 
-**Detailed Product Types:**
-
-*Ground Range Detected (GRD):*
-- ``GRD`` - Generic GRD
-- ``GRD-COG`` - Cloud Optimized GeoTIFF format
-- ``S1_GRDF_1S`` to ``S6_GRDF_1S`` - Full resolution GRD
-- ``S1_GRDH_1S`` to ``S6_GRDH_1S`` - High resolution GRD
-- ``S1_GRDM_1S`` to ``S6_GRDM_1S`` - Medium resolution GRD
-- ``IW_GRDH_1S``, ``IW_GRDM_1S`` - Interferometric Wide swath
-- ``EW_GRDH_1S``, ``EW_GRDM_1S`` - Extra Wide swath
-- ``WV_GRDM_1S`` - Wave mode
-
-*Single Look Complex (SLC):*
-- ``SLC`` - Generic SLC
-- ``S1_SLC__1S`` to ``S6_SLC__1S`` - Stripmap SLC
-- ``IW_SLC__1S`` - Interferometric Wide swath SLC
-- ``EW_SLC__1S`` - Extra Wide swath SLC
-- ``WV_SLC__1S`` - Wave mode SLC
-
-*Ocean Products:*
-- ``OCN`` - Generic Ocean
-- ``S1_OCN__2S`` to ``S6_OCN__2S`` - Stripmap Ocean
-- ``IW_OCN__2S`` - Interferometric Wide swath Ocean
-- ``EW_OCN__2S`` - Extra Wide swath Ocean
-- ``WV_OCN__2S`` - Wave mode Ocean
-
-*Raw Data:*
-- ``RAW`` - Generic Raw
-- ``S1_RAW__0S`` to ``S6_RAW__0S`` - Stripmap Raw
-- ``IW_RAW__0S`` - Interferometric Wide swath Raw
-- ``EW_RAW__0S`` - Extra Wide swath Raw
-
-*Auxiliary Data:*
-- ``AUX_PP1``, ``AUX_PP2`` - Processing Parameters
-- ``AUX_CAL`` - Calibration data
-- ``AUX_INS`` - Instrument data
-- ``AUX_SCS`` - Satellite Control System data
-- ``AUX_PREORB``, ``AUX_POEORB``, ``AUX_RESORB`` - Orbit data
-- ``AUX_RESATT`` - Attitude data
-- ``AUX_GNSSRD`` - GNSS raw data
-- ``AUX_PROQUA`` - Product Quality data
 
 .. code-block:: python
 
@@ -265,21 +240,21 @@ Sentinel-1 supports various polarization combinations:
 
 * ``HH`` - Horizontal transmit, Horizontal receive
 * ``VV`` - Vertical transmit, Vertical receive
-* ``HH%26VH`` - Horizontal transmit, Horizontal and Vertical receive
-* ``VV%26VH`` - Vertical transmit, Vertical and Horizontal receive
-* ``VH%26VV`` - Vertical transmit, Horizontal and Vertical receive
-* ``VH%26HH`` - Vertical transmit, Horizontal and Vertical receive
-* ``HH%26HV`` - Horizontal transmit, Horizontal and Vertical receive
-* ``VV%26HV`` - Vertical transmit, Vertical and Horizontal receive
-* ``HV%26HH`` - Horizontal transmit, Vertical and Horizontal receive
-* ``HV%26VV`` - Horizontal transmit, Vertical and Vertical receive
+* ``HH&VH`` - Horizontal transmit, Horizontal and Vertical receive
+* ``VV&VH`` - Vertical transmit, Vertical and Horizontal receive
+* ``VH&VV`` - Vertical transmit, Horizontal and Vertical receive
+* ``VH&HH`` - Vertical transmit, Horizontal and Vertical receive
+* ``HH&HV`` - Horizontal transmit, Horizontal and Vertical receive
+* ``VV&HV`` - Vertical transmit, Vertical and Horizontal receive
+* ``HV&HH`` - Horizontal transmit, Vertical and Horizontal receive
+* ``HV&VV`` - Horizontal transmit, Vertical and Vertical receive
 
 .. code-block:: python
 
    # Search for dual polarization VV+VH
    results = searcher.search(
        collection_name='SENTINEL-1',
-       attributes={'polarisation': 'VV%26VH'}
+       attributes={'polarisation': 'VV&VH'}
    )
 
 **Polarization by Mode:**
@@ -536,8 +511,8 @@ Technical Specifications
 
 **Spatial Resolution:**
 - SM: 5 m (single-look)
-- IW: 5×20 m (single-look)
-- EW: 20×40 m (single-look)
+- IW: 5x20 m (single-look)
+- EW: 20x40 m (single-look)
 - WV: 5 m (single-look)
 
 For more detailed information about Sentinel-1 specifications and applications, refer to the official ESA Sentinel-1 documentation.
