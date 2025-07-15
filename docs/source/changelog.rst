@@ -24,6 +24,45 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 - Documentation build process
 - API reference generation
 
+[0.1.15] - 2024-07-15
+---------------------
+
+### Added
+- Updated Sentinel-2 reference guide with correct parameters from OpenSearch descriptor
+- Comprehensive Sentinel-2 MSI documentation with all product types
+- Detailed examples for Level-1C and Level-2A products
+- Cloud cover filtering examples and best practices
+- Tile-based search documentation with MGRS tile identifiers
+- Processing baseline filtering capabilities
+- Mission take ID search functionality
+- Enhanced Sentinel-3 ocean and land products support
+- Sentinel-3 OLCI (Ocean and Land Colour Instrument) documentation
+- Sentinel-3 SLSTR (Sea and Land Surface Temperature Radiometer) documentation
+- Sentinel-3 SRAL (SAR Radar Altimeter) documentation
+- Sentinel-3 MWR (MicroWave Radiometer) documentation
+- Comprehensive Sentinel-3 product type reference
+- Sentinel-3 instrument-specific search parameters
+- Sentinel-3 timeliness and processing level filtering
+
+### Changed
+- Corrected Sentinel-2 documentation (was incorrectly showing Sentinel-1 content)
+- Enhanced parameter documentation with proper OpenSearch attributes
+- Improved search examples with realistic use cases
+- Better organization of product types and processing levels
+- Updated technical specifications for Sentinel-2 MSI
+- Improved Sentinel-3 search parameter organization
+- Enhanced multi-mission search capabilities
+- Better documentation structure for ocean and land products
+
+### Fixed
+- Sentinel-2 reference guide content alignment with actual API parameters
+- Parameter mapping between direct parameters and attributes dictionary
+- Documentation examples for proper attribute usage
+- Product type identifiers and their descriptions
+- Sentinel-3 instrument parameter validation
+- Cross-mission search consistency
+- Product type filtering for ocean and land applications
+
 [0.1.13] - 2024-12-XX
 ---------------------
 
