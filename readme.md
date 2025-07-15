@@ -6,7 +6,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Documentation Status](https://img.shields.io/badge/docs-sphinx-blue.svg)](https://esa-philab.github.io/phidown)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15332053.svg)](https://doi.org/10.5281/zenodo.15332053)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
 
 
 #  **Φ-Down**: Your Gateway to Copernicus Data <a href="https://github.com/ESA-PhiLab/phidown"><img src="./assets/logo.png" align="right" height="170em" alt="website" /></a>
@@ -48,7 +48,7 @@ Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy
 |Example Notebook | [![Open in Colab](https://img.shields.io/badge/Open%20in-Colab-orange?logo=google-colab&style=for-the-badge)](https://colab.research.google.com/drive/1ZLIyKS_OrDmJfW4H5R6i1_b88vqrdCKz?usp=sharing) |
 | Python Support | [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/) |
 | PyPi | [![PyPI Version](https://img.shields.io/pypi/v/phidown.svg?color=blue)](https://pypi.org/project/phidown/) |
-| License | [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) |
+| License | [![License: GPL v3](https://img.shields.io/badge/License-LGPLv3-A42E2B?style=plastic&labelColor=white&logo=gnu&logoColor=A42E2B)](https://opensource.org/license/LGPL-3.0) |
 | Documentation | [![Documentation Status](https://img.shields.io/badge/docs-sphinx-blue.svg)](https://esa-philab.github.io/phidown) |
 | Contributions | [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com) |
 
@@ -416,13 +416,13 @@ If **Φ-Down** has contributed to your research, project, or publication, we kin
 ---
 ## License
 
-**Φ-Down** is proudly licensed under the **GNU General Public License v3.0 (GPLv3)**.
+**Φ-Down** is proudly licensed under the **GNU Lesser General Public License version v3.0 (LGPLv3)**.
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![License: LGPL v3](https://img.shields.io/badge/License-LGPLv3-A42E2B?style=plastic&labelColor=white&logo=gnu&logoColor=A42E2B)](https://opensource.org/license/LGPL-3.0)
 
 This license ensures that the software remains free and open-source, allowing you to:
 - **Use** the software freely for any purpose.
 - **Share** the software with others.
 - **Modify** the software and share your modifications under the same license terms.
 
-For full details, please refer to the [GPLv3 License Text](https://www.gnu.org/licenses/gpl-3.0.en.html).
+For full details, please refer to the [LGPLv3 License Text](https://opensource.org/license/LGPL-3.0).
