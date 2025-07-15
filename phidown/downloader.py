@@ -1,4 +1,4 @@
-from .s5cmd_utils import download as pull_down # old style, to be removed in future
+from .s5cmd_utils import pull_down # old style, to be removed in future
 import argparse
 import sys
 import logging

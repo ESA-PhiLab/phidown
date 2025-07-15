@@ -87,7 +87,7 @@ def run_s5cmd_with_config(
         raise
     
     
-def download(
+def pull_down(
     s3_path: str,
     output_dir: str = '.',
     config_file: str = '.s5cfg',
