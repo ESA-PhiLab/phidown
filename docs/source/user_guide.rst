@@ -175,11 +175,18 @@ Basic Download
 
 .. code-block:: python
 
-   from phidown.downloader import pull_down
+   from phidown.s5cmd_utils import download as pull_down
 
-   # Download a single product
-   product_id = results.iloc[0]['Id']
-   pull_down(product_id, download_dir='./data')
+   # Download a single product using S3 path
+   s3_path = '/eodata/Sentinel-1/SAR/IW_RAW__0S/2024/05/03/S1A_IW_RAW__0SDV_20240503T031926_20240503T031942_053701_0685FB_E003.SAFE'
+   pull_down(
+       s3_path=s3_path,
+       output_dir='./data',
+       config_file='.s5cfg',
+       endpoint_url='https://eodata.dataspace.copernicus.eu',
+       download_all=True,
+       reset=False
+   )
 
 Batch Download
 ^^^^^^^^^^^^^^
@@ -188,23 +195,68 @@ Batch Download
 
    # Download multiple products
    for idx, row in results.iterrows():
-       product_id = row['Id']
+       s3_path = row['S3Path']  # Assuming S3Path is available in results
        print(f"Downloading {row['Name']}")
-       pull_down(product_id, download_dir='./data')
+       pull_down(
+           s3_path=s3_path,
+           output_dir='./data',
+           config_file='.s5cfg'
+       )
 
-Download with S3 (Faster)
-^^^^^^^^^^^^^^^^^^^^^^^^^
+Download with S3 Configuration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-For faster downloads, use S3 credentials:
+The download function uses S3 credentials by default. Make sure your `.s5cfg` file is properly configured:
 
 .. code-block:: python
 
-   # Set up S3 credentials in .s5cfg
+   # The .s5cfg file should contain:
    # [default]
    # aws_access_key_id = your_access_key
    # aws_secret_access_key = access_key_secret
+   # aws_region = eu-central-1
+   # host_base = eodata.dataspace.copernicus.eu
+   # host_bucket = eodata.dataspace.copernicus.eu
+   # use_https = true
+   # check_ssl_certificate = true
    
-   pull_down(product_id, download_dir='./data', use_s3=True)
+   # Reset configuration and prompt for new credentials
+   pull_down(
+       s3_path=s3_path,
+       output_dir='./data',
+       reset=True
+   )
+
+Command Line Usage
+------------------
+
+Φ-Down also provides a command-line interface for downloading data:
+
+.. code-block:: bash
+
+   # Basic usage
+   python -m phidown.downloader /eodata/Sentinel-1/SAR/IW_RAW__0S/2024/05/03/S1A_IW_RAW__0SDV_20240503T031926_20240503T031942_053701_0685FB_E003.SAFE
+
+   # Specify output directory
+   python -m phidown.downloader /eodata/Sentinel-1/... -o /path/to/output
+
+   # Use custom config file
+   python -m phidown.downloader /eodata/Sentinel-1/... -c /path/to/config.s5cfg
+
+   # Download single file instead of entire directory
+   python -m phidown.downloader /eodata/Sentinel-1/... --no-download-all
+
+   # Reset credentials
+   python -m phidown.downloader /eodata/Sentinel-1/... --reset
+
+Available CLI options:
+
+* ``s3_path``: S3 path to the Sentinel data (must start with /eodata/)
+* ``-o, --output-dir``: Local output directory (default: current directory)
+* ``-c, --config-file``: Path to s5cmd configuration file (default: .s5cfg)
+* ``-e, --endpoint-url``: Copernicus Data Space endpoint URL
+* ``--no-download-all``: Download only specific file instead of entire directory
+* ``--reset``: Reset configuration file and prompt for new credentials
 
 Interactive Tools
 -----------------
@@ -285,7 +337,11 @@ Example workflow:
 
 .. code-block:: python
 
+   from phidown import CopernicusDataSearcher
+   from phidown.s5cmd_utils import download as pull_down
+
    try:
+       searcher = CopernicusDataSearcher()
        results = searcher.search(
            collection_name='SENTINEL-2',
            aoi_wkt=wkt,
@@ -294,7 +350,13 @@ Example workflow:
        )
        
        if len(results) > 0:
-           pull_down(results.iloc[0]['Id'], download_dir='./data')
+           # Assuming results contain S3Path column
+           s3_path = results.iloc[0]['S3Path']
+           pull_down(
+               s3_path=s3_path,
+               output_dir='./data',
+               config_file='.s5cfg'
+           )
        else:
            print("No products found for the given criteria")
            
@@ -344,9 +406,17 @@ Performance Tips
 .. code-block:: python
 
    # Efficient batch processing
+   from phidown.s5cmd_utils import download as pull_down
+   import time
+   
    batch_size = 10
    for i in range(0, len(results), batch_size):
        batch = results.iloc[i:i+batch_size]
        for idx, row in batch.iterrows():
-           pull_down(row['Id'], download_dir='./data')
+           s3_path = row['S3Path']  # Assuming S3Path is available in results
+           pull_down(
+               s3_path=s3_path,
+               output_dir='./data',
+               config_file='.s5cfg'
+           )
        time.sleep(1)  # Be respectful to the API

@@ -626,7 +626,10 @@ class CopernicusDataSearcher:
         else:
             return self.df[columns].head(top_n)
 
-    def download_product(self, eo_product_name: str, output_dir: str, verbose=True):
+    def download_product(self, eo_product_name: str, 
+                        output_dir: str, 
+                        config_file = '.s5cfg',
+                        verbose=True):
         """
         Download the EO product using the downloader module.
         """
@@ -644,6 +647,8 @@ class CopernicusDataSearcher:
         
         s3path = res['S3Path'].iloc[0]
         # Call the downloader function
-        pull_down(s3path, 
-                abs_output_dir,
-                verbose=True)
+        pull_down(
+            s3_path=s3path,
+            output_dir=abs_output_dir,
+            config_file=config_file,
+            )

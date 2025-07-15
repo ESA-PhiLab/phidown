@@ -15,8 +15,8 @@ sys.path.insert(0, os.path.abspath('../../'))
 project = 'Φ-Down'
 copyright = '2025, Roberto Del Prete'
 author = 'Roberto Del Prete'
-release = '0.1.13'
-version = '0.1.13'
+release = '0.1.15'
+version = '0.1.15'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
