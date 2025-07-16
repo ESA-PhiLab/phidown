@@ -104,25 +104,39 @@ Sentinel-2 (Optical)
 ^^^^^^^^^^^^^^^^^^^^
 
 * **Collection**: 'SENTINEL-2'
-* **Product Types**: 'L1C', 'L2A'
+* **Product Types**: 'S2MSI1C', 'S2MSI2A'
 * **Use Cases**: Land cover mapping, agriculture monitoring, environmental analysis
 
 .. code-block:: python
 
    results = searcher.search(
        collection_name='SENTINEL-2',
-       product_type='L2A',
+       product_type='S2MSI2A',
        cloud_cover_threshold=10,
        start_date='2023-01-01',
        end_date='2023-01-31'
    )
 
+For detailed Sentinel-2 search parameters and examples, see the :doc:`sentinel2_reference` guide.
+
 Sentinel-3 (Ocean/Land)
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 * **Collection**: 'SENTINEL-3'
-* **Product Types**: 'OL_1_EFR', 'OL_2_LFR', 'SL_1_RBT', 'SL_2_LST'
+* **Product Types**: 'OL_1_EFR___', 'OL_2_LFR___', 'SL_1_RBT___', 'SL_2_LST___'
 * **Use Cases**: Ocean color, land surface temperature, topography
+
+.. code-block:: python
+
+   results = searcher.search(
+       collection_name='SENTINEL-3',
+       product_type='OL_2_LFR___',
+       start_date='2023-01-01',
+       end_date='2023-01-31',
+       attributes={'instrument': 'OLCI'}
+   )
+
+For detailed Sentinel-3 search parameters and examples, see the :doc:`sentinel3_reference` guide.
 
 Sentinel-5P (Atmospheric)
 ^^^^^^^^^^^^^^^^^^^^^^^^^

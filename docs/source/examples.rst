@@ -52,7 +52,8 @@ Search for Sentinel-1 SAR data with specific parameters:
        aoi_wkt=netherlands_wkt,
        start_date='2023-05-01',
        end_date='2023-05-31',
-       orbit_direction='DESCENDING'
+       orbit_direction='DESCENDING',
+       attributes={'sensorMode': 'IW'}
    )
    
    print(f"Found {len(results)} SAR products")
@@ -62,8 +63,46 @@ Search for Sentinel-1 SAR data with specific parameters:
        print(f"Orbit: {row['OrbitDirection']}")
        print("---")
 
-Example 3: Multi-Mission Search
------------------------------------
+For detailed Sentinel-1 parameters, see the :doc:`sentinel1_reference` guide.
+
+Example 3: Sentinel-3 Ocean Color Search
+-----------------------------------------
+
+Search for Sentinel-3 OLCI ocean color data:
+
+.. code-block:: python
+
+   from phidown import CopernicusDataSearcher
+
+   searcher = CopernicusDataSearcher()
+   
+   # Define area of interest (Mediterranean Sea)
+   mediterranean_wkt = 'POLYGON((0 35, 10 35, 10 45, 0 45, 0 35))'
+   
+   # Search for OLCI ocean color products
+   results = searcher.search(
+       collection_name='SENTINEL-3',
+       product_type='OL_2_WFR___',
+       aoi_wkt=mediterranean_wkt,
+       start_date='2023-06-01',
+       end_date='2023-06-30',
+       attributes={
+           'instrument': 'OLCI',
+           'cloudCover': '[0,20]'
+       }
+   )
+   
+   print(f"Found {len(results)} ocean color products")
+   for idx, row in results.iterrows():
+       print(f"Product: {row['Name']}")
+       print(f"Date: {row['ContentDate']}")
+       print(f"Instrument: {row.get('Instrument', 'N/A')}")
+       print("---")
+
+For detailed Sentinel-3 parameters, see the :doc:`sentinel3_reference` guide.
+
+Example 4: Multi-Mission Search
+-------------------------------
 
 Search across multiple missions for comprehensive coverage:
 
@@ -102,7 +141,7 @@ Search across multiple missions for comprehensive coverage:
    for mission, count in mission_counts.items():
        print(f"  {mission}: {count}")
 
-Example 4: Download with Progress Tracking
+Example 5: Download with Progress Tracking
 ------------------------------------------
 
 Download products with progress monitoring:
@@ -140,7 +179,7 @@ Download products with progress monitoring:
        except Exception as e:
            print(f"✗ Failed: {product_name} - {e}")
 
-Example 5: Interactive Polygon Selection
+Example 6: Interactive Polygon Selection
 ----------------------------------------
 
 Use interactive tools to select area of interest:
@@ -169,7 +208,7 @@ Use interactive tools to select area of interest:
    #     end_date='2023-06-30'
    # )
 
-Example 6: Time Series Analysis
+Example 7: Time Series Analysis
 -----------------------------------
 
 Analyze temporal patterns in search results:
@@ -214,7 +253,7 @@ Analyze temporal patterns in search results:
    plt.tight_layout()
    plt.show()
 
-Example 7: Batch Processing with Error Handling
+Example 8: Batch Processing with Error Handling
 -----------------------------------------------
 
 Process multiple areas with robust error handling:
@@ -272,7 +311,7 @@ Process multiple areas with robust error handling:
        # Be respectful to the API
        time.sleep(2)
 
-Example 8: Advanced Filtering and Analysis
+Example 9: Advanced Filtering and Analysis
 ------------------------------------------
 
 Apply complex filters and analyze results:
@@ -325,7 +364,7 @@ Apply complex filters and analyze results:
    for idx, row in best_monthly.iterrows():
        print(f"{row['Date'].strftime('%Y-%m')}: {row['Name']} (Cloud Cover: {row['CloudCover']}%)")
 
-Example 9: Visualization and Mapping
+Example 10: Visualization and Mapping
 ------------------------------------
 
 Create visualizations of search results:
@@ -375,7 +414,7 @@ Create visualizations of search results:
    m.save('search_results_map.html')
    print("Map saved as 'search_results_map.html'")
 
-Example 10: Configuration and Customization
+Example 11: Configuration and Customization
 -------------------------------------------
 
 Customize search parameters and configuration:

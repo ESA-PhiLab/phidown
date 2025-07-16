@@ -20,6 +20,8 @@ Welcome to Φ-Down Documentation
    api_reference
    examples
    sentinel1_reference
+   sentinel2_reference
+   sentinel3_reference
    contributing
    changelog
 
