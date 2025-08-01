@@ -6,23 +6,20 @@ This document tracks all notable changes to Φ-Down.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
-[Unreleased]
-------------
+
+
+
+[0.1.17] - 2024-08-01
+---------------------
 
 ### Added
-- Comprehensive Sphinx documentation with GitHub Pages support
-- API reference documentation with autoapi
-- User guide with detailed examples
-- Interactive tools documentation
-- Contributing guidelines
+- Landsat-8 reference guide with detailed product types
 
 ### Changed
-- Enhanced project structure for better documentation
-- Improved code organization and documentation strings
+- config.json updated to include Landsat-8 collection
+- Improved Landsat-8 search examples with realistic use cases
+- Enhanced Landsat-8 product type documentation (how_to_start.ipynb)
 
-### Fixed
-- Documentation build process
-- API reference generation
 
 [0.1.16] - 2024-07-15
 ---------------------
