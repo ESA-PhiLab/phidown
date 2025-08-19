@@ -256,29 +256,84 @@ class CopernicusDataSearcher:
         Raises:
             ValueError: If the 'orbit_direction' parameter is not 'ASCENDING', 'DESCENDING', or None.
         """
-        valid_orbit_directions = ["ASCENDING", "DESCENDING"]
+        valid_orbit_directions = ['ASCENDING', 'DESCENDING']
         if self.orbit_direction is not None and self.orbit_direction not in valid_orbit_directions:
             raise ValueError(
-                f"Invalid orbit direction: {self.orbit_direction}. Must be one of: {', '.join(valid_orbit_directions)}"
+                f'Invalid orbit direction: {self.orbit_direction}. Must be one of: {", ".join(valid_orbit_directions)}'
             )
 
-    def _validate_aoi_wkt(self):
+    def _validate_aoi_wkt(self) -> None:
         """
-        Validate the 'aoi_wkt' parameter to ensure it is a valid WKT polygon.
+        Validate and normalize the 'aoi_wkt' parameter to ensure it is a valid WKT polygon.
+        Automatically fixes common issues like extra whitespace and missing closing coordinates.
 
         Raises:
             ValueError: If the 'aoi_wkt' parameter is not a valid WKT polygon.
+            TypeError: If the 'aoi_wkt' parameter is not a string.
         """
         if self.aoi_wkt is not None:
             if not isinstance(self.aoi_wkt, str):
                 raise TypeError("The 'aoi_wkt' parameter must be a string")
+            
+            original_wkt = self.aoi_wkt
+            
+            # First normalize all whitespace
+            self.aoi_wkt = ' '.join(self.aoi_wkt.split())
+            
             if not self.aoi_wkt.strip():
                 raise ValueError("The 'aoi_wkt' parameter cannot be empty")
-            if not (self.aoi_wkt.startswith("POLYGON((") and self.aoi_wkt.endswith("))")):
-                raise ValueError("The 'aoi_wkt' parameter must be a valid WKT POLYGON")
-            coordinates = [coord.strip() for coord in self.aoi_wkt[9:-2].split(",")]
-            if coordinates[0] != coordinates[-1]:
-                raise ValueError("The 'aoi_wkt' polygon must start and end with the same point")
+            
+            # Check if it starts with POLYGON (case insensitive) and has proper structure
+            upper_wkt = self.aoi_wkt.upper()
+            if not upper_wkt.startswith('POLYGON'):
+                raise ValueError("The 'aoi_wkt' parameter must be a valid WKT POLYGON format")
+            
+            # Find the start of coordinates after POLYGON
+            polygon_prefix = 'POLYGON'
+            remaining_part = self.aoi_wkt[len(polygon_prefix):].strip()
+            
+            if not (remaining_part.startswith('((') and remaining_part.endswith('))')):
+                raise ValueError("The 'aoi_wkt' parameter must be a valid WKT POLYGON format: 'POLYGON((...))'")
+            
+            # Extract coordinate string
+            coord_string = remaining_part[2:-2]  # Remove "((" and "))"
+            coord_pairs = [pair.strip() for pair in coord_string.split(',') if pair.strip()]
+            
+            if len(coord_pairs) < 4:
+                raise ValueError('WKT polygon must have at least 4 coordinate pairs (including closing coordinate)')
+            
+            # Validate and normalize each coordinate pair
+            normalized_coords = []
+            for i, pair in enumerate(coord_pairs):
+                coords = pair.split()
+                if len(coords) != 2:
+                    raise ValueError(f"Invalid coordinate pair at position {i + 1}: '{pair}'. Must be 'longitude latitude'")
+                
+                try:
+                    lon, lat = float(coords[0]), float(coords[1])
+                    # Validate EPSG:4326 bounds
+                    if not (-180 <= lon <= 180):
+                        raise ValueError(f'Longitude {lon} at position {i + 1} is out of valid range [-180, 180]')
+                    if not (-90 <= lat <= 90):
+                        raise ValueError(f'Latitude {lat} at position {i + 1} is out of valid range [-90, 90]')
+                    normalized_coords.append(f'{lon} {lat}')
+                except ValueError as e:
+                    if 'could not convert' in str(e):
+                        raise ValueError(f"Invalid coordinate values at position {i + 1}: '{pair}'. Must be numeric")
+                    raise
+            
+            # Check if polygon is closed (first and last coordinates must be the same)
+            if normalized_coords[0] != normalized_coords[-1]:
+                # Auto-fix by closing the polygon
+                normalized_coords.append(normalized_coords[0])
+                print('Auto-corrected WKT polygon: Added closing coordinate to match the first point')
+            
+            # Reconstruct the WKT string with proper formatting
+            self.aoi_wkt = f"POLYGON(({', '.join(normalized_coords)}))"
+            
+            # Notify user if corrections were made
+            if self.aoi_wkt != original_wkt:
+                print('WKT polygon normalized: Whitespace and formatting corrected')
 
     def _validate_time(self):
         """
