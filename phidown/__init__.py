@@ -4,7 +4,7 @@
 Package Initialization
 """
 
-__version__ = "0.1.13"
+__version__ = "0.1.19"
 __author__ = "Roberto Del Prete"
 
 # Import main classes and functions

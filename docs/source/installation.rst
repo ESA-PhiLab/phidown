@@ -15,18 +15,35 @@ Dependencies
 Core dependencies (automatically installed):
 
 * ``s5cmd`` - High-performance S3 client for data downloads
-* ``numpy`` - Numerical computing
 * ``pandas`` - Data manipulation and analysis
-* ``requests`` - HTTP library for API calls
-* ``pyyaml`` - YAML configuration file support
-* ``tqdm`` - Progress bars
-* ``zstandard`` - Compression support
+* ``ipyleaflet`` - Interactive maps for Jupyter notebooks
+* ``huggingface-hub`` - Access to Hugging Face model hub
 
-Optional dependencies for visualization:
+Optional dependency groups:
+
+**ais** - AIS (vessel tracking) support:
+
+* ``shapely`` - Geometric operations for spatial data
+
+**viz** - Visualization tools:
 
 * ``ipywidgets`` - Interactive widgets for Jupyter
-* ``ipyleaflet`` - Interactive maps
-* ``folium`` - Alternative mapping library
+* ``folium`` - Web-based interactive maps
+
+**dev** - Development tools:
+
+* ``pytest`` - Testing framework
+* ``pytest-mock`` - Mocking library for tests
+* ``flake8`` - Code style checker
+
+**docs** - Documentation tools:
+
+* ``sphinx`` - Documentation generator
+* ``sphinx-rtd-theme`` - Read the Docs theme for Sphinx
+* ``sphinx-autodoc-typehints`` - Type hints support in documentation
+* ``myst-parser`` - Markdown parser for Sphinx
+* ``sphinx-copybutton`` - Copy button for code blocks
+* ``sphinx-autoapi`` - Automatic API documentation generation
 
 Installing from PyPI
 --------------------
@@ -39,16 +56,65 @@ The easiest way to install Φ-Down is using pip:
 
 This will install the core package with all required dependencies.
 
-Installing with Visualization Support
----------------------------------------
+Installing with Optional Features
+----------------------------------
 
-To use interactive features like polygon selection tools:
+Φ-Down comes with several optional dependency groups that enable additional functionality:
+
+**Visualization Tools**
+
+To use interactive features like polygon selection tools and maps:
 
 .. code-block:: bash
 
    pip install phidown[viz]
 
-This installs the visualization dependencies (``ipywidgets``, ``folium``).
+This installs visualization dependencies (``ipywidgets``, ``folium``).
+
+**AIS (Automatic Identification System) Support**
+
+For vessel tracking and maritime monitoring features:
+
+.. code-block:: bash
+
+   pip install phidown[ais]
+
+This installs geometry processing dependencies (``shapely``).
+
+**Development Tools**
+
+For contributing to the project or running tests:
+
+.. code-block:: bash
+
+   pip install phidown[dev]
+
+This installs testing and code quality tools (``pytest``, ``pytest-mock``, ``flake8``).
+
+**Documentation Tools**
+
+For building and contributing to documentation:
+
+.. code-block:: bash
+
+   pip install phidown[docs]
+
+This installs documentation dependencies (``sphinx``, ``sphinx-rtd-theme``, etc.).
+
+**All Optional Features**
+
+To install everything at once:
+
+.. code-block:: bash
+
+   pip install phidown[ais,viz,dev,docs]
+
+.. note::
+   For most users, we recommend installing with visualization support for the best experience:
+   
+   .. code-block:: bash
+   
+      pip install phidown[viz]
 
 Installing from Source
 ----------------------
@@ -61,13 +127,18 @@ To install the latest development version:
    cd phidown
    pip install -e .
 
-For development with all optional dependencies:
+For development with specific optional dependencies:
 
 .. code-block:: bash
 
    git clone https://github.com/ESA-PhiLab/phidown.git
    cd phidown
-   pip install -e .[viz,dev]
+   
+   # Install with visualization support
+   pip install -e .[viz]
+   
+   # Install with all optional features
+   pip install -e .[ais,viz,dev,docs]
 
 Using PDM (Recommended for Development)
 -----------------------------------------
@@ -80,7 +151,24 @@ If you're contributing to Φ-Down, use PDM for dependency management:
    cd phidown
    pdm install
 
-This installs all dependencies including development tools.
+This installs all core dependencies. For optional dependency groups:
+
+.. code-block:: bash
+
+   # Install with visualization support
+   pdm install --group viz
+
+   # Install with AIS support
+   pdm install --group ais
+
+   # Install with development tools
+   pdm install --group dev
+
+   # Install with documentation tools
+   pdm install --group docs
+
+   # Install all optional groups
+   pdm install --group viz --group ais --group dev --group docs
 
 Conda Installation
 ------------------

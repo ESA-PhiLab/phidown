@@ -212,12 +212,61 @@ The following collections are currently available:
   <img src="./assets/pypi.png" alt="PyPI" width="400px"/>
 </div>
 
+#### Basic Installation
 
+You can install the core package directly using pip:
 
-You can install it directly using pip:
 ```bash
 pip install phidown
 ```
+
+#### Installation with Optional Features
+
+Φ-Down comes with several optional dependency groups that enable additional functionality:
+
+**Install with visualization tools:**
+
+```bash
+pip install phidown[viz]
+```
+
+Includes: `ipywidgets`, `folium` for interactive maps and widgets
+
+**Install with AIS (vessel tracking) support:**
+
+```bash
+pip install phidown[ais]
+```
+
+Includes: `shapely` for geometric operations
+
+**Install with development tools:**
+
+```bash
+pip install phidown[dev]
+```
+
+Includes: `pytest`, `pytest-mock`, `flake8` for testing and code quality
+
+**Install with documentation tools:**
+
+```bash
+pip install phidown[docs]
+```
+
+Includes: `sphinx`, `sphinx-rtd-theme`, and other documentation dependencies
+
+**Install everything (all optional features):**
+
+```bash
+pip install phidown[ais,viz,dev,docs]
+```
+
+> **💡 Tip:** For most users, we recommend installing with visualization support for the best experience:
+> 
+> ```bash
+> pip install phidown[viz]
+> ```
 
 
 
@@ -242,9 +291,30 @@ pdm install
 ```
 
 #### Step 3: Install All Dependencies (Including Optional)
+
 To install all dependencies, including optional ones for development or specific features:
+
 ```bash
-pdm install -G :all
+pdm install --group :all
+```
+
+Or install specific optional groups:
+
+```bash
+# Install with visualization support
+pdm install --group viz
+
+# Install with AIS support  
+pdm install --group ais
+
+# Install with development tools
+pdm install --group dev
+
+# Install with documentation tools
+pdm install --group docs
+
+# Install multiple groups
+pdm install --group viz --group ais --group dev
 ```
 
 ### Option 3: Build from Source (Using pip)
@@ -310,7 +380,7 @@ Log to https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials
 ### Example Notebooks
 
 For detailed examples of how to use **Φ-Down**, refer to:
-- **[how_to_start.ipynb](./how_to_start.ipynb)** - Basic introduction [![Open in Colab](https://img.shields.io/badge/Open%20in-Colab-orange?logo=google-colab&style=for-the-badge)](https://colab.research.google.com/drive/1ZLIyKS_OrDmJfW4H5R6i1_b88vqrdCKz?usp=sharing)
+- **[how_to_start.ipynb](./how_to_start.ipynb)** - Basic introduction  [![Open in Colab](https://img.shields.io/badge/Open%20in-Colab-orange?logo=google-colab&style=for-the-badge)](https://colab.research.google.com/drive/1ZLIyKS_OrDmJfW4H5R6i1_b88vqrdCKz?usp=sharing)
 - **[Maritime Monitoring](./notebooks/)** - SAR imagery + AIS vessel tracking integration
 - **[Interactive Tools](./notebooks/)** - Map-based area selection and multi-sensor analysis
 
