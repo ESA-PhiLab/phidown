@@ -357,8 +357,8 @@ class CopernicusDataSearcher:
             if not is_iso8601(self.end_date):
                 raise ValueError(f"Invalid end_date format: {self.end_date}. Must be in ISO 8601 format.")
         if self.start_date and self.end_date:
-            if self.start_date >= self.end_date:
-                raise ValueError("start_date must be earlier than end_date.")
+            if self.start_date > self.end_date:
+                raise ValueError("start_date must not be later than end_date.")
 
     def _validate_attributes(self):
         """
