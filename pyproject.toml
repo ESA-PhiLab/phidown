@@ -10,7 +10,6 @@ dependencies = [
   "pandas>=1.5.2",        # keep as is, already minimum version
   "ipyleaflet>=0.19.2", 
   "s5cmd",
-  "huggingface-hub>=0.35.0",
 ]
 
 requires-python = ">=3.9"
@@ -18,24 +17,26 @@ license = { text = "GPLv3" }
 
 [project.optional-dependencies]
 ais = [
-  "shapely>=2.0.0",
+  "shapely>=1.8.0,<2.0.0",  # Use 1.x for Python 3.9 compatibility
+  "pyarrow",
+  "huggingface-hub>=0.16.0,<1.0.0",  # More conservative version range
 ]
 viz = [
   "ipywidgets>=8.1.6",
   "folium>=0.18.0",
 ]
 dev = [
-  "pytest>=8.0.0",
+  "pytest>=7.0.0,<9.0.0",  # More conservative range
   "pytest-mock>=3.10.0",
-  "flake8>=7.2.0",
+  "flake8>=6.0.0,<8.0.0",  # More conservative range
 ]
 docs = [
-  "sphinx>=8.0.0",
-  "sphinx-rtd-theme>=3.0.0",
-  "sphinx-autodoc-typehints>=2.0.0",
-  "myst-parser>=4.0.0",
+  "sphinx>=7.0.0,<8.0.0",  # Use 7.x for better compatibility
+  "sphinx-rtd-theme>=1.3.0,<4.0.0",
+  "sphinx-autodoc-typehints>=1.24.0,<3.0.0",  # Compatible with Python 3.9
+  "myst-parser>=3.0.0,<4.0.0",  # Use 3.x for compatibility
   "sphinx-copybutton>=0.5.0",
-  "sphinx-autoapi>=3.0.0",
+  "sphinx-autoapi>=2.5.0,<4.0.0",  # More conservative range
 ]
 
 [build-system]
