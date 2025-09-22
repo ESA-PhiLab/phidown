@@ -307,9 +307,14 @@ Log to https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials
 
 
 
-### Example Notebook
+### Example Notebooks
 
-For a detailed example of how to use **Φ-Down**, refer to the [how_to_start.ipynb](./how_to_start.ipynb) notebook or [![Open in Colab](https://img.shields.io/badge/Open%20in-Colab-orange?logo=google-colab&style=for-the-badge)](https://colab.research.google.com/drive/1ZLIyKS_OrDmJfW4H5R6i1_b88vqrdCKz?usp=sharing). It provides step-by-step instructions and practical use cases to help you get started quickly.
+For detailed examples of how to use **Φ-Down**, refer to:
+- **[how_to_start.ipynb](./how_to_start.ipynb)** - Basic introduction [![Open in Colab](https://img.shields.io/badge/Open%20in-Colab-orange?logo=google-colab&style=for-the-badge)](https://colab.research.google.com/drive/1ZLIyKS_OrDmJfW4H5R6i1_b88vqrdCKz?usp=sharing)
+- **[Maritime Monitoring](./notebooks/)** - SAR imagery + AIS vessel tracking integration
+- **[Interactive Tools](./notebooks/)** - Map-based area selection and multi-sensor analysis
+
+All notebooks provide step-by-step instructions and practical use cases. See the [notebooks directory](./notebooks/) for the complete collection.
 
 > **⚠️ Search Optimization Tips⚠️**  
 >  

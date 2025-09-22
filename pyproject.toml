@@ -1,6 +1,6 @@
 [project]
 name = "phidown"
-version = "0.1.18"
+version = "0.1.19"
 description = "A project using AWS services and dataset tools for Sentinel data"
 authors = [
   { name = "Roberto Del Prete", email = "roberto.delprete@esa.int" }
@@ -10,12 +10,16 @@ dependencies = [
   "pandas>=1.5.2",        # keep as is, already minimum version
   "ipyleaflet>=0.19.2", 
   "s5cmd",
+  "huggingface-hub>=0.35.0",
 ]
 
 requires-python = ">=3.9"
 license = { text = "GPLv3" }
 
 [project.optional-dependencies]
+ais = [
+  "shapely>=2.0.0",
+]
 viz = [
   "ipywidgets>=8.1.6",
   "folium>=0.18.0",
