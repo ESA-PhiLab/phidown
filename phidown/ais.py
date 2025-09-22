@@ -113,6 +113,12 @@ class AISDataHandler:
         if aoi_wkt:
             df = self._filter_by_aoi(df, aoi_wkt)
         
+        # Print any errors that occurred
+        if self._errors:
+            print(f"Errors encountered during processing:")
+            for error in self._errors:
+                print(f"  - {error}")
+        
         return df
     
     def get_errors(self) -> List[str]:
@@ -288,14 +294,18 @@ class AISDataHandler:
                     filename=filename,
                     repo_type="dataset"
                 )
+                print(f"Downloaded {filename} to {local_path}")
             except Exception as exc:
                 self._errors.append(f"{day}: download failed ({exc})")
+                print(f"Download failed for {filename}: {exc}")
                 continue
             
             try:
                 df = pd.read_parquet(local_path)
+                print(f"Successfully read {filename}: {len(df)} rows, columns: {list(df.columns)}")
             except Exception as exc:
                 self._errors.append(f"{day}: failed to read parquet ({exc})")
+                print(f"Failed to read parquet {filename}: {exc}")
                 continue
             
             # Find coordinate columns
@@ -303,6 +313,7 @@ class AISDataHandler:
             lon_col = self._find_column(df, ["lon", "longitude", "long", "lng"])
             if lat_col is None or lon_col is None:
                 self._errors.append(f"{day}: missing latitude/longitude columns")
+                print(f"Missing coordinate columns for {filename}. Available columns: {list(df.columns)}")
                 continue
             
             # Apply time filtering if requested
@@ -319,6 +330,7 @@ class AISDataHandler:
                 self._errors.append(f"{day}: no timestamp column for time filtering")
             
             if df.empty:
+                print(f"No data remaining after time filtering for {filename}")
                 continue
             
             # Validate and clean coordinates
@@ -327,6 +339,7 @@ class AISDataHandler:
             valid_mask = lat_series.notna() & lon_series.notna()
             
             if not valid_mask.any():
+                print(f"No valid coordinates found for {filename}")
                 continue
             
             subset = df.loc[valid_mask].copy()
@@ -367,14 +380,18 @@ class AISDataHandler:
                 subset["timestamp"] = ""
             
             frames.append(subset.reset_index(drop=True))
+            print(f"Added {len(subset)} rows from {filename}")
         
         if not frames:
+            print("No valid data frames collected")
             return pd.DataFrame(columns=[
                 "name", "lat", "lon", "source_date", "timestamp", "mmsi"
             ])
         
         result = pd.concat(frames, ignore_index=True)
-        return result[["name", "lat", "lon", "source_date", "timestamp", "mmsi"]]
+        final_result = result[["name", "lat", "lon", "source_date", "timestamp", "mmsi"]]
+        print(f"Final result: {len(final_result)} rows total")
+        return final_result
     
     def _filter_by_aoi(self, df: pd.DataFrame, wkt_text: str) -> pd.DataFrame:
         """Filter DataFrame points by Area of Interest polygon.
