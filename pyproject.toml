@@ -17,6 +17,9 @@ license = { text = "GPLv3" }
 [project.optional-dependencies]
 jupyter_env = [
   "ipykernel>=6.30.1",
+  "jupyterlab-widgets>=3.0.15",
+  "jupyter-leaflet>=0.20.0",
+  "ipywidgets>=8.1.6",
 ]
 ais = [
   "shapely>=2.0.0",  # Use 2.x for Python 3.12 compatibility
@@ -28,7 +31,6 @@ viz = [
   "localtileserver>=0.10.6",
   "setuptools>=80.9.0",
   "ipyleaflet>=0.19.2", 
-  "ipywidgets>=8.1.6",
   "leafmap>=0.52.2",
   "xarray>=2024.7.0",
   "folium>=0.18.0",
