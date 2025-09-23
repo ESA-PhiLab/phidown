@@ -8,7 +8,6 @@ authors = [
 
 dependencies = [
   "pandas>=1.5.2",        # keep as is, already minimum version
-  "ipyleaflet>=0.19.2", 
   "s5cmd",
 ]
 
@@ -16,14 +15,26 @@ requires-python = ">=3.9"
 license = { text = "GPLv3" }
 
 [project.optional-dependencies]
+jupyter =[
+  "ipykernel>=6.30.1",
+]
 ais = [
-  "shapely>=1.8.0,<2.0.0",  # Use 1.x for Python 3.9 compatibility
-  "pyarrow",
-  "huggingface-hub>=0.16.0,<1.0.0",  # More conservative version range
+  "shapely>=2.0.0",  # Use 2.x for Python 3.12 compatibility
+  "pyarrow>=21.0.0", 
+  "huggingface-hub>=0.35.0", 
 ]
 viz = [
+  "leafmap[maplibre]>=0.52.2",
+  "localtileserver>=0.10.6",
+  "setuptools>=80.9.0",
+  "ipyleaflet>=0.19.2", 
   "ipywidgets>=8.1.6",
+  "leafmap>=0.52.2",
+  "xarray>=2024.7.0",
+  "localtileserver>=0.10.6",
   "folium>=0.18.0",
+  "rasterio>=1.4.3",
+  "matplotlib>=3.9.4", 
 ]
 dev = [
   "pytest>=7.0.0,<9.0.0",  # More conservative range

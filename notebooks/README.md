@@ -25,7 +25,7 @@ This directory contains example notebooks demonstrating various capabilities of 
 - Compare different sensor modalities for the same area
 - Ideal for: Multi-sensor studies, data fusion applications
 
-### 4. SAR and AIS Integration (`4_sar_and_ais_integration.ipynb`)
+### 4. Quick SAR + AIS Example (`4_sar_and_ais_integration.ipynb`)
 **Comprehensive maritime monitoring analysis**
 - Search for Sentinel-1 SAR imagery over shipping areas
 - Download corresponding AIS vessel tracking data
@@ -34,12 +34,6 @@ This directory contains example notebooks demonstrating various capabilities of 
 - Export integrated datasets for further analysis
 - Ideal for: Maritime surveillance, vessel detection validation, shipping route analysis
 
-### 5. Quick SAR + AIS Example (`5_quick_sar_ais_example.ipynb`)
-**Simple introduction to SAR/AIS workflows**
-- Streamlined example of SAR data search and AIS download
-- Basic integration analysis
-- Quick setup for maritime monitoring projects
-- Ideal for: Quick starts, learning the basics, proof of concept
 
 ## Getting Started
 

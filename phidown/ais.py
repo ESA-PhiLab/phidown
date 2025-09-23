@@ -37,13 +37,15 @@ class AISDataHandler:
         hf_repo_id (str): Hugging Face repository ID for AIS data.
         file_template (str): Template for AIS data filenames.
         date_format (str): Date format string.
+        verbose (bool): Whether to print progress messages.
     """
     
     def __init__(
         self, 
         hf_repo_id: str = "Lore0123/AISPortal",
         file_template: str = "{date}_ais.parquet",
-        date_format: str = "%Y-%m-%d"
+        date_format: str = "%Y-%m-%d",
+        verbose: bool = True
     ) -> None:
         """Initialize the AIS data handler.
         
@@ -51,10 +53,12 @@ class AISDataHandler:
             hf_repo_id: Hugging Face repository ID containing AIS data.
             file_template: Template for AIS data filenames with {date} placeholder.
             date_format: Date format string for parsing dates.
+            verbose: Whether to print progress and error messages.
         """
         self.hf_repo_id = hf_repo_id
         self.file_template = file_template
         self.date_format = date_format
+        self.verbose = verbose
         self._errors: List[str] = []
     
     def get_ais_data(
@@ -63,7 +67,8 @@ class AISDataHandler:
         end_date: Optional[Union[str, date]] = None,
         start_time: Optional[Union[str, time]] = None,
         end_time: Optional[Union[str, time]] = None,
-        aoi_wkt: Optional[str] = None
+        aoi_wkt: Optional[str] = None,
+        verbose: Optional[bool] = None
     ) -> pd.DataFrame:
         """Download and filter AIS data based on date range, time window, and AOI.
         
@@ -73,6 +78,7 @@ class AISDataHandler:
             start_time: Start time for daily filtering (HH:MM:SS string or time object).
             end_time: End time for daily filtering (HH:MM:SS string or time object).
             aoi_wkt: Area of Interest as WKT polygon string for spatial filtering.
+            verbose: Whether to print progress messages. If None, uses instance default.
             
         Returns:
             Filtered pandas DataFrame containing AIS data with standardized columns:
@@ -82,10 +88,15 @@ class AISDataHandler:
             - source_date: Date of data source
             - timestamp: Timestamp in YYYY-MM-DD HH:MM:SS format
             - mmsi: Maritime Mobile Service Identity
+            - Plus all additional columns from the original AIS dataset
+            (COG, SOG, HEADING, NAVSTAT, IMO, CALLSIGN, TYPE, etc.)
             
         Raises:
             ValueError: If date parsing fails or no valid data is found.
         """
+        # Use method parameter or fall back to instance default
+        use_verbose = verbose if verbose is not None else self.verbose
+        
         self._errors.clear()
         
         # Parse and validate dates
@@ -107,17 +118,17 @@ class AISDataHandler:
             raise ValueError("No valid dates in range")
         
         # Load and process data
-        df = self._load_ais_points(dates, start_time_obj, end_time_obj)
+        df = self._load_ais_points(dates, start_time_obj, end_time_obj, use_verbose)
         
         # Apply spatial filtering if AOI provided
         if aoi_wkt:
-            df = self._filter_by_aoi(df, aoi_wkt)
+            df = self._filter_by_aoi(df, aoi_wkt, use_verbose)
         
         # Print any errors that occurred
-        if self._errors:
-            print(f"Errors encountered during processing:")
+        if self._errors and use_verbose:
+            print(f'Errors encountered during processing:')
             for error in self._errors:
-                print(f"  - {error}")
+                print(f'  - {error}')
         
         return df
     
@@ -169,7 +180,23 @@ class AISDataHandler:
             raw = value.strip()
             if not raw:
                 return None
-            for fmt in ("%H:%M:%S", "%H:%M"):
+            
+            # Remove timezone suffixes (Z, +00:00, etc.)
+            if raw.endswith('Z'):
+                raw = raw[:-1]
+            elif '+' in raw:
+                raw = raw.split('+')[0]
+            elif raw.endswith('UTC'):
+                raw = raw[:-3]
+            
+            # Try different time formats including microseconds
+            time_formats = [
+                "%H:%M:%S.%f",  # HH:MM:SS.microseconds
+                "%H:%M:%S",     # HH:MM:SS
+                "%H:%M",        # HH:MM
+            ]
+            
+            for fmt in time_formats:
                 try:
                     parsed = datetime.strptime(raw, fmt)
                     return parsed.time()
@@ -271,7 +298,8 @@ class AISDataHandler:
         self,
         dates: List[date],
         start_time_obj: Optional[time],
-        end_time_obj: Optional[time]
+        end_time_obj: Optional[time],
+        verbose: bool = True
     ) -> pd.DataFrame:
         """Load AIS data for multiple dates and apply time filtering.
         
@@ -279,6 +307,7 @@ class AISDataHandler:
             dates: List of dates to load data for.
             start_time_obj: Start time for daily filtering.
             end_time_obj: End time for daily filtering.
+            verbose: Whether to print progress messages.
             
         Returns:
             Concatenated and filtered DataFrame.
@@ -294,26 +323,27 @@ class AISDataHandler:
                     filename=filename,
                     repo_type="dataset"
                 )
-                print(f"Downloaded {filename} to {local_path}")
             except Exception as exc:
-                self._errors.append(f"{day}: download failed ({exc})")
-                print(f"Download failed for {filename}: {exc}")
+                self._errors.append(f'{day}: download failed ({exc})')
+                if verbose:
+                    print(f'Download failed for {filename}: {exc}')
                 continue
             
             try:
                 df = pd.read_parquet(local_path)
-                print(f"Successfully read {filename}: {len(df)} rows, columns: {list(df.columns)}")
             except Exception as exc:
-                self._errors.append(f"{day}: failed to read parquet ({exc})")
-                print(f"Failed to read parquet {filename}: {exc}")
+                self._errors.append(f'{day}: failed to read parquet ({exc})')
+                if verbose:
+                    print(f'Failed to read parquet {filename}: {exc}')
                 continue
             
             # Find coordinate columns
             lat_col = self._find_column(df, ["lat", "latitude"])
             lon_col = self._find_column(df, ["lon", "longitude", "long", "lng"])
             if lat_col is None or lon_col is None:
-                self._errors.append(f"{day}: missing latitude/longitude columns")
-                print(f"Missing coordinate columns for {filename}. Available columns: {list(df.columns)}")
+                self._errors.append(f'{day}: missing latitude/longitude columns')
+                if verbose:
+                    print(f'Missing coordinate columns for {filename}. Available columns: {list(df.columns)}')
                 continue
             
             # Apply time filtering if requested
@@ -327,10 +357,11 @@ class AISDataHandler:
                 if mask is not None:
                     df = df[mask.fillna(False)]
             elif start_time_obj or end_time_obj:
-                self._errors.append(f"{day}: no timestamp column for time filtering")
+                self._errors.append(f'{day}: no timestamp column for time filtering')
             
             if df.empty:
-                print(f"No data remaining after time filtering for {filename}")
+                if verbose:
+                    print(f'No data remaining after time filtering for {filename}')
                 continue
             
             # Validate and clean coordinates
@@ -339,7 +370,8 @@ class AISDataHandler:
             valid_mask = lat_series.notna() & lon_series.notna()
             
             if not valid_mask.any():
-                print(f"No valid coordinates found for {filename}")
+                if verbose:
+                    print(f'No valid coordinates found for {filename}')
                 continue
             
             subset = df.loc[valid_mask].copy()
@@ -380,25 +412,37 @@ class AISDataHandler:
                 subset["timestamp"] = ""
             
             frames.append(subset.reset_index(drop=True))
-            print(f"Added {len(subset)} rows from {filename}")
+            if verbose:
+                print(f'Added {len(subset)} rows from {filename}')
         
         if not frames:
-            print("No valid data frames collected")
+            if verbose:
+                print('No valid data frames collected')
             return pd.DataFrame(columns=[
                 "name", "lat", "lon", "source_date", "timestamp", "mmsi"
             ])
         
         result = pd.concat(frames, ignore_index=True)
-        final_result = result[["name", "lat", "lon", "source_date", "timestamp", "mmsi"]]
-        print(f"Final result: {len(final_result)} rows total")
+        
+        # Ensure standardized columns are first, then add all remaining columns
+        standard_cols = ["name", "lat", "lon", "source_date", "timestamp", "mmsi"]
+        remaining_cols = [col for col in result.columns if col not in standard_cols]
+        
+        # Reorder columns with standard ones first
+        final_columns = standard_cols + remaining_cols
+        final_result = result[final_columns]
+        
+        if verbose:
+            print(f'Final result: {len(final_result)} rows total with {len(final_columns)} columns')
         return final_result
     
-    def _filter_by_aoi(self, df: pd.DataFrame, wkt_text: str) -> pd.DataFrame:
+    def _filter_by_aoi(self, df: pd.DataFrame, wkt_text: str, verbose: bool = True) -> pd.DataFrame:
         """Filter DataFrame points by Area of Interest polygon.
         
         Args:
             df: DataFrame with lat/lon columns.
             wkt_text: WKT polygon string defining the AOI.
+            verbose: Whether to print progress messages.
             
         Returns:
             Filtered DataFrame containing only points within the AOI.
@@ -450,7 +494,8 @@ def download_ais_data(
     start_time: Optional[Union[str, time]] = None,
     end_time: Optional[Union[str, time]] = None,
     aoi_wkt: Optional[str] = None,
-    hf_repo_id: str = "Lore0123/AISPortal"
+    hf_repo_id: str = "Lore0123/AISPortal",
+    verbose: bool = True
 ) -> pd.DataFrame:
     """Convenience function to download and filter AIS data.
     
@@ -461,24 +506,28 @@ def download_ais_data(
         end_time: End time for daily filtering (HH:MM:SS string or time object).
         aoi_wkt: Area of Interest as WKT polygon string for spatial filtering.
         hf_repo_id: Hugging Face repository ID containing AIS data.
+        verbose: Whether to print progress and error messages.
         
     Returns:
-        Filtered pandas DataFrame containing AIS data.
+        Filtered pandas DataFrame containing AIS data with all available columns.
+        Standardized columns (name, lat, lon, source_date, timestamp, mmsi) 
+        are placed first, followed by all original AIS dataset columns.
         
     Example:
         >>> # Download data for a single day
         >>> df = download_ais_data("2025-08-25")
         
-        >>> # Download with time window
+        >>> # Download with time window (silent)
         >>> df = download_ais_data(
         ...     "2025-08-25", 
         ...     start_time="10:00:00", 
-        ...     end_time="12:00:00"
+        ...     end_time="12:00:00",
+        ...     verbose=False
         ... )
         
         >>> # Download with AOI filtering
         >>> aoi = "POLYGON((4.21 51.37,4.48 51.37,4.51 51.29,4.47 51.17,4.25 51.17,4.19 51.25,4.21 51.37))"
         >>> df = download_ais_data("2025-08-25", aoi_wkt=aoi)
     """
-    handler = AISDataHandler(hf_repo_id=hf_repo_id)
+    handler = AISDataHandler(hf_repo_id=hf_repo_id, verbose=verbose)
     return handler.get_ais_data(start_date, end_date, start_time, end_time, aoi_wkt)

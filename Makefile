@@ -72,7 +72,7 @@ test:
 # Clean the PDM virtual environment
 clean: check_pdm
 	@echo "🧹 Removing PDM virtual environment..."
-	@$(PDM_EXE) venv remove || \
+	@python -m venv remove && rm -rf .venv || \
 		(echo "❌ Failed to remove PDM virtual environment"; exit 1)
 	@echo "✅ PDM virtual environment has been removed."
 
