@@ -20,11 +20,6 @@ except ImportError:
     shapely_wkt = None
     Point = None
     SHAPELY_AVAILABLE = False
-    warnings.warn(
-        "Shapely not available. AOI filtering will be disabled. "
-        "Install shapely to enable spatial filtering: pip install shapely",
-        UserWarning
-    )
 
 
 class AISDataHandler:
@@ -455,6 +450,11 @@ class AISDataHandler:
             return df
         
         if not SHAPELY_AVAILABLE or shapely_wkt is None or Point is None:
+            warnings.warn(
+                "Shapely not available. AOI filtering will be disabled. "
+                "Install shapely to enable spatial filtering: pip install shapely",
+                UserWarning
+            )
             raise ValueError(
                 "AOI filtering unavailable: shapely not installed. "
                 "Install with: pip install shapely"

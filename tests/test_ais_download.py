@@ -9,8 +9,8 @@ def test_ais_download():
     print("=" * 50)
     
     try:
-        # Try downloading data for a recent date
-        df = download_ais_data("2025-01-15")  # Use a recent date
+        # Try downloading data for a known available past date
+        df = download_ais_data('2023-01-15')  # Use a reliable past date
         
         print(f"\n✅ Download completed successfully!")
         print(f"Result shape: {df.shape}")
