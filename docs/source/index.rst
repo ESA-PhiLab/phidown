@@ -17,11 +17,13 @@ Welcome to Φ-Down Documentation
    getting_started
    installation
    user_guide
+   ais_guide
    api_reference
    examples
    sentinel1_reference
    sentinel2_reference
    sentinel3_reference
+   landsat8_reference
    contributing
    changelog
 
@@ -34,6 +36,7 @@ Overview
 - **Sentinel-2**: Multi-spectral imaging for land monitoring
 - **Sentinel-3**: Ocean and land monitoring
 - **Sentinel-5P**: Atmospheric monitoring
+- **AIS Data**: Automatic Identification System data for maritime vessel tracking
 
 Key Features
 ------------
@@ -43,6 +46,7 @@ Key Features
 * 🗺️ **Visualization**: Built-in tools for plotting and interactive maps
 * 🎯 **Interactive Tools**: Polygon selection tools for area of interest
 * 📊 **Data Management**: Pandas integration for result handling
+* 🚢 **AIS Data**: Access maritime vessel tracking data with temporal and spatial filtering
 
 Quick Start
 -----------
