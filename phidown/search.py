@@ -332,8 +332,8 @@ class CopernicusDataSearcher:
             self.aoi_wkt = f"POLYGON(({', '.join(normalized_coords)}))"
             
             # Notify user if corrections were made
-            if self.aoi_wkt != original_wkt:
-                print('WKT polygon normalized: Whitespace and formatting corrected')
+            # if self.aoi_wkt != original_wkt:
+            #     print('WKT polygon normalized: Whitespace and formatting corrected')
 
     def _validate_time(self):
         """
