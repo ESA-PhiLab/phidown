@@ -6,6 +6,14 @@ This document tracks all notable changes to Φ-Down.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
+[0.1.19] - 2024-09-20
+---------------------
+
+### Added
+- notebook with examples for Sentinel-1 GRD, SLC, RAW products matching
+- pilot for AIS data search and download integration
+
+
 [0.1.18] - 2024-08-19
 ---------------------
 
