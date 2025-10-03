@@ -84,6 +84,8 @@ class CopernicusDataSearcher:
             start_date (str, optional): Start date for filtering (ISO 8601 format). Defaults to None.
             end_date (str, optional): End date for filtering (ISO 8601 format). Defaults to None.
             top (int, optional): Maximum number of results to retrieve. Defaults to 1000.
+            count (bool, optional): Enable result counting and automatic pagination. When True and 
+                total results exceed 'top', will automatically paginate to retrieve all results. Defaults to False.
             order_by (str, optional): Field and direction to order results by. Defaults to "ContentDate/Start desc".
         """
         self.base_url = base_url  # Set or override base_url
@@ -484,15 +486,66 @@ class CopernicusDataSearcher:
         return self.url
 
     def execute_query(self):
-        """Execute the query and retrieve data"""
+        """Execute the query and retrieve data.
+        
+        If count=True and the total number of results exceeds the 'top' limit,
+        this method will automatically paginate through all results using
+        multiple requests with the $skip parameter, combining all results
+        into a single DataFrame.
+        
+        Returns:
+            pd.DataFrame: DataFrame containing all retrieved products.
+        """
         url = self._build_query()
         self.response = copy.deepcopy(requests.get(url))
         self.response.raise_for_status()  # Raise an error for bad status codes
 
         self.json_data = self.response.json()
         self.num_results = self.json_data.get('@odata.count', 0)
-        self.df = pd.DataFrame.from_dict(self.json_data['value'])
+        
+        # Check if pagination is needed
+        if self.count and self.num_results > self.top:
+            return self._execute_paginated_query()
+        else:
+            self.df = pd.DataFrame.from_dict(self.json_data['value'])
+            return self.df
 
+    def _execute_paginated_query(self):
+        """Execute paginated queries when results exceed top limit"""
+        all_data = []
+        skip = 0
+        page_size = self.top  # Use the current top value as page size
+        
+        # Add first page (already retrieved in execute_query)
+        if 'value' in self.json_data:
+            all_data.extend(self.json_data['value'])
+        
+        # Continue with pagination while there are more results
+        while skip + page_size < self.num_results:
+            skip += page_size
+            
+            # Build paginated query URL
+            paginated_query = f"?$filter={self.filter_condition}&$orderby={self.order_by}&$top={page_size}&$skip={skip}&$expand=Attributes"
+            if self.count:
+                paginated_query += "&$count=true"
+            
+            paginated_url = f"{self.base_url}{paginated_query}"
+            
+            # Make paginated request
+            try:
+                paginated_response = requests.get(paginated_url)
+                paginated_response.raise_for_status()
+                paginated_data = paginated_response.json()
+                
+                if 'value' in paginated_data:
+                    all_data.extend(paginated_data['value'])
+                    
+            except Exception as e:
+                print(f"Warning: Error retrieving page at skip={skip}: {e}")
+                break
+        
+        # Create DataFrame from all collected data
+        self.df = pd.DataFrame.from_dict(all_data)
         return self.df
 
     def query_by_name(self, product_name: str) -> pd.DataFrame:
