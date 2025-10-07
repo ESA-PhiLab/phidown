@@ -34,6 +34,22 @@ This directory contains example notebooks demonstrating various capabilities of 
 - Export integrated datasets for further analysis
 - Ideal for: Maritime surveillance, vessel detection validation, shipping route analysis
 
+### 5. SLC/GRD/RAW S1 Matcher (`5_slc_grd_raw_s1_matcher.ipynb`)
+**Sentinel-1 product type matching**
+- Match different Sentinel-1 processing levels (SLC, GRD, RAW)
+- Compare product characteristics and availability
+- Select appropriate processing level for your application
+- Ideal for: SAR processing, understanding S1 product types
+
+### 6. Sentinel-1 SLC Burst Search (`6_burst_search_examples.ipynb`)
+**Individual burst-level SAR data access**
+- Search for Sentinel-1 SLC burst products (available from August 2024)
+- Filter by burst-specific parameters (Burst ID, Swath, Polarization)
+- Access individual bursts without downloading full SLC products
+- Combine temporal, spatial, and burst-specific filters
+- Analyze burst distribution and characteristics
+- Ideal for: InSAR time series, regional SAR analysis, efficient data access
+
 
 ## Getting Started
 
@@ -69,6 +85,10 @@ Some notebooks require authentication for downloading data:
 - **Notebooks 1, 2, 3**: Basic data access, multi-sensor analysis
 - Focus on land monitoring, change detection, environmental studies
 
+### SAR Processing & Analysis
+- **Notebooks 5, 6**: Sentinel-1 product matching, burst-level access
+- Focus on InSAR, time series analysis, efficient SAR data handling
+
 ### Maritime Applications
 - **Notebooks 4, 5**: SAR imagery + AIS vessel tracking
 - Focus on maritime surveillance, shipping analysis, vessel detection
@@ -76,10 +96,11 @@ Some notebooks require authentication for downloading data:
 ### Interactive Analysis
 - **Notebook 2**: Interactive map-based area selection
 - **Notebook 4**: Comprehensive visualization and analysis
+- **Notebook 6**: Burst search with visualization
 
 ### Educational/Training
 - **Notebooks 1, 5**: Simple, focused examples
-- **Notebooks 2, 3, 4**: Advanced concepts and workflows
+- **Notebooks 2, 3, 4, 6**: Advanced concepts and workflows
 
 ## Data Sources
 
