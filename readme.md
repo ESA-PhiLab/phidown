@@ -59,6 +59,7 @@ Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy
 > - ✔️ **Done:** Add a visualisation tool  
 > - ✔️ **Done:** Add a S-1 reference in docs.  
 > - ✔️ **Done:** Removed old boto3 dep.
+> - ✔️ **Done:** Sentinel-1 SLC Burst Mode support (v0.1.20)
 > - [x] **Coming soon:** Implement a `count` option for search results more than 1000
 > - [x] **Coming soon:** Add a parallel download executor
 > - [x] **Coming soon:** Improve docs for ALL missions.
@@ -67,10 +68,13 @@ Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy
 
 ## Features
 
-- Authenticate with the Copernicus Data Space Ecosystem.
-- Search for Sentinel products using the OData API with various filters `query_by_filter` (collection, product type, date, AOI, cloud cover, etc.).
-- Search for products by exact name using `query_by_name`.
-- Download Sentinel products using the S3 protocol. 
+- 🔐 Authenticate with the Copernicus Data Space Ecosystem.
+- 🔍 Search for Sentinel products using the OData API with various filters `query_by_filter` (collection, product type, date, AOI, cloud cover, etc.).
+- 🆔 Search for products by exact name using `query_by_name`.
+- 📥 Download Sentinel products using the S3 protocol.
+- 🎯 **NEW:** Search individual Sentinel-1 SLC bursts (burst mode) for efficient InSAR analysis.
+- 🗺️ Interactive polygon selection tools for area of interest definition.
+- 📊 Built-in visualization and result analysis capabilities. 
 
 
 Here's a quick example of how to use Φ-Down to search and download Sentinel data:
@@ -99,7 +103,35 @@ print(f"Number of results: {len(df)}")
 searcher.display_results(top_n=15)
 ```
 
-For more advanced use cases, including searching with geographical filters and batch downloading, see the [usage notebook](./how_to_start.ipynb).
+### Sentinel-1 SLC Burst Mode (New in v0.1.20)
+
+Search for individual Sentinel-1 SLC bursts for efficient InSAR analysis:
+
+```python
+from phidown.search import CopernicusDataSearcher
+
+searcher = CopernicusDataSearcher()
+
+# Search for bursts with specific parameters
+searcher.query_by_filter(
+    burst_mode=True,  # Enable burst mode
+    burst_id=15804,   # Specific burst ID
+    swath_identifier='IW2',
+    polarisation_channels='VV',
+    orbit_direction='DESCENDING',
+    start_date='2024-08-01T00:00:00',
+    end_date='2024-08-15T00:00:00',
+    top=20,
+    count=True
+)
+
+df = searcher.execute_query()
+print(f"Found {len(df)} bursts")
+print(f"Total available: {searcher.num_results}")
+searcher.display_results(top_n=5)
+```
+
+For more advanced use cases, including searching with geographical filters and batch downloading, see the [usage notebook](./how_to_start.ipynb) and the [burst mode examples notebook](./notebooks/6_burst_search_examples.ipynb).
 
 ## 📚 Documentation
 
@@ -108,6 +140,7 @@ Comprehensive documentation is available at: **[https://esa-philab.github.io/phi
 - **[Getting Started](https://esa-philab.github.io/phidown/getting_started.html)** - Quick start guide
 - **[Installation](https://esa-philab.github.io/phidown/installation.html)** - Detailed installation instructions
 - **[User Guide](https://esa-philab.github.io/phidown/user_guide.html)** - Complete usage guide
+- **[Sentinel-1 Burst Mode](https://esa-philab.github.io/phidown/sentinel1_burst_mode.html)** - NEW: Individual burst search guide
 - **[API Reference](https://esa-philab.github.io/phidown/api_reference.html)** - Full API documentation
 - **[Examples](https://esa-philab.github.io/phidown/examples.html)** - Code examples and tutorials
 - **[Contributing](https://esa-philab.github.io/phidown/contributing.html)** - How to contribute
