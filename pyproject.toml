@@ -1,6 +1,6 @@
 [project]
 name = "phidown"
-version = "0.1.19"
+version = "0.1.20"
 description = "A project using AWS services and dataset tools for Sentinel data"
 authors = [
   { name = "Roberto Del Prete", email = "roberto.delprete@esa.int" }
