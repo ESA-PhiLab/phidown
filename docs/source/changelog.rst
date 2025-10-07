@@ -6,6 +6,68 @@ This document tracks all notable changes to Φ-Down.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
+[0.1.20] - 2025-10-07
+---------------------
+
+### Added
+- **Sentinel-1 SLC Burst Mode Support**: Full integration for searching individual Sentinel-1 SLC bursts
+  
+  - Access individual bursts from SLC products without downloading full scenes
+  - Available for data from August 2, 2024 onwards
+  - 12 new burst-specific search parameters:
+    
+    - ``burst_id``: Unique identifier for a specific burst
+    - ``absolute_burst_id``: Global unique burst identifier
+    - ``swath_identifier``: Swath name (IW1, IW2, IW3, EW1-EW5)
+    - ``parent_product_name``: Name of the parent SLC product
+    - ``parent_product_type``: Type of parent product (IW_SLC__1S, EW_SLC__1S)
+    - ``parent_product_id``: Parent product identifier
+    - ``datatake_id``: Datatake identifier
+    - ``relative_orbit_number``: Relative orbit number for burst filtering
+    - ``operational_mode``: Acquisition mode (IW, EW)
+    - ``polarisation_channels``: Polarization channels (VV, VH, HH, HV)
+    - ``platform_serial_identifier``: Sentinel-1 satellite (A, B)
+    
+- **Burst Mode Documentation**: Comprehensive guide for Sentinel-1 SLC burst searching
+- **Burst Search Examples Notebook**: Interactive Jupyter notebook with 9 detailed examples:
+  
+  - Basic burst search with temporal filters
+  - Spatial filtering with area of interest (AOI)
+  - Search by specific Burst ID
+  - Filter by swath identifier and polarization
+  - Search bursts from parent products
+  - Orbit direction and relative orbit filtering
+  - Advanced multi-parameter searches
+  - Burst result analysis and statistics
+  - Visualization of burst footprints
+  
+- **Enhanced Configuration**: Updated ``config.json`` with burst-specific validation:
+  
+  - Valid parent product types
+  - Valid swath identifiers
+  - Valid operational modes
+  - Burst-specific field definitions
+
+### Changed
+- **Query Builder**: Updated ``_build_query()`` to use Bursts endpoint when ``burst_mode=True``
+- **Filter Logic**: Enhanced filter building to handle burst-specific parameters
+- **Display Results**: Improved ``display_results()`` method to show appropriate columns for burst vs product mode
+- **Date Filters**: Modified date filtering operators for burst mode compatibility (uses ``ge/le`` instead of ``gt/lt``)
+- **Orbit Direction**: Updated orbit direction filtering to use different operators in burst mode
+- **Validation**: Added comprehensive parameter validation for burst-specific fields
+
+### Fixed
+- Date format validation to support standard ISO 8601 format
+- Column selection in ``display_results()`` to handle missing columns gracefully
+- Burst mode integration with existing search functionality
+- Backward compatibility with non-burst searches
+
+### Technical Details
+- Burst searches use the ``/odata/v1/Bursts`` endpoint
+- Excludes ``$expand=Attributes`` parameter in burst mode
+- Returns burst-specific metadata including footprint, swath, and parent product information
+- Fully compatible with existing spatial (WKT polygon), temporal, and orbit filters
+
 [0.1.19] - 2024-09-20
 ---------------------
 

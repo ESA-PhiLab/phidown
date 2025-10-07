@@ -3,6 +3,11 @@ Sentinel-1 Reference Guide
 
 This reference guide provides detailed information about Sentinel-1 SAR data parameters and options available through the Copernicus Data Space Ecosystem.
 
+.. note::
+   **New in version 0.1.20:** Sentinel-1 SLC Burst Mode is now available! 
+   Search for individual bursts from SLC products with enhanced filtering capabilities.
+   See the :doc:`sentinel1_burst_mode` guide for complete documentation.
+
 Overview
 --------
 
@@ -14,6 +19,7 @@ Sentinel-1 is a constellation of two polar-orbiting satellites (Sentinel-1A and 
 - Dual polarization capability (HH+HV, VV+VH)
 - 12-day repeat cycle (6 days with both satellites)
 - Global coverage
+- **Individual burst access for SLC products** (available from August 2, 2024)
 
 Search Parameters
 -----------------

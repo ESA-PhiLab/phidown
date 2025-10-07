@@ -21,6 +21,7 @@ Welcome to Φ-Down Documentation
    api_reference
    examples
    sentinel1_reference
+   sentinel1_burst_mode
    sentinel2_reference
    sentinel3_reference
    landsat8_reference
