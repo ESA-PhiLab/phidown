@@ -6,6 +6,18 @@ This document tracks all notable changes to Φ-Down.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
+[0.1.21] - 2025-10-17
+---------------------
+
+### Added
+- **progress bar**: Full progress bar support for downloads using tqdm
+
+### Changed
+- **search.py**: Refactored search logic to improve performance
+- **downloader.py**: Refactored download logic to integrate progress bar seamlessly
+
+
+
 [0.1.20] - 2025-10-07
 ---------------------
 
