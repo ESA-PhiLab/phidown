@@ -133,7 +133,25 @@ searcher.display_results(top_n=5)
 
 For more advanced use cases, including searching with geographical filters and batch downloading, see the [usage notebook](./how_to_start.ipynb) and the [burst mode examples notebook](./notebooks/6_burst_search_examples.ipynb).
 
-## 📚 Documentation
+## � Download Progress Monitoring
+
+When using `pull_down()` to download data, Φ-Down now streams s5cmd output in real time so you can monitor download progress:
+
+- **Live Progress**: File transfer messages appear as they happen (no more waiting for completion to see what happened)
+- **No Setup Required**: Progress streaming is enabled by default - no environment variables needed
+- **Prerequisites**: Ensure `s5cmd` is installed and available on your PATH
+
+Example output during download:
+```
+INFO:phidown.s5cmd_utils:Running command: s5cmd --endpoint-url https://eodata.dataspace.copernicus.eu cp s3:/eodata/Sentinel-1/...
+INFO:phidown.s5cmd_utils:Downloading from: s3:/eodata/Sentinel-1/SAR/...
+INFO:phidown.s5cmd_utils:Output directory: /path/to/output/
+INFO:phidown.s5cmd_utils:cp s3:/eodata/.../file1.tiff ./output/
+INFO:phidown.s5cmd_utils:cp s3:/eodata/.../file2.xml ./output/
+INFO:phidown.s5cmd_utils:✓ Download completed
+```
+
+## �📚 Documentation
 
 Comprehensive documentation is available at: **[https://esa-philab.github.io/phidown](https://esa-philab.github.io/phidown)**
 
