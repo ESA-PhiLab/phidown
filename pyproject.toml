@@ -9,6 +9,7 @@ authors = [
 dependencies = [
   "pandas>=1.5.2",        # keep as is, already minimum version
   "s5cmd",
+  "tqdm>=4.65.0",
 ]
 
 requires-python = ">=3.9"

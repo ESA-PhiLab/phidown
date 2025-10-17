@@ -887,14 +887,29 @@ class CopernicusDataSearcher:
     def download_product(self, eo_product_name: str, 
                         output_dir: str, 
                         config_file = '.s5cfg',
-                        verbose=True):
+                        verbose=True,
+                        show_progress=True):
         """
         Download the EO product using the downloader module.
+        
+        Args:
+            eo_product_name: Name of the EO product to download
+            output_dir: Local output directory for downloaded files
+            config_file: Path to s5cmd configuration file
+            verbose: Whether to print download information
+            show_progress: Whether to show tqdm progress bar during download
+        
+        Returns:
+            bool: True if download was successful, False otherwise
         """
         res = self.query_by_name(eo_product_name)
         if res.empty:
             print(f"No product found with name: {eo_product_name}")
             return False
+        
+        
+        # file size in bytes
+        content_length = res['ContentLength'].iloc[0]
         
         # Ensure output_dir is an absolute path
         abs_output_dir = os.path.abspath(output_dir)
@@ -904,9 +919,11 @@ class CopernicusDataSearcher:
             print(f"Output directory: {abs_output_dir}")
         
         s3path = res['S3Path'].iloc[0]
-        # Call the downloader function
+        # Call the downloader function with progress bar
         pull_down(
             s3_path=s3path,
             output_dir=abs_output_dir,
             config_file=config_file,
+            total_size=content_length,
+            show_progress=show_progress
             )

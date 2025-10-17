@@ -4,6 +4,9 @@ from typing import Optional, List
 import configparser
 import logging
 import shlex
+import time
+import threading
+from tqdm import tqdm
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -14,7 +17,7 @@ def run_s5cmd_with_config(
     command: str,
     config_file: str = '.s5cfg',
     endpoint_url: Optional[str] = None,
-    verbose: bool = True
+    verbose: bool = False,
 ) -> str:
     """Run s5cmd command with configuration file.
 
@@ -90,15 +93,17 @@ def run_s5cmd_with_config(
             # strip trailing newlines but preserve message
             text_line = line.rstrip('\n')
             if text_line:
-                logger.info(text_line)
+                if verbose:
+                    logger.info(text_line)
                 stdout_lines.append(text_line)
 
         returncode = process.wait()
         if returncode != 0:
             # Join collected output for better error context
             combined = "\n".join(stdout_lines)
-            logger.error(f'Command exited with non-zero status {returncode}. '
-                         f'Output:\n{combined}')
+            if verbose:
+                logger.error(f'Command exited with non-zero status {returncode}. '
+                             f'Output:\n{combined}')
             raise subprocess.CalledProcessError(returncode, cmd_parts, output=combined)
 
         return "\n".join(stdout_lines)
@@ -111,18 +116,42 @@ def run_s5cmd_with_config(
         raise
 
 
+def get_directory_size(directory: str) -> int:
+    """Calculate total size of all files in a directory recursively.
+    
+    Args:
+        directory: Path to the directory
+        
+    Returns:
+        int: Total size in bytes
+    """
+    total_size = 0
+    try:
+        for dirpath, dirnames, filenames in os.walk(directory):
+            for filename in filenames:
+                filepath = os.path.join(dirpath, filename)
+                if os.path.exists(filepath):
+                    total_size += os.path.getsize(filepath)
+    except Exception as e:
+        logger.warning(f'Error calculating directory size: {e}')
+    return total_size
+
+
 def pull_down(
     s3_path: str,
     output_dir: str = '.',
     config_file: str = '.s5cfg',
     endpoint_url: str = 'https://eodata.dataspace.copernicus.eu',
     download_all: bool = True,
-    reset: bool = False
+    reset: bool = False,
+    total_size: Optional[int] = None,
+    show_progress: bool = True
 ) -> bool:
     """Download Sentinel-1 SAFE directory from Copernicus Data Space.
 
     This function downloads either individual files or entire SAFE directories
     from the Copernicus Data Space Ecosystem using the optimized s5cmd tool.
+    Optionally displays a progress bar based on downloaded file size.
 
     Args:
         s3_path: S3 path to the Sentinel-1 data (should start with /eodata/)
@@ -131,6 +160,8 @@ def pull_down(
         endpoint_url: Copernicus Data Space endpoint URL
         download_all: If True, downloads entire directory with wildcard pattern
         reset: If True, prompts for new AWS credentials and resets config file
+        total_size: Expected total size in bytes (for progress bar)
+        show_progress: If True and total_size provided, shows tqdm progress bar
 
     Returns:
         bool: True if download was successful
@@ -140,11 +171,13 @@ def pull_down(
         ValueError: If s3_path format is invalid
 
     Example:
-        >>> # Download entire SAFE directory
-        >>> output = download_sentinel_safe(
+        >>> # Download entire SAFE directory with progress bar
+        >>> output = pull_down(
         ...     '/eodata/Sentinel-1/SAR/IW_RAW__0S/2024/05/03/'
         ...     'S1A_IW_RAW__0SDV_20240503T031926_20240503T031942_053701_0685FB_E003.SAFE',
-        ...     output_dir='/path/to/data'
+        ...     output_dir='/path/to/data',
+        ...     total_size=1073741824,  # 1 GB
+        ...     show_progress=True
         ... )
 
     Notes:
@@ -154,6 +187,7 @@ def pull_down(
         - Ensure `s5cmd` is installed and available on PATH. There is no
           additional environment variable required to enable streaming; it's
           handled by this function.
+        - Progress bar monitors actual disk usage and updates in real-time.
     """
     assert s3_path, 'S3 path cannot be empty'
     assert output_dir, 'Output directory arg cannot be empty'
@@ -198,11 +232,71 @@ def pull_down(
     # The subprocess will handle arguments properly
     command = f'cp {s3_url} {full_output_dir}/'
 
-    logger.info(f'Downloading from: {s3_url}')
-    logger.info(f'Output directory: {full_output_dir}')
-    run_s5cmd_with_config(
-        command=command,
-        config_file=config_file,
-        endpoint_url=endpoint_url
-    )
+    if show_progress and total_size and total_size > 0:
+        # Suppress info logging when progress bar is shown
+        pass
+    else:
+        logger.info(f'Downloading from: {s3_url}')
+        logger.info(f'Output directory: {full_output_dir}')
+    
+    # If progress bar is enabled and total_size is provided
+    if show_progress and total_size and total_size > 0:
+        # Get initial size
+        initial_size = get_directory_size(full_output_dir)
+        
+        # Create progress bar
+        pbar = tqdm(
+            total=total_size,
+            initial=initial_size,
+            unit='B',
+            unit_scale=True,
+            unit_divisor=1024,
+            desc='Downloading'
+        )
+        
+        # Flag to stop monitoring thread
+        stop_monitoring = threading.Event()
+        
+        def monitor_progress():
+            """Monitor download progress by checking disk usage."""
+            last_size = initial_size
+            while not stop_monitoring.is_set():
+                time.sleep(0.5)  # Update every 0.5 seconds
+                current_size = get_directory_size(full_output_dir)
+                delta = current_size - last_size
+                if delta > 0:
+                    pbar.update(delta)
+                    last_size = current_size
+        
+        # Start monitoring thread
+        monitor_thread = threading.Thread(target=monitor_progress, daemon=True)
+        monitor_thread.start()
+        
+        try:
+            run_s5cmd_with_config(
+                command=command,
+                config_file=config_file,
+                endpoint_url=endpoint_url,
+                verbose=False  # Reduce logging noise when using progress bar
+            )
+        finally:
+            # Stop monitoring and ensure final update
+            stop_monitoring.set()
+            monitor_thread.join(timeout=2)
+            
+            # Final size check
+            final_size = get_directory_size(full_output_dir)
+            remaining = final_size - pbar.n
+            if remaining > 0:
+                pbar.update(remaining)
+            
+            pbar.close()
+    else:
+        # No progress bar - use original implementation
+        run_s5cmd_with_config(
+            command=command,
+            config_file=config_file,
+            endpoint_url=endpoint_url
+        )
+    
     return True
