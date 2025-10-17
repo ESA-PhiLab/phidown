@@ -69,16 +69,25 @@ First Steps
 
 4. **Download data**:
 
+   Download a product using its name from the search results:
+
    .. code-block:: python
+      """
+      Args:
+         product_name (str): Name of the product to download (from search results)
+         config_file (str): Path to the configuration file containing authentication credentials
+         output_dir (str): Directory where the downloaded product will be saved
 
-      from phidown.downloader import pull_down
-      import os
+      Note:
+         - Update the config_file path to point to your actual .s5cfg file
+         - Update the output_dir path to your desired download location
+         - The example downloads the first product from the search results (df.iloc[0])
+      """
+      searcher.download_product('EO_PRODUCT_NAME',
+                                 config_file='path/to/your/config/file/.s5cfg',
+                                 output_dir='path/to/your/download/directory/')
 
-      # Download the first product
-      if len(df) > 0:
-         product_s3_path = df.iloc[0]["S3Path"]  # or "RemotePath"
-         download_dir = os.path.abspath("./data")
-         pull_down(product_s3_path, output_dir=download_dir)
+
 
 What's Next?
 ------------
