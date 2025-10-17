@@ -53,27 +53,32 @@ First Steps
       searcher = CopernicusDataSearcher()
       
       # Search for Sentinel-2 data over Rome
-      results = searcher.search(
-          collection_name='SENTINEL-2',
-          aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
-          start_date='2023-01-01',
-          end_date='2023-01-31'
+      searcher.query_by_filter(
+         collection_name='SENTINEL-2',
+         aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
+         start_date='2023-01-01',
+         end_date='2023-01-31'
       )
       
+      df = searcher.execute_query()
+
       # Display results
-      print(f"Found {len(results)} products")
-      searcher.display_results(results, columns=['Name', 'ContentDate', 'CloudCover'])
+      print(f"Number of results: {len(df)}")
+      # Display the first few rows of the DataFrame
+      print(searcher.display_results(top_n=15))
 
 4. **Download data**:
 
    .. code-block:: python
 
       from phidown.downloader import pull_down
+      import os
 
       # Download the first product
-      if len(results) > 0:
-          product_id = results.iloc[0]['Id']
-          pull_down(product_id, download_dir='./data')
+      if len(df) > 0:
+         product_s3_path = df.iloc[0]["S3Path"]  # or "RemotePath"
+         download_dir = os.path.abspath("./data")
+         pull_down(product_s3_path, output_dir=download_dir)
 
 What's Next?
 ------------
