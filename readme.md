@@ -48,17 +48,14 @@ Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy
 |Example Notebook | [![Open in Colab](https://img.shields.io/badge/Open%20in-Colab-orange?logo=google-colab&style=for-the-badge)](https://colab.research.google.com/drive/1ZLIyKS_OrDmJfW4H5R6i1_b88vqrdCKz?usp=sharing) |
 | Python Support | [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/) |
 | PyPi | [![PyPI Version](https://img.shields.io/pypi/v/phidown.svg?color=blue)](https://pypi.org/project/phidown/) |
-| License | [![License: GPL v3](https://img.shields.io/badge/License-LGPLv3-A42E2B?style=plastic&labelColor=white&logo=gnu&logoColor=A42E2B)](https://opensource.org/license/LGPL-3.0) |
+| License | [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=plastic&labelColor=white&logo=apache&logoColor=red)](https://www.apache.org/licenses/LICENSE-2.0) |
 | Documentation | [![Documentation Status](https://img.shields.io/badge/docs-sphinx-blue.svg)](https://esa-philab.github.io/phidown) |
 | Contributions | [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com) |
 
 
 > ## 🚀 **What's Next & Feature Status**
 > 
-> - ✔️ **Done:** Replace `s3` with `s5cmd` for data transfers  
-> - ✔️ **Done:** Add a visualisation tool  
-> - ✔️ **Done:** Add a S-1 reference in docs.  
-> - ✔️ **Done:** Removed old boto3 dep.
+> - ✔️ **Done:** Add a progress bar.  
 > - ✔️ **Done:** Sentinel-1 SLC Burst Mode support (v0.1.20)
 > - [x] **Coming soon:** Implement a `count` option for search results more than 1000
 > - [x] **Coming soon:** Add a parallel download executor
@@ -542,13 +539,13 @@ If **Φ-Down** has contributed to your research, project, or publication, we kin
 ---
 ## License
 
-**Φ-Down** is proudly licensed under the **GNU Lesser General Public License version v3.0 (LGPLv3)**.
+**Φ-Down** is proudly licensed under the **Apache License 2.0**.
 
-[![License: LGPL v3](https://img.shields.io/badge/License-LGPLv3-A42E2B?style=plastic&labelColor=white&logo=gnu&logoColor=A42E2B)](https://opensource.org/license/LGPL-3.0)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=plastic&labelColor=white&logo=apache&logoColor=red)](https://www.apache.org/licenses/LICENSE-2.0)
 
-This license ensures that the software remains free and open-source, allowing you to:
-- **Use** the software freely for any purpose.
-- **Share** the software with others.
-- **Modify** the software and share your modifications under the same license terms.
+This license lets you:
+- **Use** the software freely for commercial and non-commercial purposes.
+- **Modify** and distribute the software, provided you include a copy of the license and state any notable changes.
+- **Include** any accompanying NOTICE information when redistributing derivative works.
 
-For full details, please refer to the [LGPLv3 License Text](https://opensource.org/license/LGPL-3.0).
+For full details, please refer to the [Apache License 2.0 text](https://www.apache.org/licenses/LICENSE-2.0).
