@@ -6,22 +6,22 @@ This document tracks all notable changes to Φ-Down.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
-## [0.1.22] - 2025-10-18
+[0.1.22] - 2025-10-18
 ---------------------
 
 ### Added
 - **Burst Mode Download API**: Complete integration for searching and downloading Sentinel-1 SLC bursts
-  - New `get_token()` function for obtaining CDSE authentication tokens
-  - New `download_burst_on_demand()` function for on-demand burst processing and download
+  - New ``get_token()`` function for obtaining CDSE authentication tokens
+  - New ``download_burst_on_demand()`` function for on-demand burst processing and download
 - **Documentation**: Comprehensive burst mode documentation
-  - New `burst_mode.rst` documentation page with detailed examples
+  - New ``burst_mode.rst`` documentation page with detailed examples
   - Seven practical burst search examples covering different use cases
   - Complete workflow examples combining search and download
   - Common use cases: InSAR time series, regional analysis, product decomposition, systematic monitoring
-- **Example Notebooks**: Added `6_burst_search_examples.ipynb` demonstrating burst functionality
+- **Example Notebooks**: Added ``6_burst_search_examples.ipynb`` demonstrating burst functionality
 
 ### Changed
-- Updated logging throughout `downloader.py` to use logger instead of print statements
+- Updated logging throughout ``downloader.py`` to use logger instead of print statements
 - Improved error messages with clearer context and emoji indicators
 - Enhanced docstrings with Google-style formatting for all burst-related functions
 
@@ -29,16 +29,15 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 - UUID validation for burst IDs with proper error handling
 - Better handling of redirect responses during burst processing
 
-
 [0.1.21] - 2025-10-17
 ---------------------
 
 ### Added
-- **progress bar**: Full progress bar support for downloads using tqdm
+- **Progress bar**: Full progress bar support for downloads using ``tqdm``
 
 ### Changed
-- **search.py**: Refactored search logic to improve performance
-- **downloader.py**: Refactored download logic to integrate progress bar seamlessly
+- ``search.py``: Refactored search logic to improve performance
+- ``downloader.py``: Refactored download logic to integrate progress bar seamlessly
 
 
 
