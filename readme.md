@@ -9,9 +9,7 @@
 
 
 
-#  **Φ-Down**: Your Gateway to Copernicus Data <a href="https://github.com/ESA-PhiLab/phidown"><img src="./assets/logo.png" align="right" height="170em" alt="website" /></a>
-
-
+#  **Φ-Down**: Your Gateway to Copernicus Data <a href="https://github.com/ESA-PhiLab/phidown"></a>
 
 <div align="center" style="margin: 40px 0;">
   <h3 style="padding-left: 40px; margin-bottom: 20px;">🌐 Connect with Φ-Lab & the Author</h3>
@@ -34,7 +32,7 @@
 
 ---
 
-## Overview 
+## By Roberto Del Prete
 
 **Φ-Down** is a Python library that simplifies accessing Earth Observation data from the Copernicus Data Space Ecosystem using services and dataset tools. It provides a streamlined interface for searching, filtering, and downloading satellite imagery from various Sentinel missions and contributing datasets.
 
