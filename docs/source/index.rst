@@ -16,6 +16,7 @@ Welcome to Φ-Down Documentation
 
    getting_started
    installation
+   cli
    user_guide
    ais_guide
    api_reference
@@ -42,6 +43,7 @@ Overview
 Key Features
 ------------
 
+* 🖥️ **Command-Line Interface**: Download products directly from terminal (NEW!)
 * 🔍 **Search**: Query Copernicus Data Space using intuitive filters
 * 📥 **Download**: Efficient data downloading with S3 integration
 * 🗺️ **Visualization**: Built-in tools for plotting and interactive maps

@@ -11,6 +11,18 @@ __author__ = "Roberto Del Prete"
 from .search import CopernicusDataSearcher  
 from .viz import plot_kml_coordinates
 
+# Lazy import CLI functions to avoid import conflicts
+# These will be imported on first use
+def __getattr__(name):
+    """Lazy import for CLI functions."""
+    if name == 'download_by_name':
+        from .cli import download_by_name
+        return download_by_name
+    elif name == 'download_by_s3path':
+        from .cli import download_by_s3path
+        return download_by_s3path
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
 # Import AIS functionality (optional dependency)
 try:
     from .ais import AISDataHandler, download_ais_data
@@ -34,7 +46,9 @@ except ImportError:
 # Build __all__ dynamically based on available dependencies
 __all__ = [
     'CopernicusDataSearcher',
-    'plot_kml_coordinates'
+    'plot_kml_coordinates',
+    'download_by_name',
+    'download_by_s3path'
 ]
 
 if _AIS_AVAILABLE:

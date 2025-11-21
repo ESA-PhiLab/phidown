@@ -128,6 +128,93 @@ searcher.display_results(top_n=5)
 
 For more advanced use cases, including searching with geographical filters and batch downloading, see the [usage notebook](./how_to_start.ipynb) and the [burst mode examples notebook](./notebooks/6_burst_search_examples.ipynb).
 
+## 🖥️ Command-Line Interface (CLI)
+
+**NEW in v0.1.23:** Φ-Down now includes a powerful CLI for downloading products directly from your terminal!
+
+### Quick Start
+
+After installation, you can use the `phidown` command to download products:
+
+```bash
+# Download by product name
+phidown --name S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003 -o ./data
+
+# Download by S3 path
+phidown --s3path /eodata/Sentinel-1/SAR/IW_GRDH_1S/2024/05/03/... -o ./data
+
+# Reset configuration and enter new credentials
+phidown --name PRODUCT_NAME -o ./data --reset
+
+# Download without progress bar
+phidown --name PRODUCT_NAME -o ./data --no-progress
+```
+
+### CLI Options
+
+```
+phidown --help
+
+options:
+  -h, --help            show this help message and exit
+  --name NAME           Product name to download
+  --s3path S3PATH       S3 path to download (must start with /eodata/)
+  -o OUTPUT_DIR, --output-dir OUTPUT_DIR
+                        Output directory for downloaded data (default: current directory)
+  -c CONFIG_FILE, --config-file CONFIG_FILE
+                        Path to s5cmd configuration file (default: .s5cfg)
+  --reset               Reset configuration file and prompt for new credentials
+  --no-progress         Disable progress bar during download
+  --no-download-all     Download specific file instead of entire directory (for S3 path only)
+  -v, --verbose         Enable verbose output
+  --version             show program's version number and exit
+```
+
+### CLI Examples
+
+**1. Simple download with automatic credentials setup:**
+```bash
+# First time - will prompt for credentials
+phidown --name S1A_IW_GRDH_1SDV_20240503T031926 -o ~/downloads
+```
+
+**2. Download to specific directory:**
+```bash
+phidown --name S2A_MSIL2A_20240503T101031_N0510 -o /data/sentinel2
+```
+
+**3. Download using S3 path:**
+```bash
+phidown --s3path /eodata/Sentinel-1/SAR/IW_RAW__0S/2024/05/03/S1A_IW_RAW__0SDV.SAFE -o ./raw_data
+```
+
+**4. Use custom config file:**
+```bash
+phidown --name PRODUCT_NAME -o ./data -c ~/.my-s5cfg
+```
+
+### Python API
+
+You can also use the CLI functions programmatically in your Python code:
+
+```python
+from phidown import download_by_name, download_by_s3path
+
+# Download by product name
+success = download_by_name(
+    product_name='S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003',
+    output_dir='./downloads',
+    show_progress=True
+)
+
+# Download by S3 path
+success = download_by_s3path(
+    s3_path='/eodata/Sentinel-1/SAR/IW_GRDH_1S/2024/05/03/...',
+    output_dir='./downloads',
+    download_all=True
+)
+```
+
 ## � Download Progress Monitoring
 
 When using `pull_down()` to download data, Φ-Down now streams s5cmd output in real time so you can monitor download progress:
