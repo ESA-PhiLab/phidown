@@ -26,6 +26,7 @@ Welcome to Φ-Down Documentation
    sentinel2_reference
    sentinel3_reference
    landsat8_reference
+   ccm_reference
    contributing
    changelog
 
@@ -38,6 +39,7 @@ Overview
 - **Sentinel-2**: Multi-spectral imaging for land monitoring
 - **Sentinel-3**: Ocean and land monitoring
 - **Sentinel-5P**: Atmospheric monitoring
+- **CCM**: Copernicus Contributing Missions (commercial and public satellites)
 - **AIS Data**: Automatic Identification System data for maritime vessel tracking
 
 Key Features

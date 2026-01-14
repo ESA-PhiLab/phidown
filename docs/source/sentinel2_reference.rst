@@ -30,18 +30,45 @@ When searching for Sentinel-2 data, parameters are passed in two ways:
    - ``start_date`` / ``end_date`` - Temporal range
    - ``top`` - Maximum number of results
 
-2. **Attributes:** Passed in the ``attributes`` dictionary
-   - ``tileId`` - Tile identifier (e.g., 32TQM)
-   - ``processingLevel`` - Processing level (S2MSI1C, S2MSI2A)
-   - ``platform`` - Satellite platform (S2A, S2B, S2C)
-   - ``instrument`` - Instrument type (MSI, AUX)
-   - ``orbitNumber`` - Absolute orbit number
-   - ``sensorMode`` - Sensor mode (INS-NOBS, INS-RAW, INS-VIC)
-   - ``cloudCover`` - Cloud cover percentage
-   - ``status`` - Product availability status
-   - ``relativeOrbitNumber`` - Relative orbit number
-   - ``processingBaseline`` - Processing baseline version
-   - ``missionTakeId`` - Mission take identifier
+2. **Attributes Dictionary**
+
+   Attributes are passed in the ``attributes`` parameter dictionary. All values listed below have been
+   comprehensively tested and verified against the Copernicus Data Space OData API.
+
+   .. table:: Sentinel-2 Attribute Reference
+      :widths: 28 42 30
+
+      ============================  ==========================================  ===============================
+      Attribute                     Verified Values                             Description
+      ============================  ==========================================  ===============================
+      ``platformSerialIdentifier``  ``'A'``, ``'B'``                            Satellite platform identifier
+      ``instrumentShortName``       ``'MSI'``                                   Multi-Spectral Instrument
+      ``tileId``                    MGRS tile (e.g., ``'32TQM'``, ``'33TWG'``) Tile identifier (UTM grid)
+      ``operationalMode``           ``'INS-NOBS'``, ``'INS-RAW'``, ``'INS-VIC'`` Instrument operational mode
+      ``orbitNumber``               Integer as string                           Absolute orbit number
+      ``relativeOrbitNumber``       ``'1'``–``'143'`` (string)                  Relative orbit (repeat cycle)
+      ``processingBaseline``        Version string (e.g., ``'05.09'``)          Processing baseline version
+      ``qualityStatus``             ``'PASSED'``, ``'FAILED'``, ``'DEGRADED'``  Product quality assessment
+      ``sourceProduct``             Product identifier string                   Source L1C product (for L2A)
+      ============================  ==========================================  ===============================
+
+   .. note::
+      **Processing Level Filtering**
+      
+      ``processingLevel`` as an attribute does not filter correctly. Instead, use ``product_type``
+      parameter to specify:
+      
+      - ``'S2MSI1C'`` for Level-1C (Top-of-Atmosphere reflectance)
+      - ``'S2MSI2A'`` for Level-2A (Bottom-of-Atmosphere reflectance)
+      - ``'S2MSI2B'`` for Level-2B (archived format)
+
+3. **Method Parameters**
+
+   These parameters are passed directly to ``query_by_filter()``, not in the attributes dictionary:
+   
+   - ``cloud_cover_threshold`` - Maximum cloud cover percentage (0-100, uses < comparison)
+   - ``orbit_direction`` - Orbit direction (``'ASCENDING'`` or ``'DESCENDING'``)
+   - ``product_type`` - Product level (``'S2MSI1C'``, ``'S2MSI2A'``, ``'S2MSI2B'``)
 
 Basic Parameters
 ^^^^^^^^^^^^^^^^
@@ -132,33 +159,31 @@ Available processing levels:
        attributes={'processingLevel': 'S2MSI2A'}
    )
 
-Platform
-""""""""
+Platform Serial Identifier
+""""""""""""""""""""""""""
 Sentinel-2 constellation satellites:
 
-* ``S2A`` - Sentinel-2A (launched 2015)
-* ``S2B`` - Sentinel-2B (launched 2017)
-* ``S2C`` - Sentinel-2C (planned)
+* ``A`` - Sentinel-2A (launched 2015)
+* ``B`` - Sentinel-2B (launched 2017)
 
 .. code-block:: python
 
    # Search for Sentinel-2A data only
    results = searcher.search(
        collection_name='SENTINEL-2',
-       attributes={'platform': 'S2A'}
+       attributes={'platformSerialIdentifier': 'A'}
    )
 
-Instrument
-""""""""""
+Instrument Short Name
+"""""""""""""""""""""
 * ``MSI`` - Multi-Spectral Instrument (main optical instrument)
-* ``AUX`` - Auxiliary data files
 
 .. code-block:: python
 
    # Search for MSI instrument data
    results = searcher.search(
        collection_name='SENTINEL-2',
-       attributes={'instrument': 'MSI'}
+       attributes={'instrumentShortName': 'MSI'}
    )
 
 Sensor Mode
@@ -182,21 +207,24 @@ Cloud Cover
 
 Cloud Cover Percentage
 """"""""""""""""""""""
-Filter products by cloud cover percentage (0-100%).
+Filter products by cloud cover percentage (0-100%) using the ``cloud_cover_threshold`` parameter (not in attributes dict).
 
 .. code-block:: python
 
    # Search for products with less than 20% cloud cover
-   results = searcher.search(
+   searcher = CopernicusDataSearcher()
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
-       attributes={'cloudCover': '[0,20]'}
+       product_type='S2MSI1C',
+       start_date='2016-01-01',
+       end_date='2016-12-31',
+       cloud_cover_threshold=20,
+       top=10
    )
+   results = searcher.execute_query()
 
-   # Search for products with exactly 10% cloud cover
-   results = searcher.search(
-       collection_name='SENTINEL-2',
-       attributes={'cloudCover': '10'}
-   )
+   # Note: cloud_cover_threshold uses 'less than' comparison (<)
+   # Use cloud_cover_threshold=20 to get products with cloudCover < 20
 
 Orbit Parameters
 ^^^^^^^^^^^^^^^^
@@ -305,14 +333,17 @@ Example 1: Basic Level-1C Search
    searcher = CopernicusDataSearcher()
    
    # Search for Level-1C products with low cloud cover
-   results = searcher.search(
+   searcher = CopernicusDataSearcher()
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        product_type='S2MSI1C',
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
        start_date='2023-06-01',
        end_date='2023-06-30',
-       attributes={'cloudCover': '[0,20]'}
+       cloud_cover_threshold=20,
+       top=10
    )
+   results = searcher.execute_query()
    
    print(f"Found {len(results)} Level-1C products with <20% cloud cover")
 

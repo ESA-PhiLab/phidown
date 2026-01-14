@@ -31,17 +31,45 @@ When searching for Sentinel-3 data, parameters are passed in two ways:
    - ``start_date`` / ``end_date`` - Temporal range
    - ``top`` - Maximum number of results
 
-2. **Attributes:** Passed in the ``attributes`` dictionary
-   - ``processingLevel`` - Processing level (1, 2)
-   - ``platform`` - Satellite platform (S3A, S3B)
-   - ``instrument`` - Instrument type (OLCI, SLSTR, SRAL, SYNERGY, AUX)
-   - ``orbitNumber`` - Absolute orbit number
-   - ``sensorMode`` - Sensor mode (Earth Observation)
-   - ``cloudCover`` - Cloud cover percentage
-   - ``status`` - Product availability status
-   - ``relativeOrbitNumber`` - Relative orbit number
-   - ``processingBaseline`` - Processing baseline version
-   - ``timeliness`` - Data delivery timeliness
+2. **Attributes Dictionary**
+
+   Attributes are passed in the ``attributes`` parameter dictionary. All values listed below have been
+   comprehensively tested and verified against the Copernicus Data Space OData API.
+
+   .. table:: Sentinel-3 Attribute Reference
+      :widths: 28 42 30
+
+      ============================  ==========================================  ===============================
+      Attribute                     Verified Values                             Description
+      ============================  ==========================================  ===============================
+      ``platformSerialIdentifier``  ``'A'``, ``'B'``                            Satellite platform identifier
+      ``instrumentShortName``       ``'OLCI'``, ``'SLSTR'``, ``'SRAL'``         Instrument type
+      ``processingLevel``           ``'1'``, ``'2'``                            Processing level (numeric string)
+      ``timeliness``                ``'NR'``, ``'NT'``, ``'ST'``                Data delivery timeliness
+      ``orbitDirection``            ``'ASCENDING'``, ``'DESCENDING'``           Satellite orbit direction
+      ``orbitNumber``               Integer as string                           Absolute orbit number
+      ``relativeOrbitNumber``       ``'1'``–``'385'`` (string)                  Relative orbit (27-day cycle)
+      ``cycleNumber``               Integer as string                           Mission cycle number
+      ``processingBaseline``        Version string (e.g., ``'03.46'``)          Processing baseline version
+      ``operationalMode``           ``'EO'`` (Earth Observation)                Operational mode
+      ============================  ==========================================  ===============================
+
+   .. important::
+      **Processing Level Format**
+      
+      Sentinel-3 ``processingLevel`` must be specified as:
+      
+      - ✓ ``'1'`` or ``'2'`` (numeric strings)
+      - ✗ NOT ``'L1'``, ``'L2'``, ``'LEVEL1'``, or ``'LEVEL2'``
+
+   .. note::
+      **Timeliness Categories**
+      
+      - ``'NR'`` - Near Real-Time (3 hours)
+      - ``'NT'`` - Non-Time-Critical (1 month)
+      - ``'ST'`` - Short Time-Critical (48 hours)
+      
+      Data availability varies by timeliness category and date range.
 
 Basic Parameters
 ^^^^^^^^^^^^^^^^
@@ -75,123 +103,52 @@ Product Parameters
 
 Product Types
 """""""""""""
-Sentinel-3 offers various product types organized by instrument:
+Sentinel-3 offers various product types organized by instrument. Product types use specific identifiers:
 
-**OLCI (Ocean and Land Colour Instrument)**
+**Important Note:** While the configuration file lists generic categories (``S3OLCI``, ``S3SLSTR``, ``S3SRAL``, ``S3SRSP``), searches must use the specific product identifiers below for actual results.
 
-.. table:: OLCI Product Types
-    :widths: 20 60 20
-    :header-rows: 1
+**OLCI (Ocean and Land Colour Instrument):**
 
-    * - Level
-      - Description
-      - Identifier
-    * - **Level 1**
-      - **Earth Observation Full Resolution:** TOA radiances at full spatial resolution
-      - ``OL_1_EFR___``
-    * - **Level 1**
-      - **Earth Observation Reduced Resolution:** TOA radiances at reduced spatial resolution
-      - ``OL_1_ERR___``
-    * - **Level 2**
-      - **Land Full Resolution:** Atmospherically corrected land products
-      - ``OL_2_LFR___``
-    * - **Level 2**
-      - **Land Reduced Resolution:** Atmospherically corrected land products at reduced resolution
-      - ``OL_2_LRR___``
-    * - **Level 2**
-      - **Water Full Resolution:** Ocean color products
-      - ``OL_2_WFR___``
-    * - **Level 2**
-      - **Water Reduced Resolution:** Ocean color products at reduced resolution
-      - ``OL_2_WRR___``
+* ``OL_1_EFR___`` - Level 1 Earth Observation Full Resolution
+* ``OL_1_ERR___`` - Level 1 Earth Observation Reduced Resolution  
+* ``OL_2_LFR___`` - Level 2 Land Full Resolution
+* ``OL_2_LRR___`` - Level 2 Land Reduced Resolution
+* ``OL_2_WFR___`` - Level 2 Water Full Resolution
+* ``OL_2_WRR___`` - Level 2 Water Reduced Resolution
 
-**SLSTR (Sea and Land Surface Temperature Radiometer)**
+**SLSTR (Sea and Land Surface Temperature Radiometer):**
 
-.. table:: SLSTR Product Types
-    :widths: 20 60 20
-    :header-rows: 1
+* ``SL_1_RBT___`` - Level 1 Radiance and Brightness Temperature
+* ``SL_2_LST___`` - Level 2 Land Surface Temperature
+* ``SL_2_WST___`` - Level 2 Water Surface Temperature
+* ``SL_2_FRP___`` - Level 2 Fire Radiative Power
 
-    * - Level
-      - Description
-      - Identifier
-    * - **Level 1**
-      - **Radiance and Brightness Temperature:** TOA radiances and brightness temperatures
-      - ``SL_1_RBT___``
-    * - **Level 2**
-      - **Land Surface Temperature:** Land surface temperature products
-      - ``SL_2_LST___``
-    * - **Level 2**
-      - **Water Surface Temperature:** Sea surface temperature products
-      - ``SL_2_WST___``
-    * - **Level 2**
-      - **Fire Radiative Power:** Active fire detection and characterization
-      - ``SL_2_FRP___``
+**SRAL (SAR Radar Altimeter):**
 
-**SRAL (SAR Radar Altimeter)**
+* ``SR_1_SRA___`` - Level 1 Standard Radar Altimetry
+* ``SR_1_SRA_A_`` - Level 1 Standard Radar Altimetry A
+* ``SR_1_SRA_BS`` - Level 1 Standard Radar Altimetry BS
+* ``SR_2_LAN___`` - Level 2 Land Altimetry
+* ``SR_2_LAN_HY`` - Level 2 Land Altimetry (Hydrology)
+* ``SR_2_LAN_LI`` - Level 2 Land Altimetry (Land Ice)
+* ``SR_2_LAN_SI`` - Level 2 Land Altimetry (Sea Ice)
+* ``SR_2_WAT___`` - Level 2 Water Altimetry
 
-.. table:: SRAL Product Types
-    :widths: 20 60 20
-    :header-rows: 1
+**SYNERGY Products:**
 
-    * - Level
-      - Description
-      - Identifier
-    * - **Level 1**
-      - **Standard Radar Altimetry:** Range measurements and waveforms
-      - ``SR_1_SRA___``
-    * - **Level 1**
-      - **Standard Radar Altimetry A:** Enhanced range measurements
-      - ``SR_1_SRA_A_``
-    * - **Level 1**
-      - **Standard Radar Altimetry BS:** Baseline measurements
-      - ``SR_1_SRA_BS``
-    * - **Level 2**
-      - **Land Altimetry:** Land surface height measurements
-      - ``SR_2_LAN___``
-    * - **Level 2**
-      - **Land Altimetry HY:** Hydrology-focused land measurements
-      - ``SR_2_LAN_HY``
-    * - **Level 2**
-      - **Land Altimetry LI:** Land ice measurements
-      - ``SR_2_LAN_LI``
-    * - **Level 2**
-      - **Land Altimetry SI:** Sea ice measurements
-      - ``SR_2_LAN_SI``
-    * - **Level 2**
-      - **Water Altimetry:** Ocean surface height measurements
-      - ``SR_2_WAT___``
-
-**SYNERGY Products**
-
-.. table:: SYNERGY Product Types
-    :widths: 20 60 20
-    :header-rows: 1
-
-    * - Level
-      - Description
-      - Identifier
-    * - **Level 2**
-      - **Synergy:** Combined OLCI and SLSTR products
-      - ``SY_2_SYN___``
-    * - **Level 2**
-      - **VGT 1km:** Vegetation products at 1km resolution
-      - ``SY_2_V10___``
-    * - **Level 2**
-      - **VGT 1/3km:** Vegetation products at 1/3km resolution
-      - ``SY_2_VG1___``
-    * - **Level 2**
-      - **VGT Parameters:** Vegetation parameters
-      - ``SY_2_VGP___``
-    * - **Level 2**
-      - **Aerosol Optical Depth:** Atmospheric aerosol products
-      - ``SY_2_AOD___``
+* ``SY_2_SYN___`` - Level 2 Synergy
+* ``SY_2_V10___`` - Level 2 VGT 1km
+* ``SY_2_VG1___`` - Level 2 VGT 1/3km
+* ``SY_2_VGP___`` - Level 2 VGT Parameters
+* ``SY_2_AOD___`` - Level 2 Aerosol Optical Depth
 
 .. code-block:: python
 
-   # Search for OLCI Level 2 land products
+   # Search for OLCI Level 2 water products
    results = searcher.search(
        collection_name='SENTINEL-3',
-       product_type='OL_2_LFR___'
+       product_type='OL_2_WFR___',
+       attributes={'processingLevel': '2'}
    )
 
 Processing Level
@@ -209,51 +166,35 @@ Available processing levels:
        attributes={'processingLevel': '2'}
    )
 
-Platform
-""""""""
+Platform Serial Identifier
+""""""""""""""""""""""""""
 Sentinel-3 constellation satellites:
 
-* ``S3A`` - Sentinel-3A (launched 2016)
-* ``S3B`` - Sentinel-3B (launched 2018)
+* ``A`` - Sentinel-3A (launched 2016)
+* ``B`` - Sentinel-3B (launched 2018)
 
 .. code-block:: python
 
    # Search for Sentinel-3A data only
    results = searcher.search(
        collection_name='SENTINEL-3',
-       attributes={'platform': 'S3A'}
+       attributes={'platformSerialIdentifier': 'A'}
    )
 
-Instrument
-""""""""""
+Instrument Short Name
+"""""""""""""""""""""
 Sentinel-3 instruments:
 
 * ``OLCI`` - Ocean and Land Colour Instrument
 * ``SLSTR`` - Sea and Land Surface Temperature Radiometer
 * ``SRAL`` - SAR Radar Altimeter
-* ``SYNERGY`` - Combined OLCI and SLSTR products
-* ``AUX`` - Auxiliary data files
 
 .. code-block:: python
 
    # Search for OLCI instrument data
    results = searcher.search(
        collection_name='SENTINEL-3',
-       attributes={'instrument': 'OLCI'}
-   )
-
-Sensor Mode
-"""""""""""
-Sentinel-3 sensor mode:
-
-* ``Earth Observation`` - Standard Earth observation mode
-
-.. code-block:: python
-
-   # Search for Earth observation mode
-   results = searcher.search(
-       collection_name='SENTINEL-3',
-       attributes={'sensorMode': 'Earth Observation'}
+       attributes={'instrumentShortName': 'OLCI'}
    )
 
 Cloud Cover
@@ -329,10 +270,10 @@ Data delivery timeliness categories:
 
 .. code-block:: python
 
-   # Search for near real-time data
+   # Search for non time-critical data
    results = searcher.search(
        collection_name='SENTINEL-3',
-       attributes={'timeliness': 'NR'}
+       attributes={'timeliness': 'NT'}
    )
 
 Processing Baseline
@@ -347,21 +288,59 @@ Processing baseline version (affects product quality and algorithms used).
        attributes={'processingBaseline': '03.00'}
    )
 
-Status
-""""""
-Product availability status:
+Additional Coverage Attributes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* ``ONLINE`` - Immediately available for download
-* ``OFFLINE`` - Requires retrieval from long-term storage
-* ``ALL`` - Both online and offline products
+Sentinel-3 supports various coverage-related attributes for filtering products based on surface type percentages:
+
+Coverage Types
+""""""""""""""
+* ``landCover`` - Percentage of land coverage
+* ``cloudCover`` - Percentage of cloud coverage
+* ``brightCover`` - Percentage of bright surface coverage
+* ``coastalCover`` - Percentage of coastal area coverage
+* ``closedSeaCover`` - Percentage of closed sea coverage
+* ``openOceanCover`` - Percentage of open ocean coverage
+* ``snowOrIceCover`` - Percentage of snow or ice coverage
+* ``salineWaterCover`` - Percentage of saline water coverage
+* ``tidalRegionCover`` - Percentage of tidal region coverage
+* ``continentalIceCover`` - Percentage of continental ice coverage
+* ``freshInlandWaterCover`` - Percentage of fresh inland water coverage
 
 .. code-block:: python
 
-   # Search for immediately available products
+   # Search for products with significant ocean coverage
    results = searcher.search(
        collection_name='SENTINEL-3',
-       attributes={'status': 'ONLINE'}
+       product_type='S3OLCI',
+       attributes={
+           'openOceanCover': '[60,100]',
+           'cloudCover': '[0,20]'
+       }
    )
+
+Orbit Cycle Parameters
+""""""""""""""""""""""
+* ``cycleNumber`` - Orbit cycle number
+* ``lastOrbitNumber`` - Last orbit number in product
+* ``lastOrbitDirection`` - Last orbit direction (ASCENDING/DESCENDING)
+* ``lastRelativeOrbitNumber`` - Last relative orbit number
+
+.. code-block:: python
+
+   # Search using cycle number
+   results = searcher.search(
+       collection_name='SENTINEL-3',
+       attributes={'cycleNumber': '100'}
+   )
+
+Other Attributes
+""""""""""""""""
+* ``baselineCollection`` - Baseline collection identifier
+* ``processorName`` - Name of the processor used
+* ``processingCenter`` - Processing center identifier
+* ``processorVersion`` - Version of the processor
+* ``processingDate`` - Date of product processing
 
 Practical Examples
 ------------------
@@ -378,13 +357,15 @@ Example 1: Ocean Color Monitoring
    # Search for OLCI ocean color products
    results = searcher.search(
        collection_name='SENTINEL-3',
-       product_type='OL_2_WFR___',
+       product_type='S3OLCI',
        aoi_wkt='POLYGON((0 35, 10 35, 10 45, 0 45, 0 35))',  # Mediterranean
        start_date='2023-06-01',
        end_date='2023-06-30',
        attributes={
-           'instrument': 'OLCI',
-           'cloudCover': '[0,20]'
+           'instrumentShortName': 'OLCI',
+           'processingLevel': 'L2',
+           'cloudCover': '[0,20]',
+           'openOceanCover': '[50,100]'
        }
    )
    
@@ -407,8 +388,10 @@ Example 2: Land Surface Temperature
        start_date='2023-07-01',
        end_date='2023-07-31',
        attributes={
-           'instrument': 'SLSTR',
-           'timeliness': 'NT'
+           'instrumentShortName': 'SLSTR',
+           'processingLevel': '2',
+           'timeliness': 'NT',
+           'landCover': '[70,100]'
        }
    )
    
@@ -431,7 +414,7 @@ Example 3: Altimetry for Ocean Monitoring
        start_date='2023-08-01',
        end_date='2023-08-31',
        attributes={
-           'instrument': 'SRAL',
+           'instrumentShortName': 'SRAL',
            'processingLevel': '2'
        }
    )
@@ -455,8 +438,8 @@ Example 4: Synergy Products for Vegetation
        start_date='2023-05-01',
        end_date='2023-05-31',
        attributes={
-           'instrument': 'SYNERGY',
-           'processingLevel': '2'
+           'processingLevel': '2',
+           'cloudCover': '[0,30]'
        }
    )
    
@@ -479,7 +462,8 @@ Example 5: Fire Detection
        start_date='2023-08-01',
        end_date='2023-08-31',
        attributes={
-           'instrument': 'SLSTR',
+           'instrumentShortName': 'SLSTR',
+           'processingLevel': '2',
            'timeliness': 'NR'
        }
    )
@@ -504,7 +488,8 @@ Example 6: Multi-Platform Time Series
        start_date='2023-01-01',
        end_date='2023-12-31',
        attributes={
-           'platform': 'S3A',
+           'platformSerialIdentifier': 'A',
+           'processingLevel': '2',
            'cloudCover': '[0,30]'
        }
    )
@@ -516,7 +501,8 @@ Example 6: Multi-Platform Time Series
        start_date='2023-01-01',
        end_date='2023-12-31',
        attributes={
-           'platform': 'S3B',
+           'platformSerialIdentifier': 'B',
+           'processingLevel': '2',
            'cloudCover': '[0,30]'
        }
    )

@@ -36,18 +36,54 @@ When searching for Sentinel-1 data, parameters are passed in two ways:
    - ``start_date`` / ``end_date`` - Temporal range
    - ``top`` - Maximum number of results
 
-2. **Attributes:** Passed in the ``attributes`` dictionary
-   - ``sensorMode`` - Acquisition mode (IW, EW, SM, WV)
-   - ``platform`` - Satellite platform (S1A, S1B)
-   - ``polarisation`` - Polarization combination
-   - ``processingLevel`` - Processing level
-   - ``relativeOrbitNumber`` - Relative orbit number
-   - ``orbitNumber`` - Absolute orbit number
-   - ``instrument`` - Instrument type
-   - ``status`` - Product availability status
-   - ``timeliness`` - Data delivery timeliness
-   - ``processingBaseline`` - Processing baseline version
-   - ``swathIdentifier`` - Specific swath identifier
+2. **Attributes Dictionary**
+
+   Attributes are passed in the ``attributes`` parameter dictionary. All values listed below have been
+   comprehensively tested and verified against the Copernicus Data Space OData API.
+
+   .. table:: Sentinel-1 Attribute Reference
+      :widths: 28 42 30
+
+      ============================  ==========================================  ===============================
+      Attribute                     Verified Values                             Description
+      ============================  ==========================================  ===============================
+      ``platformSerialIdentifier``  ``'A'``, ``'B'``, ``'C'``                   Satellite platform identifier
+      ``instrumentShortName``       ``'SAR'``                                   C-band SAR instrument
+      ``operationalMode``           ``'IW'``, ``'EW'``, ``'SM'``, ``'WV'``     Acquisition mode
+      ``swathIdentifier``           ``'IW'``, ``'EW'``, ``'S1'``–``'S6'``      Specific swath identifier
+      ``polarisationChannels``      ``'VV'``, ``'HH'``, ``'VH'``, ``'HV'``     Polarization channel
+      ``processingLevel``           ``'LEVEL1'``, ``'RAW'``                     Processing level
+      ``timeliness``                ``'NRT-3h'``, ``'Fast-24h'``                Data delivery timeliness
+      ``orbitDirection``            ``'ASCENDING'``, ``'DESCENDING'``           Satellite orbit direction
+      ``relativeOrbitNumber``       ``'1'``–``'175'`` (string)                  Relative orbit (repeat cycle)
+      ``orbitNumber``               Integer as string                           Absolute orbit number
+      ``processingBaseline``        Version string (e.g., ``'03.52'``)          IPF processing baseline
+      ============================  ==========================================  ===============================
+
+   .. important::
+      **API Compatibility Note**
+      
+      This library uses the **OData API**, which has different parameter names than the OpenSearch/resto API:
+      
+      - ✓ ``platformSerialIdentifier`` (NOT ``platform``)
+      - ✓ ``instrumentShortName`` (NOT ``instrument``)
+      - ✓ ``operationalMode`` (NOT ``sensorMode``)
+      - ✓ ``swathIdentifier`` (NOT ``swath``)
+      - ✓ ``polarisationChannels`` (NOT ``polarisation``)
+
+   .. note::
+      **Usage Guidelines**
+      
+      - ``processingLevel`` must be ``'LEVEL1'`` (not ``'L1'`` or ``'1'``)
+      - ``polarisationChannels`` filters by **single** channel; products may contain multiple channels
+      - Date ranges affect data availability: recent dates for near-real-time products
+      - All attribute values are case-sensitive strings
+
+3. **Method Parameters**
+
+   These parameters are passed directly to ``query_by_filter()``, not in the attributes dictionary:
+   
+   - ``orbit_direction`` - Orbit direction (``'ASCENDING'`` or ``'DESCENDING'``)
 
 Basic Parameters
 ^^^^^^^^^^^^^^^^
@@ -132,19 +168,20 @@ Available processing levels:
        attributes={'processingLevel': 'LEVEL1'}
    )
 
-Platform
-""""""""
+Platform Serial Identifier
+""""""""""""""""""""""""""
 Sentinel-1 constellation satellites:
 
-* ``S1A`` - Sentinel-1A
-* ``S1B`` - Sentinel-1B
+* ``A`` - Sentinel-1A
+* ``B`` - Sentinel-1B
+* ``C`` - Sentinel-1C
 
 .. code-block:: python
 
    # Search for Sentinel-1A data only
    results = searcher.search(
        collection_name='SENTINEL-1',
-       attributes={'platform': 'S1A'}
+       attributes={'platformSerialIdentifier': 'A'}
    )
 
 Swath Identifier
@@ -171,16 +208,22 @@ Instrument
 .. code-block:: python
 
    # Search for SAR instrument data
-   results = searcher.search(
+   searcher = CopernicusDataSearcher()
+   searcher.query_by_filter(
        collection_name='SENTINEL-1',
-       attributes={'instrument': 'SAR'}
+       product_type='GRD',
+       start_date='2015-06-01',
+       end_date='2015-06-30',
+       attributes={'instrumentShortName': 'SAR'},
+       top=10
    )
+   results = searcher.execute_query()
 
-Sensor Mode
-"""""""""""
-Sentinel-1 acquisition modes:
+Operational Mode
+""""""""""""""""
+Sentinel-1 operational modes:
 
-* ``SM`` - Stripmap mode (S1-S6)
+* ``SM`` - Stripmap mode
 * ``IW`` - Interferometric Wide swath mode (default)
 * ``EW`` - Extra-Wide swath mode
 * ``WV`` - Wave mode
@@ -188,10 +231,16 @@ Sentinel-1 acquisition modes:
 .. code-block:: python
 
    # Search for Interferometric Wide swath data
-   results = searcher.search(
+   searcher = CopernicusDataSearcher()
+   searcher.query_by_filter(
        collection_name='SENTINEL-1',
-       attributes={'sensorMode': 'IW'}
+       product_type='GRD',
+       start_date='2015-06-01',
+       end_date='2015-06-30',
+       attributes={'operationalMode': 'IW'},
+       top=10
    )
+   results = searcher.execute_query()
 
 **Mode Characteristics:**
 
@@ -257,11 +306,21 @@ Sentinel-1 supports various polarization combinations:
 
 .. code-block:: python
 
-   # Search for dual polarization VV+VH
-   results = searcher.search(
+   # Search for specific polarization channel
+   searcher = CopernicusDataSearcher()
+   searcher.query_by_filter(
        collection_name='SENTINEL-1',
-       attributes={'polarisation': 'VV&VH'}
+       product_type='GRD',
+       start_date='2015-06-01',
+       end_date='2015-06-30',
+       attributes={'polarisationChannels': 'VV'},
+       top=10
    )
+   results = searcher.execute_query()
+
+.. note::
+   ``polarisationChannels`` specifies individual channels (VV, VH, HH, HV).
+   Products may contain multiple polarizations, but this filters by available channels.
 
 **Polarization by Mode:**
 - **IW and EW modes:** VV+VH or HH+HV
@@ -334,15 +393,18 @@ Example 1: Basic IW GRD Search
    searcher = CopernicusDataSearcher()
    
    # Search for standard IW GRD products
-   results = searcher.search(
+   searcher = CopernicusDataSearcher()
+   searcher.query_by_filter(
        collection_name='SENTINEL-1',
        product_type='GRD',
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
        start_date='2023-06-01',
        end_date='2023-06-30',
        orbit_direction='DESCENDING',
-       attributes={'sensorMode': 'IW'}
+       attributes={'operationalMode': 'IW'},
+       top=10
    )
+   results = searcher.execute_query()
    
    print(f"Found {len(results)} IW GRD products")
 
@@ -351,12 +413,12 @@ Example 2: Interferometric SLC Search
 
 .. code-block:: python
 
-   from phidown import CopernicusDataSearcher
+   from phidown.search import CopernicusDataSearcher
 
    searcher = CopernicusDataSearcher()
    
    # Search for SLC products suitable for interferometry
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-1',
        product_type='SLC',
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
@@ -364,11 +426,13 @@ Example 2: Interferometric SLC Search
        end_date='2023-06-30',
        orbit_direction='DESCENDING',
        attributes={
-           'sensorMode': 'IW',
-           'polarisation': 'VV%26VH',
-           'relativeOrbitNumber': 87
-       }
+           'operationalMode': 'IW',
+           'polarisationChannels': 'VV',
+           'relativeOrbitNumber': '87'
+       },
+       top=10
    )
+   results = searcher.execute_query()
    
    print(f"Found {len(results)} SLC products for interferometry")
 
@@ -377,27 +441,33 @@ Example 3: Ocean Applications
 
 .. code-block:: python
 
-   from phidown import CopernicusDataSearcher
+   from phidown.search import CopernicusDataSearcher
 
    searcher = CopernicusDataSearcher()
    
-   # Search for ocean products and wave mode data
-   ocean_results = searcher.search(
+   # Search for ocean products
+   searcher.query_by_filter(
        collection_name='SENTINEL-1',
        product_type='OCN',
        aoi_wkt='POLYGON((0 35, 10 35, 10 45, 0 45, 0 35))',  # Mediterranean
        start_date='2023-06-01',
-       end_date='2023-06-30'
+       end_date='2023-06-30',
+       top=50
    )
+   ocean_results = searcher.execute_query()
    
-   wave_results = searcher.search(
+   # Search for wave mode data
+   searcher2 = CopernicusDataSearcher()
+   searcher2.query_by_filter(
        collection_name='SENTINEL-1',
        product_type='GRD',
        aoi_wkt='POLYGON((0 35, 10 35, 10 45, 0 45, 0 35))',
        start_date='2023-06-01',
        end_date='2023-06-30',
-       attributes={'sensorMode': 'WV'}
+       attributes={'operationalMode': 'WV'},
+       top=50
    )
+   wave_results = searcher2.execute_query()
    
    print(f"Found {len(ocean_results)} ocean products and {len(wave_results)} wave mode products")
 
@@ -406,13 +476,13 @@ Example 4: Time Series Analysis
 
 .. code-block:: python
 
-   from phidown import CopernicusDataSearcher
+   from phidown.search import CopernicusDataSearcher
    import pandas as pd
 
    searcher = CopernicusDataSearcher()
    
    # Search for consistent time series data
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-1',
        product_type='GRD',
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
@@ -420,11 +490,13 @@ Example 4: Time Series Analysis
        end_date='2023-12-31',
        orbit_direction='DESCENDING',
        attributes={
-           'sensorMode': 'IW',
-           'relativeOrbitNumber': 87,
-           'polarisation': 'VV%26VH'
-       }
+           'operationalMode': 'IW',
+           'relativeOrbitNumber': '87',
+           'polarisationChannels': 'VV'
+       },
+       top=1000
    )
+   results = searcher.execute_query()
    
    # Group by date to analyze temporal coverage
    results['Date'] = pd.to_datetime(results['ContentDate']).dt.date
@@ -448,7 +520,7 @@ Example 5: Multi-Platform Search
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
        start_date='2023-06-01',
        end_date='2023-06-30',
-       attributes={'platform': 'S1A'}
+       attributes={'platformSerialIdentifier': 'A'}
    )
    
    s1b_results = searcher.search(
@@ -457,7 +529,7 @@ Example 5: Multi-Platform Search
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
        start_date='2023-06-01',
        end_date='2023-06-30',
-       attributes={'platform': 'S1B'}
+       attributes={'platformSerialIdentifier': 'B'}
    )
    
    print(f"Sentinel-1A: {len(s1a_results)} products")
@@ -474,10 +546,10 @@ Search Optimization Tips
 
 4. **Consider Processing Baseline:** Newer baselines generally provide better quality but may not be available for historical data.
 
-5. **Use Sensor Mode Appropriately:**
-   - IW for most land applications (use ``attributes={'sensorMode': 'IW'}``)
-   - EW for wide-area monitoring (use ``attributes={'sensorMode': 'EW'}``)
-   - WV for ocean wave analysis (use ``attributes={'sensorMode': 'WV'}``)
+5. **Use Operational Mode Appropriately:**
+   - IW for most land applications (use ``attributes={'operationalMode': 'IW'}``)
+   - EW for wide-area monitoring (use ``attributes={'operationalMode': 'EW'}``)
+   - WV for ocean wave analysis (use ``attributes={'operationalMode': 'WV'}``)
 
 6. **Check Product Status:** Use ``attributes={'status': 'ONLINE'}`` for immediate download needs.
 

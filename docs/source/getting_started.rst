@@ -99,6 +99,7 @@ What's Next?
   - :doc:`sentinel1_reference` for SAR data parameters
   - :doc:`sentinel2_reference` for optical data parameters  
   - :doc:`sentinel3_reference` for ocean/land data parameters
+  - :doc:`ccm_reference` for Copernicus Contributing Missions access
 * Try the interactive tools for polygon selection and visualization
 
 Common Issues
