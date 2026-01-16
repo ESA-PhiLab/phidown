@@ -138,7 +138,7 @@ After installation, you can use the `phidown` command to download products:
 
 ```bash
 # Download by product name
-phidown --name S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003 -o ./data
+phidown --name S1A_IW_GRDH_1SDV_20141031T161924_20141031T161949_003076_003856_634E.SAFE' -o ./data
 
 # Download by S3 path
 phidown --s3path /eodata/Sentinel-1/SAR/IW_GRDH_1S/2024/05/03/... -o ./data
@@ -175,12 +175,12 @@ options:
 **1. Simple download with automatic credentials setup:**
 ```bash
 # First time - will prompt for credentials
-phidown --name S1A_IW_GRDH_1SDV_20240503T031926 -o ~/downloads
+phidown --name S1A_IW_GRDH_1SDV_20141031T161924_20141031T161949_003076_003856_634E.SAFE' -o ~/downloads
 ```
 
 **2. Download to specific directory:**
 ```bash
-phidown --name S2A_MSIL2A_20240503T101031_N0510 -o /data/sentinel2
+phidown --name S2A_MSIL2A_20240503T101031_N0510S2A_MSIL2A_2024050... -o /data/sentinel2
 ```
 
 **3. Download using S3 path:**
@@ -202,14 +202,14 @@ from phidown import download_by_name, download_by_s3path
 
 # Download by product name
 success = download_by_name(
-    product_name='S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003',
+    product_name='S1A_IW_GRDH_1SDV_20141031T161924_20141031T161949_003076_003856_634E.SAFE',
     output_dir='./downloads',
     show_progress=True
 )
 
 # Download by S3 path
 success = download_by_s3path(
-    s3_path='/eodata/Sentinel-1/SAR/IW_GRDH_1S/2024/05/03/...',
+    s3_path='/eodata/Sentinel-1/SAR/IW_GRDH_1S/2014/10/03/...',
     output_dir='./downloads',
     download_all=True
 )
