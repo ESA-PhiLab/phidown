@@ -16,12 +16,17 @@ Welcome to Φ-Down Documentation
 
    getting_started
    installation
+   cli
    user_guide
+   ais_guide
    api_reference
    examples
    sentinel1_reference
+   sentinel1_burst_mode
    sentinel2_reference
    sentinel3_reference
+   landsat8_reference
+   ccm_reference
    contributing
    changelog
 
@@ -34,15 +39,19 @@ Overview
 - **Sentinel-2**: Multi-spectral imaging for land monitoring
 - **Sentinel-3**: Ocean and land monitoring
 - **Sentinel-5P**: Atmospheric monitoring
+- **CCM**: Copernicus Contributing Missions (commercial and public satellites)
+- **AIS Data**: Automatic Identification System data for maritime vessel tracking
 
 Key Features
 ------------
 
+* 🖥️ **Command-Line Interface**: Download products directly from terminal (NEW!)
 * 🔍 **Search**: Query Copernicus Data Space using intuitive filters
 * 📥 **Download**: Efficient data downloading with S3 integration
 * 🗺️ **Visualization**: Built-in tools for plotting and interactive maps
 * 🎯 **Interactive Tools**: Polygon selection tools for area of interest
 * 📊 **Data Management**: Pandas integration for result handling
+* 🚢 **AIS Data**: Access maritime vessel tracking data with temporal and spatial filtering
 
 Quick Start
 -----------

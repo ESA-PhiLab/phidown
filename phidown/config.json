@@ -19,6 +19,19 @@
     ],
     "valid_order_by_directions": ["asc", "desc"],
     "valid_order_by_fields": ["ContentDate/Start", "ContentDate/End", "PublicationDate", "ModificationDate"],
+    "burst_specific_fields": {
+        "ParentProductName": "string",
+        "ParentProductType": "string",
+        "ParentProductId": "string",
+        "BurstId": "integer",
+        "AbsoluteBurstId": "integer",
+        "SwathIdentifier": "string",
+        "DatatakeID": "integer",
+        "RelativeOrbitNumber": "integer"
+    },
+    "valid_parent_product_types": ["IW_SLC__1S", "EW_SLC__1S"],
+    "valid_swath_identifiers": ["IW1", "IW2", "IW3", "EW1", "EW2", "EW3", "EW4", "EW5"],
+    "valid_operational_modes": ["IW", "EW"],
     "attributes": {
         "SENTINEL-1": {
             "productType": ["SLC", "GRD", "OCN"],

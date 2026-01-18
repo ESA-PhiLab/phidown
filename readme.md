@@ -9,9 +9,7 @@
 
 
 
-#  **Φ-Down**: Your Gateway to Copernicus Data <a href="https://github.com/ESA-PhiLab/phidown"><img src="./assets/logo.png" align="right" height="170em" alt="website" /></a>
-
-
+#  **Φ-Down**: Your Gateway to Copernicus Data <a href="https://github.com/ESA-PhiLab/phidown"></a>
 
 <div align="center" style="margin: 40px 0;">
   <h3 style="padding-left: 40px; margin-bottom: 20px;">🌐 Connect with Φ-Lab & the Author</h3>
@@ -34,7 +32,7 @@
 
 ---
 
-## Overview 
+## By Roberto Del Prete
 
 **Φ-Down** is a Python library that simplifies accessing Earth Observation data from the Copernicus Data Space Ecosystem using services and dataset tools. It provides a streamlined interface for searching, filtering, and downloading satellite imagery from various Sentinel missions and contributing datasets.
 
@@ -48,17 +46,15 @@ Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy
 |Example Notebook | [![Open in Colab](https://img.shields.io/badge/Open%20in-Colab-orange?logo=google-colab&style=for-the-badge)](https://colab.research.google.com/drive/1ZLIyKS_OrDmJfW4H5R6i1_b88vqrdCKz?usp=sharing) |
 | Python Support | [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/) |
 | PyPi | [![PyPI Version](https://img.shields.io/pypi/v/phidown.svg?color=blue)](https://pypi.org/project/phidown/) |
-| License | [![License: GPL v3](https://img.shields.io/badge/License-LGPLv3-A42E2B?style=plastic&labelColor=white&logo=gnu&logoColor=A42E2B)](https://opensource.org/license/LGPL-3.0) |
+| License | [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=plastic&labelColor=white&logo=apache&logoColor=red)](https://www.apache.org/licenses/LICENSE-2.0) |
 | Documentation | [![Documentation Status](https://img.shields.io/badge/docs-sphinx-blue.svg)](https://esa-philab.github.io/phidown) |
 | Contributions | [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com) |
 
 
 > ## 🚀 **What's Next & Feature Status**
 > 
-> - ✔️ **Done:** Replace `s3` with `s5cmd` for data transfers  
-> - ✔️ **Done:** Add a visualisation tool  
-> - ✔️ **Done:** Add a S-1 reference in docs.  
-> - ✔️ **Done:** Removed old boto3 dep.
+> - ✔️ **Done:** Add a progress bar.  
+> - ✔️ **Done:** Sentinel-1 SLC Burst Mode support (v0.1.20)
 > - [x] **Coming soon:** Implement a `count` option for search results more than 1000
 > - [x] **Coming soon:** Add a parallel download executor
 > - [x] **Coming soon:** Improve docs for ALL missions.
@@ -67,10 +63,13 @@ Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy
 
 ## Features
 
-- Authenticate with the Copernicus Data Space Ecosystem.
-- Search for Sentinel products using the OData API with various filters `query_by_filter` (collection, product type, date, AOI, cloud cover, etc.).
-- Search for products by exact name using `query_by_name`.
-- Download Sentinel products using the S3 protocol. 
+- 🔐 Authenticate with the Copernicus Data Space Ecosystem.
+- 🔍 Search for Sentinel products using the OData API with various filters `query_by_filter` (collection, product type, date, AOI, cloud cover, etc.).
+- 🆔 Search for products by exact name using `query_by_name`.
+- 📥 Download Sentinel products using the S3 protocol.
+- 🎯 **NEW:** Search individual Sentinel-1 SLC bursts (burst mode) for efficient InSAR analysis.
+- 🗺️ Interactive polygon selection tools for area of interest definition.
+- 📊 Built-in visualization and result analysis capabilities. 
 
 
 Here's a quick example of how to use Φ-Down to search and download Sentinel data:
@@ -99,15 +98,149 @@ print(f"Number of results: {len(df)}")
 searcher.display_results(top_n=15)
 ```
 
-For more advanced use cases, including searching with geographical filters and batch downloading, see the [usage notebook](./how_to_start.ipynb).
+### Sentinel-1 SLC Burst Mode (New in v0.1.20)
 
-## 📚 Documentation
+Search for individual Sentinel-1 SLC bursts for efficient InSAR analysis:
+
+```python
+from phidown.search import CopernicusDataSearcher
+
+searcher = CopernicusDataSearcher()
+
+# Search for bursts with specific parameters
+searcher.query_by_filter(
+    burst_mode=True,  # Enable burst mode
+    burst_id=15804,   # Specific burst ID
+    swath_identifier='IW2',
+    polarisation_channels='VV',
+    orbit_direction='DESCENDING',
+    start_date='2024-08-01T00:00:00',
+    end_date='2024-08-15T00:00:00',
+    top=20,
+    count=True
+)
+
+df = searcher.execute_query()
+print(f"Found {len(df)} bursts")
+print(f"Total available: {searcher.num_results}")
+searcher.display_results(top_n=5)
+```
+
+For more advanced use cases, including searching with geographical filters and batch downloading, see the [usage notebook](./how_to_start.ipynb) and the [burst mode examples notebook](./notebooks/6_burst_search_examples.ipynb).
+
+## 🖥️ Command-Line Interface (CLI)
+
+**NEW in v0.1.23:** Φ-Down now includes a powerful CLI for downloading products directly from your terminal!
+
+### Quick Start
+
+After installation, you can use the `phidown` command to download products:
+
+```bash
+# Download by product name
+phidown --name S1A_IW_GRDH_1SDV_20141031T161924_20141031T161949_003076_003856_634E.SAFE' -o ./data
+
+# Download by S3 path
+phidown --s3path /eodata/Sentinel-1/SAR/IW_GRDH_1S/2024/05/03/... -o ./data
+
+# Reset configuration and enter new credentials
+phidown --name PRODUCT_NAME -o ./data --reset
+
+# Download without progress bar
+phidown --name PRODUCT_NAME -o ./data --no-progress
+```
+
+### CLI Options
+
+```
+phidown --help
+
+options:
+  -h, --help            show this help message and exit
+  --name NAME           Product name to download
+  --s3path S3PATH       S3 path to download (must start with /eodata/)
+  -o OUTPUT_DIR, --output-dir OUTPUT_DIR
+                        Output directory for downloaded data (default: current directory)
+  -c CONFIG_FILE, --config-file CONFIG_FILE
+                        Path to s5cmd configuration file (default: .s5cfg)
+  --reset               Reset configuration file and prompt for new credentials
+  --no-progress         Disable progress bar during download
+  --no-download-all     Download specific file instead of entire directory (for S3 path only)
+  -v, --verbose         Enable verbose output
+  --version             show program's version number and exit
+```
+
+### CLI Examples
+
+**1. Simple download with automatic credentials setup:**
+```bash
+# First time - will prompt for credentials
+phidown --name S1A_IW_GRDH_1SDV_20141031T161924_20141031T161949_003076_003856_634E.SAFE' -o ~/downloads
+```
+
+**2. Download to specific directory:**
+```bash
+phidown --name S2A_MSIL2A_20240503T101031_N0510S2A_MSIL2A_2024050... -o /data/sentinel2
+```
+
+**3. Download using S3 path:**
+```bash
+phidown --s3path /eodata/Sentinel-1/SAR/IW_RAW__0S/2024/05/03/S1A_IW_RAW__0SDV.SAFE -o ./raw_data
+```
+
+**4. Use custom config file:**
+```bash
+phidown --name PRODUCT_NAME -o ./data -c ~/.my-s5cfg
+```
+
+### Python API
+
+You can also use the CLI functions programmatically in your Python code:
+
+```python
+from phidown import download_by_name, download_by_s3path
+
+# Download by product name
+success = download_by_name(
+    product_name='S1A_IW_GRDH_1SDV_20141031T161924_20141031T161949_003076_003856_634E.SAFE',
+    output_dir='./downloads',
+    show_progress=True
+)
+
+# Download by S3 path
+success = download_by_s3path(
+    s3_path='/eodata/Sentinel-1/SAR/IW_GRDH_1S/2014/10/03/...',
+    output_dir='./downloads',
+    download_all=True
+)
+```
+
+## � Download Progress Monitoring
+
+When using `pull_down()` to download data, Φ-Down now streams s5cmd output in real time so you can monitor download progress:
+
+- **Live Progress**: File transfer messages appear as they happen (no more waiting for completion to see what happened)
+- **No Setup Required**: Progress streaming is enabled by default - no environment variables needed
+- **Prerequisites**: Ensure `s5cmd` is installed and available on your PATH
+
+Example output during download:
+```
+INFO:phidown.s5cmd_utils:Running command: s5cmd --endpoint-url https://eodata.dataspace.copernicus.eu cp s3:/eodata/Sentinel-1/...
+INFO:phidown.s5cmd_utils:Downloading from: s3:/eodata/Sentinel-1/SAR/...
+INFO:phidown.s5cmd_utils:Output directory: /path/to/output/
+INFO:phidown.s5cmd_utils:cp s3:/eodata/.../file1.tiff ./output/
+INFO:phidown.s5cmd_utils:cp s3:/eodata/.../file2.xml ./output/
+INFO:phidown.s5cmd_utils:✓ Download completed
+```
+
+## �📚 Documentation
 
 Comprehensive documentation is available at: **[https://esa-philab.github.io/phidown](https://esa-philab.github.io/phidown)**
 
 - **[Getting Started](https://esa-philab.github.io/phidown/getting_started.html)** - Quick start guide
 - **[Installation](https://esa-philab.github.io/phidown/installation.html)** - Detailed installation instructions
 - **[User Guide](https://esa-philab.github.io/phidown/user_guide.html)** - Complete usage guide
+- **[Sentinel-1 Burst Mode](https://esa-philab.github.io/phidown/sentinel1_burst_mode.html)** - NEW: Individual burst search guide
 - **[API Reference](https://esa-philab.github.io/phidown/api_reference.html)** - Full API documentation
 - **[Examples](https://esa-philab.github.io/phidown/examples.html)** - Code examples and tutorials
 - **[Contributing](https://esa-philab.github.io/phidown/contributing.html)** - How to contribute
@@ -212,12 +345,61 @@ The following collections are currently available:
   <img src="./assets/pypi.png" alt="PyPI" width="400px"/>
 </div>
 
+#### Basic Installation
 
+You can install the core package directly using pip:
 
-You can install it directly using pip:
 ```bash
 pip install phidown
 ```
+
+#### Installation with Optional Features
+
+Φ-Down comes with several optional dependency groups that enable additional functionality:
+
+**Install with visualization tools:**
+
+```bash
+pip install phidown[viz]
+```
+
+Includes: `ipywidgets`, `folium` for interactive maps and widgets
+
+**Install with AIS (vessel tracking) support:**
+
+```bash
+pip install phidown[ais]
+```
+
+Includes: `shapely` for geometric operations
+
+**Install with development tools:**
+
+```bash
+pip install phidown[dev]
+```
+
+Includes: `pytest`, `pytest-mock`, `flake8` for testing and code quality
+
+**Install with documentation tools:**
+
+```bash
+pip install phidown[docs]
+```
+
+Includes: `sphinx`, `sphinx-rtd-theme`, and other documentation dependencies
+
+**Install everything (all optional features):**
+
+```bash
+pip install phidown[ais,viz,dev,docs]
+```
+
+> **💡 Tip:** For most users, we recommend installing with visualization support for the best experience:
+> 
+> ```bash
+> pip install phidown[viz]
+> ```
 
 
 
@@ -242,9 +424,30 @@ pdm install
 ```
 
 #### Step 3: Install All Dependencies (Including Optional)
+
 To install all dependencies, including optional ones for development or specific features:
+
 ```bash
-pdm install -G :all
+pdm install --group :all
+```
+
+Or install specific optional groups:
+
+```bash
+# Install with visualization support
+pdm install --group viz
+
+# Install with AIS support  
+pdm install --group ais
+
+# Install with development tools
+pdm install --group dev
+
+# Install with documentation tools
+pdm install --group docs
+
+# Install multiple groups
+pdm install --group viz --group ais --group dev
 ```
 
 ### Option 3: Build from Source (Using pip)
@@ -307,9 +510,14 @@ Log to https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials
 
 
 
-### Example Notebook
+### Example Notebooks
 
-For a detailed example of how to use **Φ-Down**, refer to the [how_to_start.ipynb](./how_to_start.ipynb) notebook or [![Open in Colab](https://img.shields.io/badge/Open%20in-Colab-orange?logo=google-colab&style=for-the-badge)](https://colab.research.google.com/drive/1ZLIyKS_OrDmJfW4H5R6i1_b88vqrdCKz?usp=sharing). It provides step-by-step instructions and practical use cases to help you get started quickly.
+For detailed examples of how to use **Φ-Down**, refer to:
+- **[how_to_start.ipynb](./how_to_start.ipynb)** - Basic introduction  [![Open in Colab](https://img.shields.io/badge/Open%20in-Colab-orange?logo=google-colab&style=for-the-badge)](https://colab.research.google.com/drive/1ZLIyKS_OrDmJfW4H5R6i1_b88vqrdCKz?usp=sharing)
+- **[Maritime Monitoring](./notebooks/)** - SAR imagery + AIS vessel tracking integration
+- **[Interactive Tools](./notebooks/)** - Map-based area selection and multi-sensor analysis
+
+All notebooks provide step-by-step instructions and practical use cases. See the [notebooks directory](./notebooks/) for the complete collection.
 
 > **⚠️ Search Optimization Tips⚠️**  
 >  
@@ -416,13 +624,13 @@ If **Φ-Down** has contributed to your research, project, or publication, we kin
 ---
 ## License
 
-**Φ-Down** is proudly licensed under the **GNU Lesser General Public License version v3.0 (LGPLv3)**.
+**Φ-Down** is proudly licensed under the **Apache License 2.0**.
 
-[![License: LGPL v3](https://img.shields.io/badge/License-LGPLv3-A42E2B?style=plastic&labelColor=white&logo=gnu&logoColor=A42E2B)](https://opensource.org/license/LGPL-3.0)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=plastic&labelColor=white&logo=apache&logoColor=red)](https://www.apache.org/licenses/LICENSE-2.0)
 
-This license ensures that the software remains free and open-source, allowing you to:
-- **Use** the software freely for any purpose.
-- **Share** the software with others.
-- **Modify** the software and share your modifications under the same license terms.
+This license lets you:
+- **Use** the software freely for commercial and non-commercial purposes.
+- **Modify** and distribute the software, provided you include a copy of the license and state any notable changes.
+- **Include** any accompanying NOTICE information when redistributing derivative works.
 
-For full details, please refer to the [LGPLv3 License Text](https://opensource.org/license/LGPL-3.0).
+For full details, please refer to the [Apache License 2.0 text](https://www.apache.org/licenses/LICENSE-2.0).

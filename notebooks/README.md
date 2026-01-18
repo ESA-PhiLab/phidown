@@ -1,0 +1,157 @@
+# Phidown Jupyter Notebooks
+
+This directory contains example notebooks demonstrating various capabilities of the phidown library for accessing Copernicus Earth Observation data and AIS maritime data.
+
+## Available Notebooks
+
+### 1. Search and Download (`1_search_n_download.ipynb`)
+**Basic data discovery and download workflow**
+- Search SENTINEL-1 data with customizable filters
+- Filter by processing level, operational mode, and other attributes
+- Download selected products to local directory
+- Ideal for: Getting started with phidown, understanding search parameters
+
+### 2. Interactive Polygon Tool (`2_interactive_polygon_tool.ipynb`)
+**Interactive area selection for data queries**
+- Use interactive maps to draw areas of interest
+- Generate WKT polygons for spatial filtering
+- Visualize search areas before querying data
+- Ideal for: Interactive data exploration, visual area selection
+
+### 3. Sentinel-1 and Sentinel-2 Intersection (`3_interesect_S2_S1.ipynb`)
+**Multi-sensor data analysis**
+- Find overlapping Sentinel-1 (SAR) and Sentinel-2 (optical) data
+- Temporal and spatial correlation analysis
+- Compare different sensor modalities for the same area
+- Ideal for: Multi-sensor studies, data fusion applications
+
+### 4. Quick SAR + AIS Example (`4_sar_and_ais_integration.ipynb`)
+**Comprehensive maritime monitoring analysis**
+- Search for Sentinel-1 SAR imagery over shipping areas
+- Download corresponding AIS vessel tracking data
+- Spatial and temporal correlation of satellite and vessel data
+- Vessel activity analysis and visualization
+- Export integrated datasets for further analysis
+- Ideal for: Maritime surveillance, vessel detection validation, shipping route analysis
+
+### 5. SLC/GRD/RAW S1 Matcher (`5_slc_grd_raw_s1_matcher.ipynb`)
+**Sentinel-1 product type matching**
+- Match different Sentinel-1 processing levels (SLC, GRD, RAW)
+- Compare product characteristics and availability
+- Select appropriate processing level for your application
+- Ideal for: SAR processing, understanding S1 product types
+
+### 6. Sentinel-1 SLC Burst Search (`6_burst_search_examples.ipynb`)
+**Individual burst-level SAR data access**
+- Search for Sentinel-1 SLC burst products (available from August 2024)
+- Filter by burst-specific parameters (Burst ID, Swath, Polarization)
+- Access individual bursts without downloading full SLC products
+- Combine temporal, spatial, and burst-specific filters
+- Analyze burst distribution and characteristics
+- Ideal for: InSAR time series, regional SAR analysis, efficient data access
+
+
+## Getting Started
+
+### Prerequisites
+```bash
+# Basic phidown installation
+pip install phidown
+
+# For interactive tools (notebooks 2, 4)
+pip install phidown[viz]
+
+# For AIS functionality (notebooks 4, 5)
+pip install phidown[ais]
+
+# For full functionality
+pip install phidown[viz,ais]
+```
+
+### Running the Notebooks
+1. Start Jupyter Lab or Jupyter Notebook
+2. Navigate to the `notebooks/` directory
+3. Open any notebook file (`.ipynb`)
+4. Run cells sequentially or as needed
+
+### Authentication
+Some notebooks require authentication for downloading data:
+- Set up Copernicus Data Space credentials
+- Configure authentication as described in the main documentation
+
+## Use Cases by Domain
+
+### Earth Observation Research
+- **Notebooks 1, 2, 3**: Basic data access, multi-sensor analysis
+- Focus on land monitoring, change detection, environmental studies
+
+### SAR Processing & Analysis
+- **Notebooks 5, 6**: Sentinel-1 product matching, burst-level access
+- Focus on InSAR, time series analysis, efficient SAR data handling
+
+### Maritime Applications
+- **Notebooks 4, 5**: SAR imagery + AIS vessel tracking
+- Focus on maritime surveillance, shipping analysis, vessel detection
+
+### Interactive Analysis
+- **Notebook 2**: Interactive map-based area selection
+- **Notebook 4**: Comprehensive visualization and analysis
+- **Notebook 6**: Burst search with visualization
+
+### Educational/Training
+- **Notebooks 1, 5**: Simple, focused examples
+- **Notebooks 2, 3, 4, 6**: Advanced concepts and workflows
+
+## Data Sources
+
+### Satellite Data (Copernicus)
+- **Sentinel-1**: SAR (radar) imagery, weather-independent
+- **Sentinel-2**: Optical imagery, high resolution
+- **Sentinel-3**: Ocean and land monitoring
+- **Landsat**: Complementary optical data
+
+### AIS Data (Hugging Face)
+- Global vessel tracking data
+- Automatic Identification System messages
+- Maritime Mobile Service Identity (MMSI) information
+- Temporal and spatial filtering capabilities
+
+## Output and Results
+
+Most notebooks generate:
+- **CSV files**: Search results, vessel data, analysis summaries
+- **Visualizations**: Maps, plots, statistical analyses
+- **Metadata**: Processing logs, error reports
+- **Integrated datasets**: Combined satellite and AIS data
+
+## Troubleshooting
+
+### Common Issues
+1. **Import errors**: Check dependency installation
+2. **Authentication**: Verify Copernicus credentials
+3. **Data availability**: Some dates/areas may have limited data
+4. **Memory usage**: Large datasets may require chunked processing
+
+### Getting Help
+- Check the main phidown documentation
+- Review error messages and logs generated by notebooks
+- Verify date ranges and geographic coordinates
+- Ensure required dependencies are installed
+
+## Contributing
+
+To add new notebooks:
+1. Follow the existing naming convention (`N_descriptive_name.ipynb`)
+2. Include clear markdown documentation
+3. Add your notebook to this README
+4. Test with different data scenarios
+5. Include error handling and user guidance
+
+## Next Steps
+
+After running these notebooks, you can:
+- Integrate phidown into your own analysis workflows
+- Combine with other geospatial libraries (GDAL, rasterio, geopandas)
+- Develop automated processing pipelines
+- Create custom visualization and analysis tools
+- Scale up to operational monitoring systems

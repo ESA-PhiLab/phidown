@@ -53,27 +53,41 @@ First Steps
       searcher = CopernicusDataSearcher()
       
       # Search for Sentinel-2 data over Rome
-      results = searcher.search(
-          collection_name='SENTINEL-2',
-          aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
-          start_date='2023-01-01',
-          end_date='2023-01-31'
+      searcher.query_by_filter(
+         collection_name='SENTINEL-2',
+         aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
+         start_date='2023-01-01',
+         end_date='2023-01-31'
       )
       
+      df = searcher.execute_query()
+
       # Display results
-      print(f"Found {len(results)} products")
-      searcher.display_results(results, columns=['Name', 'ContentDate', 'CloudCover'])
+      print(f"Number of results: {len(df)}")
+      # Display the first few rows of the DataFrame
+      print(searcher.display_results(top_n=15))
 
 4. **Download data**:
 
+   Download a product using its name from the search results:
+
    .. code-block:: python
+      """
+      Args:
+         product_name (str): Name of the product to download (from search results)
+         config_file (str): Path to the configuration file containing authentication credentials
+         output_dir (str): Directory where the downloaded product will be saved
 
-      from phidown.downloader import pull_down
+      Note:
+         - Update the config_file path to point to your actual .s5cfg file
+         - Update the output_dir path to your desired download location
+         - The example downloads the first product from the search results (df.iloc[0])
+      """
+      searcher.download_product('EO_PRODUCT_NAME',
+                                 config_file='path/to/your/config/file/.s5cfg',
+                                 output_dir='path/to/your/download/directory/')
 
-      # Download the first product
-      if len(results) > 0:
-          product_id = results.iloc[0]['Id']
-          pull_down(product_id, download_dir='./data')
+
 
 What's Next?
 ------------
@@ -85,6 +99,7 @@ What's Next?
   - :doc:`sentinel1_reference` for SAR data parameters
   - :doc:`sentinel2_reference` for optical data parameters  
   - :doc:`sentinel3_reference` for ocean/land data parameters
+  - :doc:`ccm_reference` for Copernicus Contributing Missions access
 * Try the interactive tools for polygon selection and visualization
 
 Common Issues

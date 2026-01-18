@@ -65,6 +65,38 @@ Search for Sentinel-1 SAR data with specific parameters:
 
 For detailed Sentinel-1 parameters, see the :doc:`sentinel1_reference` guide.
 
+Example 2b: Sentinel-1 SLC Burst Mode Search
+---------------------------------------------
+
+Search for individual Sentinel-1 SLC bursts (available from August 2, 2024):
+
+.. code-block:: python
+
+   from phidown import CopernicusDataSearcher
+
+   searcher = CopernicusDataSearcher()
+   
+   # Search for bursts with temporal filter
+   results = searcher.query_by_filter(
+       burst_mode=True,
+       start_date='2024-08-01T00:00:00',
+       end_date='2024-08-03T00:00:00',
+       swath_identifier='IW2',
+       polarisation_channels='VV',
+       orbit_direction='DESCENDING',
+       top=10,
+       count=True
+   )
+   
+   df = searcher.execute_query()
+   print(f"Found {len(df)} bursts")
+   print(f"Total available: {searcher.num_results}")
+   
+   # Display burst-specific information
+   searcher.display_results(top_n=5)
+
+For detailed burst mode documentation, see the :doc:`sentinel1_burst_mode` guide.
+
 Example 3: Sentinel-3 Ocean Color Search
 -----------------------------------------
 

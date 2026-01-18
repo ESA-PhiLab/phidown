@@ -33,12 +33,12 @@ class CopernicusDataSearcher:
         """
         Initialize the CopernicusDataSearcher.
         Configuration is loaded from the default path.
-        Call _query_by_filter() to set search parameters before executing a query.
+        Call query_by_filter() to set search parameters before executing a query.
         """
         self.base_url: str = "https://catalogue.dataspace.copernicus.eu/odata/v1/Products"
         self.config: typing.Optional[dict] = self._load_config()  # Load config from default path
 
-        # Initialize attributes to be set by _query_by_filter
+        # Initialize attributes to be set by query_by_filter
         self.collection_name: typing.Optional[str] = None
         self.product_type: typing.Optional[str] = None
         self.orbit_direction: typing.Optional[str] = None
@@ -47,6 +47,20 @@ class CopernicusDataSearcher:
         self.aoi_wkt: typing.Optional[str] = None
         self.start_date: typing.Optional[str] = None
         self.end_date: typing.Optional[str] = None
+        
+        # Burst mode parameters
+        self.burst_mode: bool = False
+        self.burst_id: typing.Optional[int] = None
+        self.absolute_burst_id: typing.Optional[int] = None
+        self.swath_identifier: typing.Optional[str] = None
+        self.parent_product_name: typing.Optional[str] = None
+        self.parent_product_type: typing.Optional[str] = None
+        self.parent_product_id: typing.Optional[str] = None
+        self.datatake_id: typing.Optional[int] = None
+        self.relative_orbit_number: typing.Optional[int] = None
+        self.operational_mode: typing.Optional[str] = None
+        self.polarisation_channels: typing.Optional[str] = None
+        self.platform_serial_identifier: typing.Optional[str] = None
         
         # Set default values for top and order_by
         self.top: int = 1000
@@ -69,7 +83,20 @@ class CopernicusDataSearcher:
         end_date: typing.Optional[str] = None,
         top: int = 1000,
         count: bool = False,  
-        order_by: str = "ContentDate/Start desc"
+        order_by: str = "ContentDate/Start desc",
+        # Burst mode parameters
+        burst_mode: bool = False,
+        burst_id: typing.Optional[int] = None,
+        absolute_burst_id: typing.Optional[int] = None,
+        swath_identifier: typing.Optional[str] = None,
+        parent_product_name: typing.Optional[str] = None,
+        parent_product_type: typing.Optional[str] = None,
+        parent_product_id: typing.Optional[str] = None,
+        datatake_id: typing.Optional[int] = None,
+        relative_orbit_number: typing.Optional[int] = None,
+        operational_mode: typing.Optional[str] = None,
+        polarisation_channels: typing.Optional[str] = None,
+        platform_serial_identifier: typing.Optional[str] = None
     ) -> None:
         """
         Set and validate search parameters for the Copernicus data query.
@@ -85,25 +112,46 @@ class CopernicusDataSearcher:
             start_date (str, optional): Start date for filtering (ISO 8601 format). Defaults to None.
             end_date (str, optional): End date for filtering (ISO 8601 format). Defaults to None.
             top (int, optional): Maximum number of results to retrieve. Defaults to 1000.
-            count (bool, optional): Enable result counting and automatic pagination. When True and 
-                total results exceed 'top', will automatically paginate to retrieve all results. Defaults to False.
             order_by (str, optional): Field and direction to order results by. Defaults to "ContentDate/Start desc".
+            burst_mode (bool, optional): Enable Sentinel-1 SLC Burst mode searching. Defaults to False.
+            burst_id (int, optional): Burst ID to filter (burst mode only). Defaults to None.
+            absolute_burst_id (int, optional): Absolute Burst ID to filter (burst mode only). Defaults to None.
+            swath_identifier (str, optional): Swath identifier (e.g., 'IW1', 'IW2') (burst mode only). Defaults to None.
+            parent_product_name (str, optional): Parent product name (burst mode only). Defaults to None.
+            parent_product_type (str, optional): Parent product type (burst mode only). Defaults to None.
+            parent_product_id (str, optional): Parent product ID (burst mode only). Defaults to None.
+            datatake_id (int, optional): Datatake ID (burst mode only). Defaults to None.
+            relative_orbit_number (int, optional): Relative orbit number (burst mode only). Defaults to None.
+            operational_mode (str, optional): Operational mode (e.g., 'IW', 'EW') (burst mode only). Defaults to None.
+            polarisation_channels (str, optional): Polarisation channels (e.g., 'VV', 'VH') (burst mode only). Defaults to None.
+            platform_serial_identifier (str, optional): Platform serial identifier (e.g., 'A', 'B') (burst mode only). Defaults to None.
         """
-        self.base_url = base_url  # Set or override base_url
+        # Set burst mode first as it affects other validations
+        self.burst_mode = burst_mode
+        
+        # Set base URL based on burst mode
+        if self.burst_mode:
+            self.base_url = "https://catalogue.dataspace.copernicus.eu/odata/v1/Bursts"
+        else:
+            self.base_url = base_url
+            
         self.count = count  # Set or override count option
         
         # Assign and validate parameters
         self.collection_name = collection_name
-        self._validate_collection(self.collection_name) # Validate collection name
+        if not self.burst_mode:
+            self._validate_collection(self.collection_name) # Validate collection name only in non-burst mode
 
         self.product_type = product_type
-        self._validate_product_type() # Validate product type (depends on collection_name and config)
+        if not self.burst_mode:
+            self._validate_product_type() # Validate product type (depends on collection_name and config)
 
         self.orbit_direction = orbit_direction
         self._validate_orbit_direction()
 
         self.cloud_cover_threshold = cloud_cover_threshold
-        self._validate_cloud_cover_threshold()
+        if not self.burst_mode:
+            self._validate_cloud_cover_threshold()
 
         self.aoi_wkt = aoi_wkt
         self._validate_aoi_wkt()
@@ -121,11 +169,25 @@ class CopernicusDataSearcher:
         self._validate_order_by()
 
         self.attributes = attributes
-        if self.attributes is not None:
+        if self.attributes is not None and not self.burst_mode:
             self._validate_attributes()
-        # Note: _initialize_placeholders() is called in __init__ to ensure attributes exist.
-        # If _query_by_filter is meant to reset for a brand new query, consider if it needs to be called here too.
-        # For now, assuming execute_query will populate them based on new parameters.
+            
+        # Burst-specific parameters
+        if self.burst_mode:
+            self.burst_id = burst_id
+            self.absolute_burst_id = absolute_burst_id
+            self.swath_identifier = swath_identifier
+            self.parent_product_name = parent_product_name
+            self.parent_product_type = parent_product_type
+            self.parent_product_id = parent_product_id
+            self.datatake_id = datatake_id
+            self.relative_orbit_number = relative_orbit_number
+            self.operational_mode = operational_mode
+            self.polarisation_channels = polarisation_channels
+            self.platform_serial_identifier = platform_serial_identifier
+            
+            # Validate burst-specific parameters
+            self._validate_burst_parameters()
 
     # - Private Methods:
     def _load_config(self, config_path=None):
@@ -337,8 +399,8 @@ class CopernicusDataSearcher:
             self.aoi_wkt = f"POLYGON(({', '.join(normalized_coords)}))"
             
             # Notify user if corrections were made
-            if self.aoi_wkt != original_wkt:
-                print('WKT polygon normalized: Whitespace and formatting corrected')
+            # if self.aoi_wkt != original_wkt:
+            #     print('WKT polygon normalized: Whitespace and formatting corrected')
 
     def _validate_time(self):
         """
@@ -362,8 +424,8 @@ class CopernicusDataSearcher:
             if not is_iso8601(self.end_date):
                 raise ValueError(f"Invalid end_date format: {self.end_date}. Must be in ISO 8601 format.")
         if self.start_date and self.end_date:
-            if self.start_date >= self.end_date:
-                raise ValueError("start_date must be earlier than end_date.")
+            if self.start_date > self.end_date:
+                raise ValueError("start_date must not be later than end_date.")
 
     def _validate_attributes(self):
         """
@@ -380,6 +442,72 @@ class CopernicusDataSearcher:
                 raise TypeError("Attribute keys must be strings")
             if not isinstance(value, (str, int, float)):
                 raise TypeError("Attribute values must be strings, integers, or floats")
+
+    def _validate_burst_parameters(self):
+        """
+        Validate burst-specific parameters.
+
+        Raises:
+            ValueError: If any burst parameter is invalid.
+            TypeError: If any burst parameter has the wrong type.
+        """
+        # Validate swath identifier
+        if self.swath_identifier is not None:
+            valid_swaths = self.config.get("valid_swath_identifiers", [])
+            if self.swath_identifier not in valid_swaths:
+                raise ValueError(
+                    f"Invalid swath_identifier: {self.swath_identifier}. "
+                    f"Must be one of: {', '.join(valid_swaths)}"
+                )
+        
+        # Validate parent product type
+        if self.parent_product_type is not None:
+            valid_types = self.config.get("valid_parent_product_types", [])
+            if self.parent_product_type not in valid_types:
+                raise ValueError(
+                    f"Invalid parent_product_type: {self.parent_product_type}. "
+                    f"Must be one of: {', '.join(valid_types)}"
+                )
+        
+        # Validate operational mode
+        if self.operational_mode is not None:
+            valid_modes = self.config.get("valid_operational_modes", [])
+            if self.operational_mode not in valid_modes:
+                raise ValueError(
+                    f"Invalid operational_mode: {self.operational_mode}. "
+                    f"Must be one of: {', '.join(valid_modes)}"
+                )
+        
+        # Validate polarisation channels
+        if self.polarisation_channels is not None:
+            valid_pols = ['VV', 'VH', 'HH', 'HV']
+            if self.polarisation_channels not in valid_pols:
+                raise ValueError(
+                    f"Invalid polarisation_channels: {self.polarisation_channels}. "
+                    f"Must be one of: {', '.join(valid_pols)}"
+                )
+        
+        # Validate platform serial identifier
+        if self.platform_serial_identifier is not None:
+            valid_platforms = ['A', 'B', 'C']
+            if self.platform_serial_identifier not in valid_platforms:
+                raise ValueError(
+                    f"Invalid platform_serial_identifier: {self.platform_serial_identifier}. "
+                    f"Must be one of: {', '.join(valid_platforms)}"
+                )
+        
+        # Validate integer parameters
+        if self.burst_id is not None and not isinstance(self.burst_id, int):
+            raise TypeError("burst_id must be an integer")
+        
+        if self.absolute_burst_id is not None and not isinstance(self.absolute_burst_id, int):
+            raise TypeError("absolute_burst_id must be an integer")
+        
+        if self.datatake_id is not None and not isinstance(self.datatake_id, int):
+            raise TypeError("datatake_id must be an integer")
+        
+        if self.relative_orbit_number is not None and not isinstance(self.relative_orbit_number, int):
+            raise TypeError("relative_orbit_number must be an integer")
 
     def _initialize_placeholders(self):
         """
@@ -404,12 +532,12 @@ class CopernicusDataSearcher:
 
     # - Methods to build and execute the query:
     def _add_collection_filter(self, filters):
-        if self.collection_name:
+        if self.collection_name and not self.burst_mode:
             collection_filter = f"Collection/Name eq '{self.collection_name}'"
             filters.append(f"({collection_filter})")
 
     def _add_product_type_filter(self, filters):
-        if self.product_type:
+        if self.product_type and not self.burst_mode:
             filters.append(
                 "Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'productType' "
                 f"and att/OData.CSC.StringAttribute/Value eq '{self.product_type}')"
@@ -417,13 +545,16 @@ class CopernicusDataSearcher:
 
     def _add_orbit_direction_filter(self, filters):
         if self.orbit_direction:
-            filters.append(
-                "Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'orbitDirection' "
-                f"and att/OData.CSC.StringAttribute/Value eq '{self.orbit_direction}')"
-            )
+            if self.burst_mode:
+                filters.append(f"OrbitDirection eq '{self.orbit_direction}'")
+            else:
+                filters.append(
+                    "Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'orbitDirection' "
+                    f"and att/OData.CSC.StringAttribute/Value eq '{self.orbit_direction}')"
+                )
 
     def _add_cloud_cover_filter(self, filters):
-        if self.cloud_cover_threshold is not None:
+        if self.cloud_cover_threshold is not None and not self.burst_mode:
             filters.append(
                 "Attributes/OData.CSC.DoubleAttribute/any(att:att/Name eq 'cloudCover' "
                 f"and att/OData.CSC.DoubleAttribute/Value lt {self.cloud_cover_threshold})"
@@ -435,12 +566,18 @@ class CopernicusDataSearcher:
 
     def _add_date_filters(self, filters):
         if self.start_date:
-            filters.append(f"ContentDate/Start ge {self.start_date}")
+            if self.burst_mode:
+                filters.append(f"ContentDate/Start ge {self.start_date}")
+            else:
+                filters.append(f"ContentDate/Start ge {self.start_date}")
         if self.end_date:
-            filters.append(f"ContentDate/Start lt {self.end_date}")
+            if self.burst_mode:
+                filters.append(f"ContentDate/Start le {self.end_date}")
+            else:
+                filters.append(f"ContentDate/Start lt {self.end_date}")
 
     def _add_attribute_filters(self, filters):
-        if self.attributes:
+        if self.attributes and not self.burst_mode:
             for key, value in self.attributes.items():
                 if isinstance(value, str):
                     filters.append(
@@ -460,6 +597,55 @@ class CopernicusDataSearcher:
                 else:
                     raise TypeError(f"Unsupported attribute type for {key}: {type(value)}")
 
+    def _add_burst_filters(self, filters):
+        """Add burst-specific filters when in burst mode."""
+        if not self.burst_mode:
+            return
+        
+        # Burst ID
+        if self.burst_id is not None:
+            filters.append(f"BurstId eq {self.burst_id}")
+        
+        # Absolute Burst ID
+        if self.absolute_burst_id is not None:
+            filters.append(f"AbsoluteBurstId eq {self.absolute_burst_id}")
+        
+        # Swath Identifier
+        if self.swath_identifier is not None:
+            filters.append(f"SwathIdentifier eq '{self.swath_identifier}'")
+        
+        # Parent Product Name
+        if self.parent_product_name is not None:
+            filters.append(f"ParentProductName eq '{self.parent_product_name}'")
+        
+        # Parent Product Type
+        if self.parent_product_type is not None:
+            filters.append(f"ParentProductType eq '{self.parent_product_type}'")
+        
+        # Parent Product ID
+        if self.parent_product_id is not None:
+            filters.append(f"ParentProductId eq '{self.parent_product_id}'")
+        
+        # Datatake ID
+        if self.datatake_id is not None:
+            filters.append(f"DatatakeID eq {self.datatake_id}")
+        
+        # Relative Orbit Number
+        if self.relative_orbit_number is not None:
+            filters.append(f"RelativeOrbitNumber eq {self.relative_orbit_number}")
+        
+        # Operational Mode
+        if self.operational_mode is not None:
+            filters.append(f"OperationalMode eq '{self.operational_mode}'")
+        
+        # Polarisation Channels
+        if self.polarisation_channels is not None:
+            filters.append(f"PolarisationChannels eq '{self.polarisation_channels}'")
+        
+        # Platform Serial Identifier
+        if self.platform_serial_identifier is not None:
+            filters.append(f"PlatformSerialIdentifier eq '{self.platform_serial_identifier}'")
+
     def _build_filter(self):
         """
         Build the OData filter condition based on the provided parameters.
@@ -472,6 +658,7 @@ class CopernicusDataSearcher:
         self._add_aoi_filter(filters)
         self._add_date_filters(filters)
         self._add_attribute_filters(filters)
+        self._add_burst_filters(filters)
 
         # Combine all filters into a single filter condition
         if not filters:
@@ -482,9 +669,15 @@ class CopernicusDataSearcher:
     def _build_query(self):
         """Build the full OData query URL"""
         self._build_filter()
-        self.query = f"?$filter={self.filter_condition}&$orderby={self.order_by}&$top={self.top}&$expand=Attributes"
+        self.query = f"?$filter={self.filter_condition}&$orderby={self.order_by}&$top={self.top}"
+        
+        # Add $expand=Attributes only for non-burst mode
+        if not self.burst_mode:
+            self.query += "&$expand=Attributes"
+            
         if self.count:
             self.query += "&$count=true"
+            
         self.url = f"{self.base_url}{self.query}"
         return self.url
 
@@ -746,7 +939,12 @@ class CopernicusDataSearcher:
             self.execute_query()
 
         if columns is None:
-            columns = ['Id', 'Name', 'S3Path', 'GeoFootprint', 'OriginDate', 'Attributes']
+            # Use different default columns for burst mode vs product mode
+            if self.burst_mode:
+                columns = ['Id', 'BurstId', 'SwathIdentifier', 'ParentProductName', 
+                          'PolarisationChannels', 'OrbitDirection', 'ContentDate']
+            else:
+                columns = ['Id', 'Name', 'S3Path', 'GeoFootprint', 'OriginDate', 'Attributes']
 
         if 'OriginDate' in self.df.columns:
             self.df['OriginDate'] = pd.to_datetime(self.df['OriginDate']).dt.strftime('%Y-%m-%d %H:%M:%S')
@@ -758,19 +956,36 @@ class CopernicusDataSearcher:
             print("The DataFrame is empty.")
             return None
         else:
-            return self.df[columns].head(top_n)
+            # Only show columns that exist in the DataFrame
+            available_columns = [col for col in columns if col in self.df.columns]
+            return self.df[available_columns].head(top_n)
 
     def download_product(self, eo_product_name: str, 
                         output_dir: str, 
                         config_file = '.s5cfg',
-                        verbose=True):
+                        verbose=True,
+                        show_progress=True):
         """
         Download the EO product using the downloader module.
+        
+        Args:
+            eo_product_name: Name of the EO product to download
+            output_dir: Local output directory for downloaded files
+            config_file: Path to s5cmd configuration file
+            verbose: Whether to print download information
+            show_progress: Whether to show tqdm progress bar during download
+        
+        Returns:
+            bool: True if download was successful, False otherwise
         """
         res = self.query_by_name(eo_product_name)
         if res.empty:
             print(f"No product found with name: {eo_product_name}")
             return False
+        
+        
+        # file size in bytes
+        content_length = res['ContentLength'].iloc[0]
         
         # Ensure output_dir is an absolute path
         abs_output_dir = os.path.abspath(output_dir)
@@ -780,9 +995,11 @@ class CopernicusDataSearcher:
             print(f"Output directory: {abs_output_dir}")
         
         s3path = res['S3Path'].iloc[0]
-        # Call the downloader function
+        # Call the downloader function with progress bar
         pull_down(
             s3_path=s3path,
             output_dir=abs_output_dir,
             config_file=config_file,
+            total_size=content_length,
+            show_progress=show_progress
             )
