@@ -5,6 +5,7 @@ import json
 import typing
 from datetime import datetime
 import copy 
+import asyncio
 
 from .downloader import pull_down
 
@@ -112,6 +113,8 @@ class CopernicusDataSearcher:
         self._validate_time() # Validate start and end dates
 
         self.top = top
+        if self.count:
+            self.top = 1000
         self._validate_top()
 
         self.order_by = order_by
@@ -511,38 +514,61 @@ class CopernicusDataSearcher:
             return self.df
 
     def _execute_paginated_query(self):
-        """Execute paginated queries when results exceed top limit"""
+        """Execute paginated queries when results exceed top limit using asyncio"""
         all_data = []
-        skip = 0
-        page_size = self.top  # Use the current top value as page size
         
         # Add first page (already retrieved in execute_query)
         if 'value' in self.json_data:
             all_data.extend(self.json_data['value'])
-        
-        # Continue with pagination while there are more results
-        while skip + page_size < self.num_results:
-            skip += page_size
             
-            # Build paginated query URL
+        page_size = self.top  # Use the current top value as page size
+        
+        # Calculate skips based on total results and page size
+        skips = range(page_size, self.num_results, page_size)
+        
+        if not skips:
+            self.df = pd.DataFrame.from_dict(all_data)
+            return self.df
+
+        urls = []
+        for skip in skips:
             paginated_query = f"?$filter={self.filter_condition}&$orderby={self.order_by}&$top={page_size}&$skip={skip}&$expand=Attributes"
             if self.count:
                 paginated_query += "&$count=true"
+            urls.append(f"{self.base_url}{paginated_query}")
             
-            paginated_url = f"{self.base_url}{paginated_query}"
-            
-            # Make paginated request
+        async def fetch_url(url):
+            loop = asyncio.get_running_loop()
             try:
-                paginated_response = requests.get(paginated_url)
-                paginated_response.raise_for_status()
-                paginated_data = paginated_response.json()
-                
-                if 'value' in paginated_data:
-                    all_data.extend(paginated_data['value'])
-                    
+                response = await loop.run_in_executor(None, requests.get, url)
+                response.raise_for_status()
+                return response.json()
             except Exception as e:
-                print(f"Warning: Error retrieving page at skip={skip}: {e}")
-                break
+                return e
+
+        async def fetch_all(urls):
+            tasks = [fetch_url(url) for url in urls]
+            return await asyncio.gather(*tasks, return_exceptions=True)
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            # If in a running loop (e.g. Jupyter), run the new loop in a separate thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                results = pool.submit(asyncio.run, fetch_all(urls)).result()
+        else:
+            results = asyncio.run(fetch_all(urls))
+
+        # Process results
+        for res in results:
+            if isinstance(res, Exception):
+                print(f"Warning: Error retrieving page: {res}")
+            elif isinstance(res, dict) and 'value' in res:
+                all_data.extend(res['value'])
         
         # Create DataFrame from all collected data
         self.df = pd.DataFrame.from_dict(all_data)
