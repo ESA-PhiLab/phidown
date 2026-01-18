@@ -1,9 +1,9 @@
 [project]
 name = "phidown"
 version = "0.1.24"
-description = "A project using AWS services and dataset tools for Sentinel data"
+description = "Get access to Copernicus data with a pythonic easy interface. Get your products in seconds not in months."
 authors = [
-  { name = "Roberto Del Prete", email = "roberto.delprete@esa.int" }
+  { name = "Roberto Del Prete", email = "roberto.delprete@esa.int; robertodelprete88@gmail.com" }
 ]
 
 dependencies = [
