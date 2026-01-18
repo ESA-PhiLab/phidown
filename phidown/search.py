@@ -5,6 +5,7 @@ import json
 import typing
 from datetime import datetime
 import copy 
+import asyncio
 
 from .downloader import pull_down
 
@@ -111,7 +112,6 @@ class CopernicusDataSearcher:
             start_date (str, optional): Start date for filtering (ISO 8601 format). Defaults to None.
             end_date (str, optional): End date for filtering (ISO 8601 format). Defaults to None.
             top (int, optional): Maximum number of results to retrieve. Defaults to 1000.
-            count (bool, optional): Whether to include count of results. Defaults to False.
             order_by (str, optional): Field and direction to order results by. Defaults to "ContentDate/Start desc".
             burst_mode (bool, optional): Enable Sentinel-1 SLC Burst mode searching. Defaults to False.
             burst_id (int, optional): Burst ID to filter (burst mode only). Defaults to None.
@@ -161,6 +161,8 @@ class CopernicusDataSearcher:
         self._validate_time() # Validate start and end dates
 
         self.top = top
+        if self.count:
+            self.top = 1000
         self._validate_top()
 
         self.order_by = order_by
@@ -680,15 +682,89 @@ class CopernicusDataSearcher:
         return self.url
 
     def execute_query(self):
-        """Execute the query and retrieve data"""
+        """Execute the query and retrieve data.
+        
+        If count=True and the total number of results exceeds the 'top' limit,
+        this method will automatically paginate through all results using
+        multiple requests with the $skip parameter, combining all results
+        into a single DataFrame.
+        
+        Returns:
+            pd.DataFrame: DataFrame containing all retrieved products.
+        """
         url = self._build_query()
         self.response = copy.deepcopy(requests.get(url))
         self.response.raise_for_status()  # Raise an error for bad status codes
 
         self.json_data = self.response.json()
         self.num_results = self.json_data.get('@odata.count', 0)
-        self.df = pd.DataFrame.from_dict(self.json_data['value'])
+        
+        # Check if pagination is needed
+        if self.count and self.num_results > self.top:
+            return self._execute_paginated_query()
+        else:
+            self.df = pd.DataFrame.from_dict(self.json_data['value'])
+            return self.df
 
+    def _execute_paginated_query(self):
+        """Execute paginated queries when results exceed top limit using asyncio"""
+        all_data = []
+        
+        # Add first page (already retrieved in execute_query)
+        if 'value' in self.json_data:
+            all_data.extend(self.json_data['value'])
+            
+        page_size = self.top  # Use the current top value as page size
+        
+        # Calculate skips based on total results and page size
+        skips = range(page_size, self.num_results, page_size)
+        
+        if not skips:
+            self.df = pd.DataFrame.from_dict(all_data)
+            return self.df
+
+        urls = []
+        for skip in skips:
+            paginated_query = f"?$filter={self.filter_condition}&$orderby={self.order_by}&$top={page_size}&$skip={skip}&$expand=Attributes"
+            if self.count:
+                paginated_query += "&$count=true"
+            urls.append(f"{self.base_url}{paginated_query}")
+            
+        async def fetch_url(url):
+            loop = asyncio.get_running_loop()
+            try:
+                response = await loop.run_in_executor(None, requests.get, url)
+                response.raise_for_status()
+                return response.json()
+            except Exception as e:
+                return e
+
+        async def fetch_all(urls):
+            tasks = [fetch_url(url) for url in urls]
+            return await asyncio.gather(*tasks, return_exceptions=True)
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            # If in a running loop (e.g. Jupyter), run the new loop in a separate thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                results = pool.submit(asyncio.run, fetch_all(urls)).result()
+        else:
+            results = asyncio.run(fetch_all(urls))
+
+        # Process results
+        for res in results:
+            if isinstance(res, Exception):
+                print(f"Warning: Error retrieving page: {res}")
+            elif isinstance(res, dict) and 'value' in res:
+                all_data.extend(res['value'])
+        
+        # Create DataFrame from all collected data
+        self.df = pd.DataFrame.from_dict(all_data)
         return self.df
 
     def query_by_name(self, product_name: str) -> pd.DataFrame:
