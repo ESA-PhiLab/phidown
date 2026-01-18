@@ -51,11 +51,12 @@ Whether you're a researcher, developer, or data scientist, Φ-Down makes it easy
 | Contributions | [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com) |
 
 
-> ## 🚀 **What's Next & Feature Status**
+> ## 🚀 **What's Next & Feature Status v0.1.24**
 > 
 > - ✔️ **Done:** Add a progress bar.  
 > - ✔️ **Done:** Sentinel-1 SLC Burst Mode support (v0.1.20)
-> - [x] **Coming soon:** Implement a `count` option for search results more than 1000
+> - ✔️ **Done:** Implement a `count` option for search results more than 1000. (0.1.24)
+
 > - [x] **Coming soon:** Add a parallel download executor
 > - [x] **Coming soon:** Improve docs for ALL missions.
 
