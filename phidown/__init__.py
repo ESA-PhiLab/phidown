@@ -4,7 +4,7 @@
 Package Initialization
 """
 
-__version__ = "0.1.19"
+__version__ = "0.1.25"
 __author__ = "Roberto Del Prete"
 
 # Import main classes and functions
@@ -56,3 +56,4 @@ if _AIS_AVAILABLE:
 
 if _INTERACTIVE_AVAILABLE:
     __all__.extend(['InteractivePolygonTool', 'create_polygon_tool', 'search_with_polygon'])
+

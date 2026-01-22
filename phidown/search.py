@@ -1,13 +1,36 @@
 import requests
 import pandas as pd
+import numpy as np
 import os
 import json
 import typing
+import logging
 from datetime import datetime
+from pathlib import Path
 import copy 
 import asyncio
 
-from .downloader import pull_down
+from .downloader import pull_down, get_token, download_burst_on_demand
+
+# Optional shapely import for AOI coverage calculation
+try:
+    from shapely import wkt as shapely_wkt
+    from shapely.geometry import shape, Polygon
+    from shapely.ops import unary_union
+    _SHAPELY_AVAILABLE = True
+except ImportError:
+    _SHAPELY_AVAILABLE = False
+
+# Optional matplotlib import for plotting
+try:
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+    _MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    _MATPLOTLIB_AVAILABLE = False
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Set up S3 credentials in .s5cfg file!
 
@@ -426,6 +449,14 @@ class CopernicusDataSearcher:
         if self.start_date and self.end_date:
             if self.start_date > self.end_date:
                 raise ValueError("start_date must not be later than end_date.")
+        
+        # Burst mode data availability warning
+        if self.burst_mode and self.start_date:
+            burst_availability_date = '2024-08-02T00:00:00'
+            if self.start_date < burst_availability_date:
+                print(f"Warning: Burst mode data is only available from August 2, 2024 onwards. "
+                      f"Your start_date ({self.start_date}) is before this date. "
+                      f"Results before 2024-08-02 will not be available.")
 
     def _validate_attributes(self):
         """
@@ -689,8 +720,12 @@ class CopernicusDataSearcher:
         multiple requests with the $skip parameter, combining all results
         into a single DataFrame.
         
+        The returned DataFrame includes a 'coverage' column showing the percentage
+        (0-100) of the AOI covered by each product's footprint, if aoi_wkt is set
+        and shapely is available.
+        
         Returns:
-            pd.DataFrame: DataFrame containing all retrieved products.
+            pd.DataFrame: DataFrame containing all retrieved products with coverage column.
         """
         url = self._build_query()
         self.response = copy.deepcopy(requests.get(url))
@@ -701,10 +736,14 @@ class CopernicusDataSearcher:
         
         # Check if pagination is needed
         if self.count and self.num_results > self.top:
-            return self._execute_paginated_query()
+            self._execute_paginated_query()
         else:
             self.df = pd.DataFrame.from_dict(self.json_data['value'])
-            return self.df
+        
+        # Add coverage column if AOI is set
+        self._add_coverage_column()
+        
+        return self.df
 
     def _execute_paginated_query(self):
         """Execute paginated queries when results exceed top limit using asyncio"""
@@ -716,8 +755,18 @@ class CopernicusDataSearcher:
             
         page_size = self.top  # Use the current top value as page size
         
+        # Burst API has a hard limit on $skip (around 10,000 results max)
+        # We must respect this limit to avoid 422 errors
+        max_skip = self.num_results
+        if self.burst_mode:
+            burst_max_results = 10000
+            if self.num_results > burst_max_results:
+                print(f"Warning: Burst API limits pagination to ~{burst_max_results} results. "
+                      f"Only retrieving first {burst_max_results} of {self.num_results} available results.")
+                max_skip = burst_max_results
+        
         # Calculate skips based on total results and page size
-        skips = range(page_size, self.num_results, page_size)
+        skips = range(page_size, max_skip, page_size)
         
         if not skips:
             self.df = pd.DataFrame.from_dict(all_data)
@@ -725,7 +774,10 @@ class CopernicusDataSearcher:
 
         urls = []
         for skip in skips:
-            paginated_query = f"?$filter={self.filter_condition}&$orderby={self.order_by}&$top={page_size}&$skip={skip}&$expand=Attributes"
+            paginated_query = f"?$filter={self.filter_condition}&$orderby={self.order_by}&$top={page_size}&$skip={skip}"
+            # Add $expand=Attributes only for non-burst mode (Bursts API doesn't support it)
+            if not self.burst_mode:
+                paginated_query += "&$expand=Attributes"
             if self.count:
                 paginated_query += "&$count=true"
             urls.append(f"{self.base_url}{paginated_query}")
@@ -765,7 +817,100 @@ class CopernicusDataSearcher:
         
         # Create DataFrame from all collected data
         self.df = pd.DataFrame.from_dict(all_data)
-        return self.df
+
+    # -------------------------------------------------------------------------
+    # AOI Coverage Calculation Methods
+    # -------------------------------------------------------------------------
+    
+    def _calculate_aoi_coverage(self, footprint: typing.Any) -> typing.Optional[float]:
+        """Calculate the coverage percentage of AOI by a product footprint.
+        
+        Args:
+            footprint: Product footprint as GeoJSON dict, GeoJSON string, or WKT string.
+            
+        Returns:
+            float: Coverage percentage (0-100) or None if calculation fails.
+        """
+        if not _SHAPELY_AVAILABLE:
+            return None
+        
+        if self.aoi_wkt is None:
+            return None
+        
+        try:
+            # Parse AOI
+            aoi_geom = shapely_wkt.loads(self.aoi_wkt)
+            
+            # Parse footprint
+            if footprint is None:
+                return None
+            
+            if isinstance(footprint, str):
+                if footprint.strip().startswith('{'):
+                    # GeoJSON string
+                    fp_geom = shape(json.loads(footprint))
+                else:
+                    # WKT string
+                    fp_geom = shapely_wkt.loads(footprint)
+            elif isinstance(footprint, dict):
+                # GeoJSON dict
+                fp_geom = shape(footprint)
+            else:
+                return None
+            
+            # Calculate intersection
+            if not aoi_geom.is_valid or not fp_geom.is_valid:
+                return None
+            
+            intersection = aoi_geom.intersection(fp_geom)
+            
+            if aoi_geom.area > 0:
+                coverage_pct = (intersection.area / aoi_geom.area) * 100
+                return min(100.0, round(coverage_pct, 2))
+            return 0.0
+            
+        except Exception as e:
+            logger.debug(f"Could not calculate coverage: {e}")
+            return None
+    
+    def _add_coverage_column(self) -> None:
+        """Add coverage column to the results DataFrame.
+        
+        The coverage column shows the percentage (0-100) of the AOI covered
+        by each product's footprint. Requires shapely to be installed.
+        """
+        if self.df is None or self.df.empty:
+            return
+        
+        if self.aoi_wkt is None:
+            # No AOI set, skip coverage calculation
+            print("Warning: No AOI (aoi_wkt) provided. Coverage calculation requires an AOI to measure against.")
+            self.df['coverage'] = None
+            return
+        
+        if not _SHAPELY_AVAILABLE:
+            logger.warning("shapely not installed. Coverage calculation disabled. "
+                          "Install with: pip install shapely")
+            self.df['coverage'] = None
+            return
+        
+        # Determine footprint column based on mode
+        # For bursts, prefer GeoFootprint (GeoJSON dict) over Footprint (non-standard WKT)
+        # Burst 'Footprint' format is: geography'SRID=4326;POLYGON(...)' which needs parsing
+        if self.burst_mode:
+            # Prefer GeoFootprint (clean GeoJSON) for bursts
+            footprint_col = 'GeoFootprint' if 'GeoFootprint' in self.df.columns else 'Footprint'
+        else:
+            footprint_col = 'GeoFootprint'
+        
+        if footprint_col not in self.df.columns:
+            logger.warning(f"Footprint column '{footprint_col}' not found in results. "
+                          "Coverage calculation skipped.")
+            self.df['coverage'] = None
+            return
+        
+        # Calculate coverage for each product
+        self.df['coverage'] = self.df[footprint_col].apply(self._calculate_aoi_coverage)
 
     def query_by_name(self, product_name: str) -> pd.DataFrame:
         """
@@ -941,10 +1086,10 @@ class CopernicusDataSearcher:
         if columns is None:
             # Use different default columns for burst mode vs product mode
             if self.burst_mode:
-                columns = ['Id', 'BurstId', 'SwathIdentifier', 'ParentProductName', 
+                columns = ['Id','coverage','BurstId', 'SwathIdentifier', 'ParentProductName', 
                           'PolarisationChannels', 'OrbitDirection', 'ContentDate']
             else:
-                columns = ['Id', 'Name', 'S3Path', 'GeoFootprint', 'OriginDate', 'Attributes']
+                columns = ['Id', 'coverage', 'Name', 'S3Path', 'GeoFootprint', 'OriginDate', 'Attributes']
 
         if 'OriginDate' in self.df.columns:
             self.df['OriginDate'] = pd.to_datetime(self.df['OriginDate']).dt.strftime('%Y-%m-%d %H:%M:%S')
@@ -1003,3 +1148,809 @@ class CopernicusDataSearcher:
             total_size=content_length,
             show_progress=show_progress
             )
+    # -------------------------------------------------------------------------
+    # Orbit Optimization Methods
+    # -------------------------------------------------------------------------
+    
+    # Regional longitude bounds for orbit direction preferences
+    _EUROPE_AMERICA_LON_BOUNDS = (-180, 60)  # Descending preferred
+    _ASIA_AUSTRALIA_LON_BOUNDS = (60, 180)   # Ascending preferred
+    
+    # Subswath priority order (lower index = higher priority)
+    _SUBSWATH_PRIORITY = {'IW1': 0, 'IW2': 1, 'IW3': 2}
+    
+    def _get_aoi_centroid(self, aoi_wkt: typing.Optional[str] = None) -> typing.Tuple[float, float]:
+        """Calculate the centroid of the AOI.
+        
+        Args:
+            aoi_wkt: WKT polygon string. Uses self.aoi_wkt if None.
+        
+        Returns:
+            Tuple[float, float]: (longitude, latitude) of the centroid.
+            
+        Raises:
+            ValueError: If AOI is not set or cannot be parsed.
+        """
+        wkt = aoi_wkt or self.aoi_wkt
+        if wkt is None:
+            raise ValueError("AOI WKT is not set")
+        
+        # Parse WKT polygon to extract coordinates
+        wkt_upper = wkt.upper()
+        if not wkt_upper.startswith('POLYGON'):
+            raise ValueError("AOI must be a WKT POLYGON")
+        
+        # Extract coordinate string
+        try:
+            coord_str = wkt.split('((')[1].split('))')[0]
+            coords = []
+            for pair in coord_str.split(','):
+                parts = pair.strip().split()
+                if len(parts) >= 2:
+                    lon, lat = float(parts[0]), float(parts[1])
+                    coords.append((lon, lat))
+            
+            if not coords:
+                raise ValueError("Could not parse AOI coordinates")
+            
+            # Calculate centroid (simple average, excluding closing point)
+            coords = coords[:-1] if coords[0] == coords[-1] else coords
+            lon_avg = sum(c[0] for c in coords) / len(coords)
+            lat_avg = sum(c[1] for c in coords) / len(coords)
+            
+            return lon_avg, lat_avg
+        except (IndexError, ValueError) as e:
+            raise ValueError(f"Could not parse AOI WKT: {e}")
+    
+    def _get_recommended_orbit_direction(self, aoi_wkt: typing.Optional[str] = None) -> str:
+        """Determine recommended orbit direction based on AOI location.
+        
+        For Europe/America (longitude -180 to 60): Descending preferred
+        For Asia/Australia (longitude 60 to 180): Ascending preferred
+        
+        Args:
+            aoi_wkt: WKT polygon string. Uses self.aoi_wkt if None.
+        
+        Returns:
+            str: Recommended orbit direction ('ASCENDING' or 'DESCENDING').
+        """
+        lon, _ = self._get_aoi_centroid(aoi_wkt)
+        
+        if self._EUROPE_AMERICA_LON_BOUNDS[0] <= lon < self._EUROPE_AMERICA_LON_BOUNDS[1]:
+            return 'DESCENDING'
+        else:
+            return 'ASCENDING'
+    
+    def find_optimal_orbit(
+        self,
+        aoi_wkt: typing.Optional[str] = None,
+        start_date: typing.Optional[str] = None,
+        end_date: typing.Optional[str] = None,
+        product_type: str = 'SLC'
+    ) -> typing.Dict[str, typing.Any]:
+        """Find the optimal orbit direction and relative orbit for maximum AOI coverage.
+        
+        This method searches both ascending and descending orbits and compares
+        coverage to find the best configuration.
+        
+        Args:
+            aoi_wkt: Area of Interest in WKT format. Uses self.aoi_wkt if None.
+            start_date: Start date in ISO 8601 format. Uses self.start_date if None.
+            end_date: End date in ISO 8601 format. Uses self.end_date if None.
+            product_type: Product type to search ('SLC', 'GRD', etc.). Default 'SLC'.
+        
+        Returns:
+            Dict containing:
+                - ascending: dict with orbits analysis for ascending
+                - descending: dict with orbits analysis for descending
+                - recommended: dict with optimal orbit_direction, relative_orbit, expected_coverage
+        
+        Example:
+            >>> searcher = CopernicusDataSearcher()
+            >>> result = searcher.find_optimal_orbit(
+            ...     aoi_wkt='POLYGON((10 45, 12 45, 12 46, 10 46, 10 45))',
+            ...     start_date='2024-08-01T00:00:00Z',
+            ...     end_date='2024-08-31T00:00:00Z'
+            ... )
+            >>> print(f"Best: {result['recommended']['orbit_direction']} orbit {result['recommended']['relative_orbit']}")
+        """
+        aoi = aoi_wkt or self.aoi_wkt
+        start = start_date or self.start_date
+        end = end_date or self.end_date
+        
+        if aoi is None:
+            raise ValueError("AOI WKT is required")
+        if start is None or end is None:
+            raise ValueError("Start and end dates are required")
+        
+        results = {
+            'ascending': {'orbits': {}, 'best_orbit': None, 'max_coverage': 0},
+            'descending': {'orbits': {}, 'best_orbit': None, 'max_coverage': 0},
+            'recommended': None
+        }
+        
+        for direction in ['ASCENDING', 'DESCENDING']:
+            logger.info(f"Analyzing {direction} orbits...")
+            
+            # Search without specific orbit to find all available
+            self.query_by_filter(
+                collection_name='SENTINEL-1',
+                product_type=product_type,
+                orbit_direction=direction,
+                aoi_wkt=aoi,
+                start_date=start,
+                end_date=end,
+                top=100,
+                count=True
+            )
+            
+            df = self.execute_query()
+            
+            if df.empty:
+                continue
+            
+            # Extract relative orbit from attributes
+            if 'Attributes' in df.columns:
+                def get_relative_orbit(attrs):
+                    if isinstance(attrs, list):
+                        for attr in attrs:
+                            if attr.get('Name') == 'relativeOrbitNumber':
+                                return attr.get('Value')
+                    return None
+                
+                df['relative_orbit'] = df['Attributes'].apply(get_relative_orbit)
+            
+            if 'relative_orbit' not in df.columns or df['relative_orbit'].isna().all():
+                continue
+            
+            # Use coverage column already computed
+            if 'coverage' not in df.columns or df['coverage'].isna().all():
+                df['coverage'] = 50.0  # Default if shapely not available
+            
+            # Group by relative orbit
+            orbit_stats = df.groupby('relative_orbit').agg({
+                'coverage': ['mean', 'max', 'count']
+            }).round(2)
+            
+            orbit_stats.columns = ['avg_coverage', 'max_coverage', 'count']
+            orbit_stats = orbit_stats.reset_index()
+            
+            direction_key = direction.lower()
+            for _, row in orbit_stats.iterrows():
+                if pd.notna(row['relative_orbit']):
+                    orbit = int(row['relative_orbit'])
+                    results[direction_key]['orbits'][orbit] = {
+                        'avg_coverage': float(row['avg_coverage']) if pd.notna(row['avg_coverage']) else 0,
+                        'max_coverage': float(row['max_coverage']) if pd.notna(row['max_coverage']) else 0,
+                        'count': int(row['count'])
+                    }
+            
+            # Find best orbit for this direction
+            if not orbit_stats.empty:
+                # Filter out NaN values
+                valid_stats = orbit_stats.dropna(subset=['avg_coverage', 'relative_orbit'])
+                if not valid_stats.empty:
+                    best_idx = valid_stats['avg_coverage'].idxmax()
+                    best_orbit = int(valid_stats.loc[best_idx, 'relative_orbit'])
+                    max_coverage = float(valid_stats.loc[best_idx, 'avg_coverage'])
+                    
+                    results[direction_key]['best_orbit'] = best_orbit
+                    results[direction_key]['max_coverage'] = max_coverage
+        
+        # Determine overall recommendation
+        asc_coverage = results['ascending']['max_coverage']
+        desc_coverage = results['descending']['max_coverage']
+        
+        if asc_coverage > desc_coverage:
+            results['recommended'] = {
+                'orbit_direction': 'ASCENDING',
+                'relative_orbit': results['ascending']['best_orbit'],
+                'expected_coverage': asc_coverage
+            }
+        elif desc_coverage > asc_coverage:
+            results['recommended'] = {
+                'orbit_direction': 'DESCENDING',
+                'relative_orbit': results['descending']['best_orbit'],
+                'expected_coverage': desc_coverage
+            }
+        else:
+            # Use regional preference if coverages are equal
+            recommended_direction = self._get_recommended_orbit_direction(aoi)
+            direction_key = recommended_direction.lower()
+            results['recommended'] = {
+                'orbit_direction': recommended_direction,
+                'relative_orbit': results[direction_key]['best_orbit'],
+                'expected_coverage': results[direction_key]['max_coverage']
+            }
+        
+        return results
+    
+    def find_optimal_bursts(
+        self,
+        aoi_wkt: typing.Optional[str] = None,
+        start_date: typing.Optional[str] = None,
+        end_date: typing.Optional[str] = None,
+        polarisation: str = 'VV',
+        orbit_direction: typing.Optional[str] = None,
+        relative_orbit_number: typing.Optional[int] = None,
+        preferred_subswath: typing.Optional[typing.List[str]] = None
+    ) -> pd.DataFrame:
+        """Find optimal bursts covering the AOI with subswath preferences.
+        
+        Preferences:
+        - IW1 preferred over IW2, IW3 preferred last (lower incident angle)
+        - If orbit_direction not specified: Descending for EU/America, Ascending for Asia/Australia
+        
+        Args:
+            aoi_wkt: Area of Interest in WKT format. Uses self.aoi_wkt if None.
+            start_date: Start date in ISO 8601 format. Uses self.start_date if None.
+            end_date: End date in ISO 8601 format. Uses self.end_date if None.
+            polarisation: Polarisation channel ('VV', 'VH', 'HH', 'HV'). Default 'VV'.
+            orbit_direction: Orbit direction ('ASCENDING' or 'DESCENDING'). Auto-detected if None.
+            relative_orbit_number: Specific relative orbit to filter. None for all.
+            preferred_subswath: List of subswaths in preference order. Default ['IW1', 'IW2', 'IW3'].
+        
+        Returns:
+            pd.DataFrame: Optimized burst selection sorted by preference.
+            
+        Example:
+            >>> searcher = CopernicusDataSearcher()
+            >>> bursts = searcher.find_optimal_bursts(
+            ...     aoi_wkt='POLYGON((10 45, 12 45, 12 46, 10 46, 10 45))',
+            ...     start_date='2024-08-02T00:00:00Z',
+            ...     end_date='2024-08-15T00:00:00Z',
+            ...     polarisation='VV'
+            ... )
+        """
+        aoi = aoi_wkt or self.aoi_wkt
+        start = start_date or self.start_date
+        end = end_date or self.end_date
+        preferred = preferred_subswath or ['IW1', 'IW2', 'IW3']
+        
+        if aoi is None:
+            raise ValueError("AOI WKT is required")
+        if start is None or end is None:
+            raise ValueError("Start and end dates are required")
+        
+        # Get recommended orbit direction if not specified
+        direction = orbit_direction or self._get_recommended_orbit_direction(aoi)
+        
+        logger.info(f"Finding optimal bursts with {direction} orbit direction...")
+        
+        # Search bursts
+        self.query_by_filter(
+            burst_mode=True,
+            orbit_direction=direction,
+            aoi_wkt=aoi,
+            start_date=start,
+            end_date=end,
+            polarisation_channels=polarisation,
+            relative_orbit_number=relative_orbit_number,
+            top=1000,
+            count=True
+        )
+        
+        df = self.execute_query()
+        
+        if df.empty:
+            logger.warning("No bursts found for the specified parameters")
+            return df
+        
+        # Add subswath priority based on preferences
+        swath_priority = {swath: idx for idx, swath in enumerate(preferred)}
+        default_priority = len(preferred)
+        
+        if 'SwathIdentifier' in df.columns:
+            df['subswath_priority'] = df['SwathIdentifier'].apply(
+                lambda x: swath_priority.get(x, default_priority)
+            )
+        else:
+            df['subswath_priority'] = default_priority
+        
+        # Extract acquisition date
+        if 'ContentDate' in df.columns:
+            df['acquisition_date'] = pd.to_datetime(df['ContentDate'].apply(
+                lambda x: x.get('Start') if isinstance(x, dict) else x
+            )).dt.date
+        
+        # Sort by coverage (descending) then subswath priority (ascending)
+        sort_columns = []
+        sort_ascending = []
+        
+        if 'coverage' in df.columns:
+            sort_columns.append('coverage')
+            sort_ascending.append(False)
+        
+        sort_columns.append('subswath_priority')
+        sort_ascending.append(True)
+        
+        df = df.sort_values(sort_columns, ascending=sort_ascending)
+        
+        # Log summary
+        if 'SwathIdentifier' in df.columns:
+            swath_counts = df['SwathIdentifier'].value_counts()
+            logger.info(f"Found {len(df)} bursts:")
+            for swath, count in swath_counts.items():
+                logger.info(f"  {swath}: {count}")
+        
+        return df
+    
+    # -------------------------------------------------------------------------
+    # Temporal Statistics Methods
+    # -------------------------------------------------------------------------
+    
+    def compute_temporal_statistics(
+        self,
+        df: typing.Optional[pd.DataFrame] = None
+    ) -> typing.Dict[str, typing.Any]:
+        """Compute temporal statistics for search results.
+        
+        Args:
+            df: DataFrame with search results. Uses self.df if None.
+            
+        Returns:
+            Dict containing:
+                - total_acquisitions: int
+                - date_range: dict with start, end, span_days
+                - temporal_gaps: dict with min_days, max_days, mean_days, median_days, std_days
+                - acquisitions_by_month: dict
+                - acquisitions_by_year: dict
+                
+        Example:
+            >>> searcher = CopernicusDataSearcher()
+            >>> searcher.query_by_filter(...)
+            >>> searcher.execute_query()
+            >>> stats = searcher.compute_temporal_statistics()
+            >>> print(f"Mean revisit: {stats['temporal_gaps']['mean_days']:.1f} days")
+        """
+        data = df if df is not None else self.df
+        
+        if data is None or data.empty:
+            logger.warning("No data available for temporal statistics")
+            return {}
+        
+        # Extract acquisition dates
+        dates = None
+        if 'ContentDate' in data.columns:
+            dates = pd.to_datetime(data['ContentDate'].apply(
+                lambda x: x.get('Start') if isinstance(x, dict) else x
+            ))
+        elif 'OriginDate' in data.columns:
+            dates = pd.to_datetime(data['OriginDate'])
+        
+        if dates is None or dates.empty:
+            logger.warning("No date column found in results")
+            return {}
+        
+        dates = dates.dropna().sort_values()
+        
+        if len(dates) == 0:
+            return {}
+        
+        # Calculate temporal gaps
+        if len(dates) > 1:
+            gaps = dates.diff().dropna()
+            gaps_days = gaps.dt.total_seconds() / (24 * 3600)
+            
+            stats = {
+                'total_acquisitions': len(dates),
+                'date_range': {
+                    'start': dates.min().isoformat(),
+                    'end': dates.max().isoformat(),
+                    'span_days': (dates.max() - dates.min()).days
+                },
+                'temporal_gaps': {
+                    'min_days': float(gaps_days.min()),
+                    'max_days': float(gaps_days.max()),
+                    'mean_days': float(gaps_days.mean()),
+                    'median_days': float(gaps_days.median()),
+                    'std_days': float(gaps_days.std()) if len(gaps_days) > 1 else 0.0
+                },
+                'acquisitions_by_month': {str(k): int(v) for k, v in 
+                                          dates.dt.to_period('M').value_counts().sort_index().items()},
+                'acquisitions_by_year': {int(k): int(v) for k, v in 
+                                         dates.dt.year.value_counts().sort_index().items()}
+            }
+        else:
+            stats = {
+                'total_acquisitions': len(dates),
+                'date_range': {
+                    'start': dates.min().isoformat(),
+                    'end': dates.max().isoformat(),
+                    'span_days': 0
+                },
+                'temporal_gaps': None,
+                'acquisitions_by_month': {},
+                'acquisitions_by_year': {}
+            }
+        
+        return stats
+    
+    def plot_temporal_distribution(
+        self,
+        df: typing.Optional[pd.DataFrame] = None,
+        output_path: typing.Optional[str] = None,
+        show: bool = True,
+        figsize: typing.Tuple[int, int] = (14, 10)
+    ) -> typing.Optional[str]:
+        """Create and save a plot of temporal distribution of acquisitions.
+        
+        The plot includes:
+        - Acquisition timeline scatter plot
+        - Gap distribution histogram
+        - Monthly acquisition counts
+        - Cumulative acquisitions over time
+        
+        Args:
+            df: DataFrame with search results. Uses self.df if None.
+            output_path: Path to save the plot. Auto-generated if None.
+            show: Whether to display the plot interactively.
+            figsize: Figure size as (width, height) tuple.
+            
+        Returns:
+            str: Path to the saved plot file, or None if not saved.
+            
+        Raises:
+            ImportError: If matplotlib is not installed.
+            
+        Example:
+            >>> searcher = CopernicusDataSearcher()
+            >>> searcher.query_by_filter(...)
+            >>> searcher.execute_query()
+            >>> searcher.plot_temporal_distribution(output_path='./temporal_plot.png')
+        """
+        if not _MATPLOTLIB_AVAILABLE:
+            raise ImportError("matplotlib is required for plotting. Install with: pip install matplotlib")
+        
+        data = df if df is not None else self.df
+        
+        if data is None or data.empty:
+            logger.warning("No data available for plotting")
+            return None
+        
+        # Extract acquisition dates
+        dates = None
+        if 'ContentDate' in data.columns:
+            dates = pd.to_datetime(data['ContentDate'].apply(
+                lambda x: x.get('Start') if isinstance(x, dict) else x
+            ))
+        elif 'OriginDate' in data.columns:
+            dates = pd.to_datetime(data['OriginDate'])
+        
+        if dates is None or dates.empty:
+            logger.warning("No date column found in results")
+            return None
+        
+        dates = dates.dropna().sort_values().reset_index(drop=True)
+        
+        if len(dates) < 2:
+            logger.warning("Need at least 2 acquisitions for temporal plot")
+            return None
+        
+        # Create figure with subplots
+        fig, axes = plt.subplots(2, 2, figsize=figsize)
+        fig.suptitle('Sentinel-1 Temporal Distribution Analysis', fontsize=14, fontweight='bold')
+        
+        # 1. Timeline scatter plot
+        ax1 = axes[0, 0]
+        ax1.scatter(dates, range(len(dates)), alpha=0.6, c='steelblue', s=50)
+        ax1.set_xlabel('Acquisition Date')
+        ax1.set_ylabel('Acquisition Index')
+        ax1.set_title('Acquisition Timeline')
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax1.xaxis.set_major_locator(mdates.AutoDateLocator())
+        plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        ax1.grid(True, alpha=0.3)
+        
+        # 2. Temporal gaps histogram
+        ax2 = axes[0, 1]
+        gaps = dates.diff().dropna()
+        gaps_days = gaps.dt.total_seconds() / (24 * 3600)
+        ax2.hist(gaps_days, bins=min(20, len(gaps_days)), color='coral', edgecolor='black', alpha=0.7)
+        ax2.axvline(gaps_days.mean(), color='red', linestyle='--', 
+                   label=f'Mean: {gaps_days.mean():.1f} days')
+        ax2.axvline(gaps_days.median(), color='green', linestyle='--', 
+                   label=f'Median: {gaps_days.median():.1f} days')
+        ax2.legend()
+        ax2.set_xlabel('Gap Duration (days)')
+        ax2.set_ylabel('Frequency')
+        ax2.set_title('Distribution of Temporal Gaps')
+        ax2.grid(True, alpha=0.3)
+        
+        # 3. Monthly acquisition counts
+        ax3 = axes[1, 0]
+        monthly_counts = dates.dt.to_period('M').value_counts().sort_index()
+        months = [str(p) for p in monthly_counts.index]
+        ax3.bar(months, monthly_counts.values, color='seagreen', alpha=0.7)
+        ax3.set_xlabel('Month')
+        ax3.set_ylabel('Number of Acquisitions')
+        ax3.set_title('Acquisitions by Month')
+        plt.setp(ax3.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        ax3.grid(True, alpha=0.3, axis='y')
+        
+        # 4. Cumulative acquisitions over time
+        ax4 = axes[1, 1]
+        cumulative = range(1, len(dates) + 1)
+        ax4.plot(dates, cumulative, color='purple', linewidth=2)
+        ax4.fill_between(dates, cumulative, alpha=0.3, color='purple')
+        ax4.set_xlabel('Date')
+        ax4.set_ylabel('Cumulative Acquisitions')
+        ax4.set_title('Cumulative Acquisition Count')
+        ax4.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax4.xaxis.set_major_locator(mdates.AutoDateLocator())
+        plt.setp(ax4.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        ax4.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        # Save plot
+        if output_path is None:
+            output_path = f'temporal_distribution_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+        
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+        logger.info(f"Plot saved to: {output_path}")
+        
+        if show:
+            plt.show()
+        else:
+            plt.close()
+        
+        return output_path
+    
+    # -------------------------------------------------------------------------
+    # Enhanced Download Methods
+    # -------------------------------------------------------------------------
+    
+    def download_bursts(
+        self,
+        df: typing.Optional[pd.DataFrame] = None,
+        output_dir: str = '.',
+        username: typing.Optional[str] = None,
+        password: typing.Optional[str] = None,
+        retry_count: int = 3,
+        verbose: bool = True
+    ) -> typing.Dict[str, typing.Any]:
+        """Download burst products from a DataFrame.
+        
+        This method handles CDSE authentication and downloads burst products
+        via the on-demand processing API.
+        
+        Args:
+            df: DataFrame with burst products to download. Uses self.df if None.
+            output_dir: Directory to save downloaded bursts.
+            username: CDSE username. Required for burst downloads.
+            password: CDSE password. Required for burst downloads.
+            retry_count: Number of retry attempts for failed downloads.
+            verbose: Whether to print progress information.
+            
+        Returns:
+            Dict containing:
+                - downloaded: int count of successful downloads
+                - failed: int count of failed downloads
+                - details: list of dicts with download status per product
+                
+        Example:
+            >>> searcher = CopernicusDataSearcher()
+            >>> searcher.query_by_filter(burst_mode=True, ...)
+            >>> df = searcher.execute_query()
+            >>> result = searcher.download_bursts(
+            ...     df=df,
+            ...     output_dir='./bursts',
+            ...     username='your_cdse_username',
+            ...     password='your_cdse_password'
+            ... )
+        """
+        data = df if df is not None else self.df
+        
+        if data is None or data.empty:
+            logger.warning("No burst products to download")
+            return {'downloaded': 0, 'failed': 0, 'details': []}
+        
+        if username is None or password is None:
+            raise ValueError("CDSE username and password are required for burst downloads. "
+                           "Register at https://dataspace.copernicus.eu/")
+        
+        # Ensure output directory exists
+        output_path = Path(output_dir).absolute()
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        # Get access token
+        if verbose:
+            print("🔐 Authenticating with CDSE...")
+        
+        try:
+            token = get_token(username, password)
+        except Exception as e:
+            logger.error(f"Authentication failed: {e}")
+            raise
+        
+        summary = {
+            'downloaded': 0,
+            'failed': 0,
+            'details': []
+        }
+        
+        total = len(data)
+        for idx, row in data.iterrows():
+            burst_id = row.get('Id')
+            burst_num = row.get('BurstId', 'unknown')
+            
+            if not burst_id:
+                summary['failed'] += 1
+                summary['details'].append({
+                    'burst_id': None,
+                    'status': 'error',
+                    'error': 'No burst ID found'
+                })
+                continue
+            
+            if verbose:
+                print(f"📥 Downloading burst {idx + 1}/{total} (BurstId: {burst_num})...")
+            
+            success = False
+            last_error = None
+            
+            for attempt in range(retry_count):
+                try:
+                    download_burst_on_demand(
+                        burst_id=burst_id,
+                        token=token,
+                        output_dir=output_path
+                    )
+                    success = True
+                    break
+                except Exception as e:
+                    last_error = str(e)
+                    if verbose and attempt < retry_count - 1:
+                        print(f"   ⚠️  Attempt {attempt + 1} failed, retrying...")
+                    # Refresh token on failure
+                    try:
+                        token = get_token(username, password)
+                    except:
+                        pass
+            
+            if success:
+                summary['downloaded'] += 1
+                summary['details'].append({
+                    'burst_id': burst_id,
+                    'burst_num': burst_num,
+                    'status': 'success'
+                })
+                if verbose:
+                    print(f"   ✅ Downloaded successfully")
+            else:
+                summary['failed'] += 1
+                summary['details'].append({
+                    'burst_id': burst_id,
+                    'burst_num': burst_num,
+                    'status': 'failed',
+                    'error': last_error
+                })
+                if verbose:
+                    print(f"   ❌ Failed: {last_error}")
+        
+        if verbose:
+            print(f"\n📊 Download complete: {summary['downloaded']} succeeded, {summary['failed']} failed")
+        
+        return summary
+    
+    def download_products(
+        self,
+        df: typing.Optional[pd.DataFrame] = None,
+        output_dir: str = '.',
+        config_file: str = '.s5cfg',
+        retry_count: int = 3,
+        validate: bool = True,
+        verbose: bool = True,
+        show_progress: bool = True
+    ) -> typing.Dict[str, typing.Any]:
+        """Download multiple SLC/GRD products from a DataFrame.
+        
+        This method downloads products via S3 using s5cmd with retry logic
+        and optional validation.
+        
+        Args:
+            df: DataFrame with products to download. Uses self.df if None.
+            output_dir: Directory to save downloaded products.
+            config_file: Path to s5cmd configuration file.
+            retry_count: Number of retry attempts for failed downloads.
+            validate: Whether to validate downloaded files (check manifest.safe exists).
+            verbose: Whether to print progress information.
+            show_progress: Whether to show tqdm progress bar.
+            
+        Returns:
+            Dict containing:
+                - downloaded: int count of successful downloads
+                - failed: int count of failed downloads
+                - details: list of dicts with download status per product
+                
+        Example:
+            >>> searcher = CopernicusDataSearcher()
+            >>> searcher.query_by_filter(collection_name='SENTINEL-1', product_type='SLC', ...)
+            >>> df = searcher.execute_query()
+            >>> result = searcher.download_products(df=df, output_dir='./data')
+        """
+        data = df if df is not None else self.df
+        
+        if data is None or data.empty:
+            logger.warning("No products to download")
+            return {'downloaded': 0, 'failed': 0, 'details': []}
+        
+        # Ensure output directory exists
+        abs_output_dir = os.path.abspath(output_dir)
+        os.makedirs(abs_output_dir, exist_ok=True)
+        
+        summary = {
+            'downloaded': 0,
+            'failed': 0,
+            'details': []
+        }
+        
+        total = len(data)
+        for idx, row in data.iterrows():
+            product_name = row.get('Name', f'product_{idx}')
+            s3_path = row.get('S3Path')
+            content_length = row.get('ContentLength', 0)
+            
+            if not s3_path:
+                summary['failed'] += 1
+                summary['details'].append({
+                    'name': product_name,
+                    'status': 'error',
+                    'error': 'No S3Path found'
+                })
+                continue
+            
+            if verbose:
+                print(f"📥 Downloading {idx + 1}/{total}: {product_name}...")
+            
+            success = False
+            last_error = None
+            
+            for attempt in range(retry_count):
+                try:
+                    pull_down(
+                        s3_path=s3_path,
+                        output_dir=abs_output_dir,
+                        config_file=config_file,
+                        total_size=content_length,
+                        show_progress=show_progress
+                    )
+                    
+                    # Validate if enabled
+                    if validate:
+                        product_dir = os.path.join(abs_output_dir, product_name)
+                        manifest_path = os.path.join(product_dir, 'manifest.safe')
+                        if os.path.isdir(product_dir) and not os.path.exists(manifest_path):
+                            raise ValueError("manifest.safe not found - download may be incomplete")
+                    
+                    success = True
+                    break
+                    
+                except Exception as e:
+                    last_error = str(e)
+                    if verbose and attempt < retry_count - 1:
+                        print(f"   ⚠️  Attempt {attempt + 1} failed, retrying...")
+            
+            if success:
+                summary['downloaded'] += 1
+                summary['details'].append({
+                    'name': product_name,
+                    'status': 'success'
+                })
+                if verbose:
+                    print(f"   ✅ Downloaded successfully")
+            else:
+                summary['failed'] += 1
+                summary['details'].append({
+                    'name': product_name,
+                    'status': 'failed',
+                    'error': last_error
+                })
+                if verbose:
+                    print(f"   ❌ Failed: {last_error}")
+        
+        if verbose:
+            print(f"\n📊 Download complete: {summary['downloaded']} succeeded, {summary['failed']} failed")
+        
+        return summary
