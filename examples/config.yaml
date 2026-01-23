@@ -1,0 +1,103 @@
+# InSAR Data Acquisition Configuration
+# =====================================
+# Sample configuration file for the insar.py script
+# This file demonstrates all available configuration options
+
+# Search parameters for Sentinel-1 data
+search:
+  # Area of Interest in WKT format (EPSG:4326)
+  # Polygon must be closed (first and last coordinates must match)
+  # Example: North Italy
+  aoi_wkt: |
+    POLYGON((11.809016 57.629964, 12.087897 57.629964, 12.087897 57.768659, 11.809016 57.768659, 11.809016 57.629964))
+  
+  # Temporal range (ISO 8601 format)
+  # Note: Burst mode data available from August 2, 2024 onwards
+  start_date: '2024-08-03T00:00:00'
+  end_date: '2024-11-10T00:00:00'
+  
+  # Acquisition mode:
+  # - 'slc': Download full SLC products (typically 5-8 GB each)
+  # - 'burst': Download individual bursts (typically 1-2 GB each)
+  mode: slc
+  
+  # Polarisation channel: VV, VH, HH, or HV
+  # VV is the most common for InSAR applications
+  # Note: For SLC mode, products contain all available polarisations
+  #       Polarisation filtering is only used in burst mode
+  polarisation: VV
+  
+  # Orbit direction: ASCENDING, DESCENDING, or null for auto-detection
+  # If null, the script will find the optimal orbit based on:
+  # - Maximum AOI coverage
+  # - Regional preference:
+  #   - Descending preferred for Europe/America (longitude -180 to 60)
+  #   - Ascending preferred for Asia/Australia (longitude 60 to 180)
+  orbit_direction: null
+  
+  # Relative orbit number (track): 1-175, or null for auto-detection
+  # Setting this ensures consistent imaging geometry for InSAR time series
+  relative_orbit: 66
+  
+  # Platform filter: list of satellites to include
+  # Options: 'A' (S1A), 'B' (S1B), 'C' (S1C), 'D' (S1D), or 'all'
+  # Examples:
+  #   - [all]: Include all available satellites
+  #   - [A]: Only Sentinel-1A
+  #   - [A, B]: Both Sentinel-1A and 1B
+  #   - [C, D]: Both Sentinel-1C and 1D
+  platforms:
+    - all
+  
+  # ========== Burst-specific parameters (only used when mode=burst) ==========
+  
+  # Swath identifier: IW1, IW2, IW3 (null for auto-selection)
+  # Priority order (lower incidence angle preferred):
+  # - IW1 (highest priority, lowest incidence angle ~31°)
+  # - IW2 (medium priority, medium incidence angle ~38°)
+  # - IW3 (lowest priority, highest incidence angle ~45°)
+  swath_identifier: null
+  
+  # Specific burst ID to search for (optional)
+  # Use this for targeted InSAR time series on a specific burst
+  burst_id: null
+  
+  # Maximum number of results to retrieve per query
+  max_results: 1000
+
+# Download parameters
+download:
+  # Output directory for downloaded data
+  # Will be created if it doesn't exist
+  output_dir: ./data
+  
+  # CDSE credentials (required for burst downloads)
+  # Can also be set via environment variables:
+  # - CDSE_USERNAME
+  # - CDSE_PASSWORD
+  # Register at: https://dataspace.copernicus.eu/
+  username: null
+  password: null
+  
+  # Number of retry attempts for failed downloads
+  # Downloads can fail due to network issues or server timeouts
+  retry_count: 3
+  
+  # Validate downloaded files
+  # For SLC: checks that manifest.safe exists
+  # For bursts: checks file integrity
+  validate_downloads: true
+  
+  # Skip already downloaded products
+  # Useful for resuming interrupted downloads
+  resume_incomplete: true
+  
+  # Path to s5cmd configuration file (for S3 downloads of full SLC products)
+  # See: https://esa-philab.github.io/phidown/user_guide.html
+  config_file: .s5cfg
+
+# Output paths for statistics and analysis results
+output_statistics: ./statistics
+
+# Save search results to CSV file
+save_results_csv: true

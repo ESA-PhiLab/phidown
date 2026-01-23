@@ -528,17 +528,45 @@ class CopernicusDataSearcher:
                 )
         
         # Validate integer parameters
-        if self.burst_id is not None and not isinstance(self.burst_id, int):
-            raise TypeError("burst_id must be an integer")
+        if self.burst_id is not None:
+            if isinstance(self.burst_id, str):
+                logger.warning("burst_id provided as string, converting to integer")
+                try:
+                    self.burst_id = int(self.burst_id)
+                except ValueError:
+                    raise ValueError(f"burst_id '{self.burst_id}' cannot be converted to integer")
+            elif not isinstance(self.burst_id, int):
+                raise TypeError("burst_id must be an integer")
         
-        if self.absolute_burst_id is not None and not isinstance(self.absolute_burst_id, int):
-            raise TypeError("absolute_burst_id must be an integer")
+        if self.absolute_burst_id is not None:
+            if isinstance(self.absolute_burst_id, str):
+                logger.warning("absolute_burst_id provided as string, converting to integer")
+                try:
+                    self.absolute_burst_id = int(self.absolute_burst_id)
+                except ValueError:
+                    raise ValueError(f"absolute_burst_id '{self.absolute_burst_id}' cannot be converted to integer")
+            elif not isinstance(self.absolute_burst_id, int):
+                raise TypeError("absolute_burst_id must be an integer")
         
-        if self.datatake_id is not None and not isinstance(self.datatake_id, int):
-            raise TypeError("datatake_id must be an integer")
+        if self.datatake_id is not None:
+            if isinstance(self.datatake_id, str):
+                logger.warning("datatake_id provided as string, converting to integer")
+                try:
+                    self.datatake_id = int(self.datatake_id)
+                except ValueError:
+                    raise ValueError(f"datatake_id '{self.datatake_id}' cannot be converted to integer")
+            elif not isinstance(self.datatake_id, int):
+                raise TypeError("datatake_id must be an integer")
         
-        if self.relative_orbit_number is not None and not isinstance(self.relative_orbit_number, int):
-            raise TypeError("relative_orbit_number must be an integer")
+        if self.relative_orbit_number is not None:
+            if isinstance(self.relative_orbit_number, str):
+                logger.warning("relative_orbit_number provided as string, converting to integer")
+                try:
+                    self.relative_orbit_number = int(self.relative_orbit_number)
+                except ValueError:
+                    raise ValueError(f"relative_orbit_number '{self.relative_orbit_number}' cannot be converted to integer")
+            elif not isinstance(self.relative_orbit_number, int):
+                raise TypeError("relative_orbit_number must be an integer")
 
     def _initialize_placeholders(self):
         """

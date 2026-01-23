@@ -7,6 +7,7 @@ Setting Up S3 Credentials
 --------------------------
 
 Before using Φ-Down, you need to set up your S3 credentials for accessing the Copernicus Data Space Ecosystem. S3 credentials are required for downloading data.
+🔗 Manage S3 Credentials: https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials
 
 Configuration File Method
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
