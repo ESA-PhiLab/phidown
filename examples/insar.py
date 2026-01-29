@@ -471,6 +471,9 @@ def find_optimal_orbit(
         
         if 'relative_orbit' not in df.columns or df['relative_orbit'].isna().all():
             continue
+
+        unique_orbits = sorted(df['relative_orbit'].dropna().astype(int).unique().tolist())
+        logger.info(f"   {direction} available relative orbits: {unique_orbits}")
         
         # Use coverage if available
         if 'coverage' not in df.columns:
