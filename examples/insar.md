@@ -32,8 +32,8 @@ Minimal `config.yaml` example:
 ```yaml
 search:
   aoi_wkt: "POLYGON((12.4 41.8, 12.6 41.8, 12.6 42.0, 12.4 42.0, 12.4 41.8))"
-  start_date: "2024-08-01T00:00:00"
-  end_date: "2024-09-30T00:00:00"
+  start_date: "2025-11-01T00:00:00"
+  end_date: "2026-01-30T00:00:00"
   mode: slc              # 'slc' or 'burst'
   polarisation: VV       # VV, VH, HH, HV
   orbit_direction: null  # null = auto-detect, or ASCENDING/DESCENDING

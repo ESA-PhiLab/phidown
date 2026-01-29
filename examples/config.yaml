@@ -13,9 +13,9 @@ search:
   
   # Temporal range (ISO 8601 format)
   # Note: Burst mode data available from August 2, 2024 onwards
-  start_date: '2024-08-03T00:00:00'
-  end_date: '2024-11-10T00:00:00'
-  
+  start_date: '2025-11-01T00:00:00'
+  end_date: '2026-01-29T00:00:00'
+
   # Acquisition mode:
   # - 'slc': Download full SLC products (typically 5-8 GB each)
   # - 'burst': Download individual bursts (typically 1-2 GB each)
@@ -37,7 +37,7 @@ search:
   
   # Relative orbit number (track): 1-175, or null for auto-detection
   # Setting this ensures consistent imaging geometry for InSAR time series
-  relative_orbit: 66
+  relative_orbit: null
   
   # Platform filter: list of satellites to include
   # Options: 'A' (S1A), 'B' (S1B), 'C' (S1C), 'D' (S1D), or 'all'

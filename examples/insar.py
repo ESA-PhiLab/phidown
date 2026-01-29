@@ -357,6 +357,22 @@ def get_aoi_centroid(aoi_wkt: str) -> Tuple[float, float]:
     return lon_avg, lat_avg
 
 
+def normalize_relative_orbit(value: Any) -> Optional[int]:
+    """Normalize relative orbit values to int (handles strings like '066')."""
+    if value is None:
+        return None
+    if isinstance(value, float) and pd.isna(value):
+        return None
+    try:
+        text = str(value).strip()
+        if text == "":
+            return None
+        text = text.lstrip("0") or "0"
+        return int(text)
+    except (TypeError, ValueError):
+        return None
+
+
 def get_recommended_orbit_direction(aoi_wkt: str) -> str:
     """
     Determine recommended orbit direction based on AOI location.
@@ -443,6 +459,15 @@ def find_optimal_orbit(
                 return None
             
             df['relative_orbit'] = df['Attributes'].apply(get_relative_orbit)
+        
+        if 'relative_orbit' not in df.columns:
+            df['relative_orbit'] = None
+        df['relative_orbit'] = df['relative_orbit'].apply(normalize_relative_orbit)
+        for col in ('RelativeOrbitNumber', 'relativeOrbitNumber'):
+            if col in df.columns:
+                df['relative_orbit'] = df['relative_orbit'].fillna(
+                    df[col].apply(normalize_relative_orbit)
+                )
         
         if 'relative_orbit' not in df.columns or df['relative_orbit'].isna().all():
             continue
@@ -686,18 +711,26 @@ def search_slc_products(
         
         df['relativeOrbitNumber'] = df['Attributes'].apply(lambda x: get_attribute(x, 'relativeOrbitNumber'))
         df['platformSerialIdentifier'] = df['Attributes'].apply(lambda x: get_attribute(x, 'platformSerialIdentifier'))
-        
-        # Debug: Show unique orbit values
-        unique_orbits = df['relativeOrbitNumber'].unique()
-        logger.info(f"   Available relative orbits: {sorted([str(o) for o in unique_orbits if o is not None])}")
+    
+    if 'relativeOrbitNumber' not in df.columns:
+        df['relativeOrbitNumber'] = None
+    for col in ('RelativeOrbitNumber', 'relativeOrbitNumber'):
+        if col in df.columns:
+            df['relativeOrbitNumber'] = df['relativeOrbitNumber'].fillna(df[col])
+    df['relativeOrbitNumber_norm'] = df['relativeOrbitNumber'].apply(normalize_relative_orbit)
+    
+    # Debug: Show unique orbit values
+    unique_orbits = df['relativeOrbitNumber_norm'].dropna().unique()
+    logger.info(f"   Available relative orbits: {sorted([int(o) for o in unique_orbits])}")
     
     # Filter by relative orbit (client-side)
-    if relative_orbit and 'relativeOrbitNumber' in df.columns:
-        # Try both string and int comparison
-        orbit_str = str(relative_orbit)
-        mask = (df['relativeOrbitNumber'] == orbit_str) | (df['relativeOrbitNumber'] == relative_orbit)
-        df = df[mask]
-        logger.info(f"   After orbit filter (#{relative_orbit}): {len(df)} products")
+    if relative_orbit is not None and 'relativeOrbitNumber_norm' in df.columns:
+        orbit_norm = normalize_relative_orbit(relative_orbit)
+        if orbit_norm is None:
+            logger.warning(f"   Invalid relative_orbit value: {relative_orbit}")
+        else:
+            df = df[df['relativeOrbitNumber_norm'] == orbit_norm]
+            logger.info(f"   After orbit filter (#{orbit_norm}): {len(df)} products")
     
     # Filter by multiple platforms if needed (client-side)
     platforms_upper = [p.upper() for p in config.search.platforms]

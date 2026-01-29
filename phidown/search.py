@@ -1290,6 +1290,20 @@ class CopernicusDataSearcher:
             raise ValueError("AOI WKT is required")
         if start is None or end is None:
             raise ValueError("Start and end dates are required")
+
+        def normalize_relative_orbit(value):
+            if value is None:
+                return None
+            if isinstance(value, float) and pd.isna(value):
+                return None
+            try:
+                text = str(value).strip()
+                if text == "":
+                    return None
+                text = text.lstrip("0") or "0"
+                return int(text)
+            except (TypeError, ValueError):
+                return None
         
         results = {
             'ascending': {'orbits': {}, 'best_orbit': None, 'max_coverage': 0},
@@ -1327,6 +1341,15 @@ class CopernicusDataSearcher:
                     return None
                 
                 df['relative_orbit'] = df['Attributes'].apply(get_relative_orbit)
+            
+            if 'relative_orbit' not in df.columns:
+                df['relative_orbit'] = None
+            df['relative_orbit'] = df['relative_orbit'].apply(normalize_relative_orbit)
+            for col in ('RelativeOrbitNumber', 'relativeOrbitNumber'):
+                if col in df.columns:
+                    df['relative_orbit'] = df['relative_orbit'].fillna(
+                        df[col].apply(normalize_relative_orbit)
+                    )
             
             if 'relative_orbit' not in df.columns or df['relative_orbit'].isna().all():
                 continue
