@@ -45,6 +45,9 @@ class TokenManager:
         >>> token = token_mgr.get_access_token()
     """
     
+    # Token expiry buffer in seconds to refresh before actual expiration
+    EXPIRY_BUFFER_SECONDS = 60
+    
     def __init__(self, username: str, password: str, 
                  token_url: str = TOKEN_URL, client_id: str = CLIENT_ID):
         """Initialize TokenManager with credentials.
@@ -60,7 +63,8 @@ class TokenManager:
         self.token_url = token_url
         self.client_id = client_id
         self.access_token = None
-        self.expiry = time.time()  # expiry in epoch seconds
+        # Initialize expiry to current time to force initial token fetch
+        self.expiry = time.time()
 
     def get_access_token(self) -> str:
         """Get current access token, refreshing if expired.
@@ -82,8 +86,8 @@ class TokenManager:
         """Refresh the access token using password grant.
         
         This method authenticates with CDSE using username/password credentials
-        to obtain a fresh access token. The expiry is set with a 60-second
-        buffer to ensure tokens are refreshed before actual expiration.
+        to obtain a fresh access token. The expiry is set with a buffer
+        to ensure tokens are refreshed before actual expiration.
         
         Raises:
             requests.exceptions.HTTPError: If authentication request fails.
@@ -103,8 +107,8 @@ class TokenManager:
         
         token_data = response.json()
         self.access_token = token_data['access_token']
-        # Set expiry with 60-second buffer to refresh before actual expiration
-        self.expiry = time.time() + token_data.get('expires_in', 3600) - 60
+        expires_in = token_data.get('expires_in', 3600)
+        self.expiry = time.time() + expires_in - self.EXPIRY_BUFFER_SECONDS
         
         logger.debug('Access token refreshed successfully')
 

@@ -114,7 +114,7 @@ class TestTokenManager:
     
     @patch('phidown.downloader.requests.post')
     def test_token_expiry_buffer(self, mock_post):
-        """Test that token expiry includes 60-second buffer."""
+        """Test that token expiry includes EXPIRY_BUFFER_SECONDS."""
         mock_response = Mock()
         mock_response.json.return_value = {
             'access_token': 'test_token',
@@ -128,8 +128,9 @@ class TestTokenManager:
         start_time = time.time()
         token_mgr.refresh_access_token()
         
-        # Expiry should be approximately now + 3600 - 60 = now + 3540
-        expected_expiry = start_time + 3540
+        # Expiry should be approximately now + 3600 - EXPIRY_BUFFER_SECONDS
+        buffer = downloader_module.TokenManager.EXPIRY_BUFFER_SECONDS
+        expected_expiry = start_time + 3600 - buffer
         assert abs(token_mgr.expiry - expected_expiry) < 5  # Allow 5 second tolerance
     
     @patch('phidown.downloader.requests.post')
@@ -148,8 +149,9 @@ class TestTokenManager:
         start_time = time.time()
         token_mgr.refresh_access_token()
         
-        # Should use default 3600 seconds - 60 buffer = 3540
-        expected_expiry = start_time + 3540
+        # Should use default 3600 seconds - EXPIRY_BUFFER_SECONDS
+        buffer = downloader_module.TokenManager.EXPIRY_BUFFER_SECONDS
+        expected_expiry = start_time + 3600 - buffer
         assert abs(token_mgr.expiry - expected_expiry) < 5
 
 
@@ -235,8 +237,9 @@ class TestDownloadBurstWithTokenManager:
         final_response.headers = {'Content-Disposition': 'filename=burst_redirect.zip'}
         final_response.iter_content = Mock(return_value=[b'redirect_data'])
         
-        # First call is token refresh, second is initial request (redirect),
-        # third is redirected request
+        # First call is token refresh (POST), 
+        # second is initial burst request (POST, returns redirect 302),
+        # third is redirected burst request (POST per downloader.py line 204)
         mock_post.side_effect = [token_response, redirect_response, final_response]
         
         token_mgr = downloader_module.TokenManager('user@example.com', 'password123')
@@ -249,7 +252,7 @@ class TestDownloadBurstWithTokenManager:
                 output_dir=Path(tmpdir)
             )
             
-            # Verify token was obtained fresh for the redirect
+            # Verify all 3 POST requests were made (token + initial + redirect)
             assert mock_post.call_count == 3
 
 
