@@ -10,7 +10,7 @@ from pathlib import Path
 import copy 
 import asyncio
 
-from .downloader import pull_down, get_token, download_burst_on_demand
+from .downloader import pull_down, get_token, download_burst_on_demand, TokenManager
 
 # Optional shapely import for AOI coverage calculation
 try:
@@ -1805,12 +1805,14 @@ class CopernicusDataSearcher:
         output_path = Path(output_dir).absolute()
         output_path.mkdir(parents=True, exist_ok=True)
         
-        # Get access token
+        # Create token manager for automatic token refresh
         if verbose:
             print("🔐 Authenticating with CDSE...")
         
         try:
-            token = get_token(username, password)
+            token_manager = TokenManager(username, password)
+            # Trigger initial authentication
+            token_manager.get_access_token()
         except Exception as e:
             logger.error(f"Authentication failed: {e}")
             raise
@@ -1845,7 +1847,7 @@ class CopernicusDataSearcher:
                 try:
                     download_burst_on_demand(
                         burst_id=burst_id,
-                        token=token,
+                        token=token_manager,
                         output_dir=output_path
                     )
                     success = True
@@ -1854,11 +1856,6 @@ class CopernicusDataSearcher:
                     last_error = str(e)
                     if verbose and attempt < retry_count - 1:
                         print(f"   ⚠️  Attempt {attempt + 1} failed, retrying...")
-                    # Refresh token on failure
-                    try:
-                        token = get_token(username, password)
-                    except:
-                        pass
             
             if success:
                 summary['downloaded'] += 1
