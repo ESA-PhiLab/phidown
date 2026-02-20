@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 import json
+import ast
 import typing
 import logging
 from datetime import datetime
@@ -49,6 +50,26 @@ logger = logging.getLogger(__name__)
 # configuration file based on the collection names provided.
 # The search results are returned as a pandas DataFrame, and you can
 # display specific columns of interest.
+
+
+def _extract_date_start(value: typing.Any) -> typing.Any:
+    """Extract an acquisition start datetime-like value from various representations."""
+    if isinstance(value, dict):
+        return value.get("Start", value)
+    if isinstance(value, str):
+        text = value.strip()
+        if text.startswith("{") and text.endswith("}"):
+            parsed: typing.Any = None
+            try:
+                parsed = json.loads(text)
+            except Exception:
+                try:
+                    parsed = ast.literal_eval(text)
+                except Exception:
+                    parsed = None
+            if isinstance(parsed, dict):
+                return parsed.get("Start", value)
+    return value
 
 
 class CopernicusDataSearcher:
@@ -1254,7 +1275,8 @@ class CopernicusDataSearcher:
         aoi_wkt: typing.Optional[str] = None,
         start_date: typing.Optional[str] = None,
         end_date: typing.Optional[str] = None,
-        product_type: str = 'SLC'
+        product_type: str = 'SLC',
+        top: int = 100
     ) -> typing.Dict[str, typing.Any]:
         """Find the optimal orbit direction and relative orbit for maximum AOI coverage.
         
@@ -1266,6 +1288,7 @@ class CopernicusDataSearcher:
             start_date: Start date in ISO 8601 format. Uses self.start_date if None.
             end_date: End date in ISO 8601 format. Uses self.end_date if None.
             product_type: Product type to search ('SLC', 'GRD', etc.). Default 'SLC'.
+            top: Maximum results fetched per direction during orbit analysis.
         
         Returns:
             Dict containing:
@@ -1322,7 +1345,7 @@ class CopernicusDataSearcher:
                 aoi_wkt=aoi,
                 start_date=start,
                 end_date=end,
-                top=100,
+                top=top,
                 count=True
             )
             
@@ -1563,11 +1586,9 @@ class CopernicusDataSearcher:
         # Extract acquisition dates
         dates = None
         if 'ContentDate' in data.columns:
-            dates = pd.to_datetime(data['ContentDate'].apply(
-                lambda x: x.get('Start') if isinstance(x, dict) else x
-            ))
+            dates = pd.to_datetime(data['ContentDate'].apply(_extract_date_start), errors="coerce", utc=True)
         elif 'OriginDate' in data.columns:
-            dates = pd.to_datetime(data['OriginDate'])
+            dates = pd.to_datetime(data['OriginDate'], errors="coerce", utc=True)
         
         if dates is None or dates.empty:
             logger.warning("No date column found in results")
@@ -1598,7 +1619,7 @@ class CopernicusDataSearcher:
                     'std_days': float(gaps_days.std()) if len(gaps_days) > 1 else 0.0
                 },
                 'acquisitions_by_month': {str(k): int(v) for k, v in 
-                                          dates.dt.to_period('M').value_counts().sort_index().items()},
+                                          dates.dt.strftime('%Y-%m').value_counts().sort_index().items()},
                 'acquisitions_by_year': {int(k): int(v) for k, v in 
                                          dates.dt.year.value_counts().sort_index().items()}
             }
@@ -1662,11 +1683,9 @@ class CopernicusDataSearcher:
         # Extract acquisition dates
         dates = None
         if 'ContentDate' in data.columns:
-            dates = pd.to_datetime(data['ContentDate'].apply(
-                lambda x: x.get('Start') if isinstance(x, dict) else x
-            ))
+            dates = pd.to_datetime(data['ContentDate'].apply(_extract_date_start), errors="coerce", utc=True)
         elif 'OriginDate' in data.columns:
-            dates = pd.to_datetime(data['OriginDate'])
+            dates = pd.to_datetime(data['OriginDate'], errors="coerce", utc=True)
         
         if dates is None or dates.empty:
             logger.warning("No date column found in results")
@@ -1710,8 +1729,8 @@ class CopernicusDataSearcher:
         
         # 3. Monthly acquisition counts
         ax3 = axes[1, 0]
-        monthly_counts = dates.dt.to_period('M').value_counts().sort_index()
-        months = [str(p) for p in monthly_counts.index]
+        monthly_counts = dates.dt.strftime('%Y-%m').value_counts().sort_index()
+        months = list(monthly_counts.index)
         ax3.bar(months, monthly_counts.values, color='seagreen', alpha=0.7)
         ax3.set_xlabel('Month')
         ax3.set_ylabel('Number of Acquisitions')

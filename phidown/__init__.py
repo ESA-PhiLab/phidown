@@ -9,7 +9,15 @@ __author__ = "Roberto Del Prete"
 
 # Import main classes and functions
 from .search import CopernicusDataSearcher  
-from .viz import plot_kml_coordinates
+from .viz import plot_kml_coordinates, plot_product_footprints
+from .insar_workflow import (
+    BurstSearchConfig,
+    BurstWorkflowConfig,
+    build_burst_workflow_config,
+    run_burst_workflow,
+    validate_burst_results,
+    debug_burst_summary,
+)
 
 # Lazy import CLI functions to avoid import conflicts
 # These will be imported on first use
@@ -47,6 +55,13 @@ except ImportError:
 __all__ = [
     'CopernicusDataSearcher',
     'plot_kml_coordinates',
+    'plot_product_footprints',
+    'BurstSearchConfig',
+    'BurstWorkflowConfig',
+    'build_burst_workflow_config',
+    'run_burst_workflow',
+    'validate_burst_results',
+    'debug_burst_summary',
     'download_by_name',
     'download_by_s3path'
 ]
@@ -56,4 +71,3 @@ if _AIS_AVAILABLE:
 
 if _INTERACTIVE_AVAILABLE:
     __all__.extend(['InteractivePolygonTool', 'create_polygon_tool', 'search_with_polygon'])
-

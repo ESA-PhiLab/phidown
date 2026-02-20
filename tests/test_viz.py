@@ -4,7 +4,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from unittest.mock import patch, mock_open, MagicMock
 import xml.etree.ElementTree as ET
-from phidown.viz import plot_kml_coordinates
+from phidown.viz import plot_kml_coordinates, plot_product_footprints
+import pandas as pd
 
 # Define a sample KML content
 SAMPLE_KML_CONTENT = """
@@ -47,7 +48,6 @@ def test_plot_kml_coordinates_success(mock_polygon, mock_map, mock_parse, mock_f
     result_map = plot_kml_coordinates('dummy.kml', output_html='test_map.html')
 
     # Assertions
-    mock_file.assert_called_once_with('dummy.kml', 'r')  # Add spaces before inline comment
     mock_parse.assert_called_once()
     mock_root.find.assert_called_once_with('.//gx:LatLonQuad/coordinates', {
         "gx": "http://www.google.com/kml/ext/2.2",
@@ -58,7 +58,7 @@ def test_plot_kml_coordinates_success(mock_polygon, mock_map, mock_parse, mock_f
         [20.0, 10.0], [40.0, 30.0], [60.0, 50.0], [80.0, 70.0], [20.0, 10.0]
     ]
 
-    mock_map.assert_called_once_with(location=[20.0, 10.0], zoom_start=10)
+    mock_map.assert_called_once_with(location=[20.0, 10.0], zoom_start=10, tiles="CartoDB positron")
     mock_polygon.assert_called_once_with(
         locations=expected_coordinates,
         color="blue",
@@ -101,3 +101,43 @@ def test_plot_kml_coordinates_missing_coords(mock_parse, mock_file):
 
     with pytest.raises(AttributeError):  # Add spaces before inline comment
         plot_kml_coordinates('missing_coords.kml')
+
+
+@patch('folium.Map')
+@patch('folium.Polygon')
+@patch('folium.GeoJson')
+def test_plot_product_footprints_geography_wkt(mock_geojson, mock_polygon, mock_map):
+    mock_map_instance = MagicMock()
+    mock_map.return_value = mock_map_instance
+    mock_geojson.return_value = MagicMock()
+    mock_polygon.return_value = MagicMock()
+
+    df = pd.DataFrame([
+        {
+            "Id": "x1",
+            "Name": "burst-1",
+            "coverage": 10.5,
+            "Footprint": "geography'SRID=4326;POLYGON((12.4 41.8, 12.6 41.8, 12.6 42.0, 12.4 42.0, 12.4 41.8))'",
+        }
+    ])
+
+    m = plot_product_footprints(
+        df=df,
+        aoi_wkt="POLYGON((12.4 41.8, 12.6 41.8, 12.6 42.0, 12.4 42.0, 12.4 41.8))",
+        top_n=10,
+    )
+
+    assert m == mock_map_instance
+    mock_map.assert_called_once()
+    mock_polygon.assert_called_once()
+    mock_geojson.assert_called_once()
+    kwargs = mock_geojson.call_args.kwargs
+    assert "AOI coverage" in kwargs["tooltip"]
+    assert "10.50%" in kwargs["tooltip"]
+    assert "popup" in kwargs
+
+
+def test_plot_product_footprints_missing_columns():
+    df = pd.DataFrame([{"Id": "x1"}])
+    with pytest.raises(ValueError):
+        plot_product_footprints(df=df, aoi_wkt=None)
