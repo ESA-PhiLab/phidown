@@ -40,7 +40,8 @@ def run_s5cmd_with_config(
     Example:
         >>> output = run_s5cmd_with_config('ls s3://eodata/Sentinel-1/')
     """
-    assert command.strip(), 'Command cannot be empty'
+    if not command.strip():
+        raise ValueError('Command cannot be empty')
 
     # Parse the config file
     config = configparser.ConfigParser()
@@ -88,7 +89,8 @@ def run_s5cmd_with_config(
 
     stdout_lines: List[str] = []
     try:
-        assert process.stdout is not None
+        if process.stdout is None:
+            raise RuntimeError('Failed to capture process stdout')
         for line in iter(process.stdout.readline, ''):
             # strip trailing newlines but preserve message
             text_line = line.rstrip('\n')
@@ -189,9 +191,12 @@ def pull_down(
           handled by this function.
         - Progress bar monitors actual disk usage and updates in real-time.
     """
-    assert s3_path, 'S3 path cannot be empty'
-    assert output_dir, 'Output directory arg cannot be empty'
-    assert os.path.isabs(output_dir), 'Output directory must be an absolute path'
+    if not s3_path:
+        raise ValueError('S3 path cannot be empty')
+    if not output_dir:
+        raise ValueError('Output directory arg cannot be empty')
+    if not os.path.isabs(output_dir):
+        raise ValueError('Output directory must be an absolute path')
     # validate config file:
     # try to create one config file if it does not exist
     if not os.path.exists(config_file) or reset:
@@ -213,8 +218,10 @@ def pull_down(
 
         logger.info(f'Created configuration file: {config_file}')
 
-    assert os.path.exists(config_file), f'Configuration file {config_file} still not found.'
-    assert s3_path.startswith('/eodata/'), f'S3 path must start with /eodata/, got: {s3_path}'
+    if not os.path.exists(config_file):
+        raise FileNotFoundError(f'Configuration file {config_file} still not found.')
+    if not s3_path.startswith('/eodata/'):
+        raise ValueError(f'S3 path must start with /eodata/, got: {s3_path}')
 
     # Create output directory with SAFE name
     safe_name = os.path.basename(s3_path.rstrip('/'))

@@ -6,7 +6,7 @@ import json
 import ast
 import typing
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import copy 
 import asyncio
@@ -32,6 +32,7 @@ except ImportError:
 
 # Configure logging
 logger = logging.getLogger(__name__)
+REQUEST_TIMEOUT_SECONDS = 30
 
 # Set up S3 credentials in .s5cfg file!
 
@@ -461,20 +462,37 @@ class CopernicusDataSearcher:
             except ValueError:
                 return False
 
+        def parse_iso8601(date_str: str) -> datetime:
+            return datetime.fromisoformat(date_str)
+
+        start_dt: typing.Optional[datetime] = None
+        end_dt: typing.Optional[datetime] = None
         if self.start_date:
             if not is_iso8601(self.start_date):
                 raise ValueError(f"Invalid start_date format: {self.start_date}. Must be in ISO 8601 format.")
+            start_dt = parse_iso8601(self.start_date)
         if self.end_date:
             if not is_iso8601(self.end_date):
                 raise ValueError(f"Invalid end_date format: {self.end_date}. Must be in ISO 8601 format.")
-        if self.start_date and self.end_date:
-            if self.start_date > self.end_date:
+            end_dt = parse_iso8601(self.end_date)
+        if start_dt is not None and end_dt is not None:
+            start_aware = start_dt.tzinfo is not None and start_dt.tzinfo.utcoffset(start_dt) is not None
+            end_aware = end_dt.tzinfo is not None and end_dt.tzinfo.utcoffset(end_dt) is not None
+            if start_aware != end_aware:
+                raise ValueError("start_date and end_date must both be timezone-aware or both be timezone-naive.")
+            if start_dt > end_dt:
                 raise ValueError("start_date must not be later than end_date.")
         
         # Burst mode data availability warning
-        if self.burst_mode and self.start_date:
-            burst_availability_date = '2024-08-02T00:00:00'
-            if self.start_date < burst_availability_date:
+        if self.burst_mode and start_dt is not None:
+            burst_availability_date = datetime.fromisoformat('2024-08-02T00:00:00')
+            if start_dt.tzinfo is not None and start_dt.tzinfo.utcoffset(start_dt) is not None:
+                # Compare aware datetimes in UTC.
+                burst_availability_date = burst_availability_date.replace(tzinfo=timezone.utc)
+                start_for_compare = start_dt.astimezone(timezone.utc)
+            else:
+                start_for_compare = start_dt
+            if start_for_compare < burst_availability_date:
                 print(f"Warning: Burst mode data is only available from August 2, 2024 onwards. "
                       f"Your start_date ({self.start_date}) is before this date. "
                       f"Results before 2024-08-02 will not be available.")
@@ -777,7 +795,7 @@ class CopernicusDataSearcher:
             pd.DataFrame: DataFrame containing all retrieved products with coverage column.
         """
         url = self._build_query()
-        self.response = copy.deepcopy(requests.get(url))
+        self.response = copy.deepcopy(requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS))
         self.response.raise_for_status()  # Raise an error for bad status codes
 
         self.json_data = self.response.json()
@@ -834,7 +852,9 @@ class CopernicusDataSearcher:
         async def fetch_url(url):
             loop = asyncio.get_running_loop()
             try:
-                response = await loop.run_in_executor(None, requests.get, url)
+                response = await loop.run_in_executor(
+                    None, lambda: requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
+                )
                 response.raise_for_status()
                 return response.json()
             except Exception as e:
@@ -986,7 +1006,7 @@ class CopernicusDataSearcher:
         self.url = f"{self.base_url}?$filter=Name eq '{product_name}'&$expand=Attributes"
         
         try:
-            self.response = requests.get(self.url)
+            self.response = requests.get(self.url, timeout=REQUEST_TIMEOUT_SECONDS)
             self.response.raise_for_status()  # Raise an error for bad status codes (4xx or 5xx)
 
             self.json_data = self.response.json()
@@ -1103,7 +1123,7 @@ class CopernicusDataSearcher:
         self.url = f"{self.base_url}{self.query}"
 
         try:
-            self.response = requests.get(self.url)
+            self.response = requests.get(self.url, timeout=REQUEST_TIMEOUT_SECONDS)
             self.response.raise_for_status()
             self.json_data = self.response.json()
 

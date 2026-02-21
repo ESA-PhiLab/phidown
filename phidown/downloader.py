@@ -5,11 +5,8 @@ import logging
 import os
 from pathlib import Path
 import requests
-import urllib3
 import uuid
 import time
-
-urllib3.disable_warnings()
 
 
 TOKEN_URL = 'https://identity.dataspace.copernicus.eu/auth/realms/cdse/protocol/openid-connect/token'
@@ -22,6 +19,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+REQUEST_TIMEOUT_SECONDS = 30
 
 
 class TokenManager:
@@ -101,7 +99,8 @@ class TokenManager:
                 'password': self.password,
                 'client_id': self.client_id,
                 'grant_type': 'password'
-            }
+            },
+            timeout=REQUEST_TIMEOUT_SECONDS
         )
         response.raise_for_status()
         
@@ -128,15 +127,17 @@ def get_token(username: str, password: str) -> str:
         str: The access token string to be used for authenticated API requests.
         
     Raises:
-        AssertionError: If username or password is empty.
+        ValueError: If username or password is empty.
         requests.exceptions.HTTPError: If the authentication request fails.
         
     Example:
         >>> token = get_token('myuser@example.com', 'mypassword')
         Acquired keycloak token!
     """
-    assert username, 'Username is required!'
-    assert password, 'Password is required!'
+    if not username:
+        raise ValueError('Username is required!')
+    if not password:
+        raise ValueError('Password is required!')
 
     logger.info('🔐 Authenticating with CDSE...')
     
@@ -148,6 +149,7 @@ def get_token(username: str, password: str) -> str:
             'password': password,
             'grant_type': 'password',
         },
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
 
@@ -158,7 +160,12 @@ def get_token(username: str, password: str) -> str:
 
 
 
-def download_burst_on_demand(burst_id: str, token, output_dir: Path) -> None:
+def download_burst_on_demand(
+    burst_id: str,
+    token,
+    output_dir: Path,
+    insecure_skip_verify: bool = False
+) -> None:
     """Download and save a Sentinel-1 burst product from CDSE.
     
     This function requests on-demand processing of a single Sentinel-1 burst
@@ -171,7 +178,7 @@ def download_burst_on_demand(burst_id: str, token, output_dir: Path) -> None:
         output_dir: Directory path where the burst ZIP file will be saved.
         
     Raises:
-        AssertionError: If burst_id or token is empty.
+        ValueError: If burst_id or token is empty.
         RuntimeError: If burst processing fails or returns non-200 status.
         
     Example:
@@ -183,8 +190,10 @@ def download_burst_on_demand(burst_id: str, token, output_dir: Path) -> None:
         Saving output product...
         Output product has been saved to: ./output/burst_12345678.zip
     """
-    assert burst_id, 'Burst ID is required!'
-    assert token, 'Keycloak token is required!'
+    if not burst_id:
+        raise ValueError('Burst ID is required!')
+    if not token:
+        raise ValueError('Keycloak token is required!')
 
     try:
         uuid.UUID(burst_id)
@@ -193,6 +202,8 @@ def download_burst_on_demand(burst_id: str, token, output_dir: Path) -> None:
         raise ValueError('Burst ID is not a valid UUID!')
 
     logger.info(f'🛰️  Requesting on-demand processing for burst: {burst_id}')
+    if insecure_skip_verify:
+        logger.warning('⚠️  TLS certificate verification is disabled (insecure_skip_verify=True).')
 
     # Get token string from TokenManager or use token directly
     token_str = token.get_access_token() if isinstance(token, TokenManager) else token
@@ -200,9 +211,10 @@ def download_burst_on_demand(burst_id: str, token, output_dir: Path) -> None:
     response = requests.post(
         f'https://catalogue.dataspace.copernicus.eu/odata/v1/Bursts({burst_id})/$value',
         headers={'Authorization': f'Bearer {token_str}'},
-        verify=False,
+        verify=not insecure_skip_verify,
         allow_redirects=False,
         stream=True,
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
 
     if 300 <= response.status_code < 400:
@@ -213,9 +225,10 @@ def download_burst_on_demand(burst_id: str, token, output_dir: Path) -> None:
         response = requests.post(
             redirect_url,
             headers={'Authorization': f'Bearer {token_str}'},
-            verify=False,
+            verify=not insecure_skip_verify,
             stream=True,
             allow_redirects=False,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
 
     if response.status_code != 200:

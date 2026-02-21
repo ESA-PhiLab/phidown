@@ -45,6 +45,14 @@ class TestTokenManager:
         
         assert token_mgr.token_url == custom_url
         assert token_mgr.client_id == custom_client
+
+    def test_get_token_requires_username(self):
+        with pytest.raises(ValueError, match='Username is required'):
+            downloader_module.get_token('', 'password123')
+
+    def test_get_token_requires_password(self):
+        with pytest.raises(ValueError, match='Password is required'):
+            downloader_module.get_token('user@example.com', '')
     
     @patch('phidown.downloader.requests.post')
     def test_refresh_access_token_success(self, mock_post):
@@ -70,6 +78,7 @@ class TestTokenManager:
         assert call_args[1]['data']['username'] == 'user@example.com'
         assert call_args[1]['data']['password'] == 'password123'
         assert call_args[1]['data']['grant_type'] == 'password'
+        assert call_args[1]['timeout'] == downloader_module.REQUEST_TIMEOUT_SECONDS
     
     @patch('phidown.downloader.requests.post')
     def test_get_access_token_refreshes_when_expired(self, mock_post):
@@ -191,6 +200,9 @@ class TestDownloadBurstWithTokenManager:
             # Verify file was created
             output_file = Path(tmpdir) / 'burst_test.zip'
             assert output_file.exists()
+            # Verify secure default
+            assert mock_post.call_args_list[1].kwargs['verify'] is True
+            assert mock_post.call_args_list[1].kwargs['timeout'] == downloader_module.REQUEST_TIMEOUT_SECONDS
     
     @patch('phidown.downloader.requests.post')
     def test_download_burst_with_string_token(self, mock_post):
@@ -214,6 +226,30 @@ class TestDownloadBurstWithTokenManager:
             # Verify file was created
             output_file = Path(tmpdir) / 'burst_test.zip'
             assert output_file.exists()
+            # Verify secure default
+            assert mock_post.call_args.kwargs['verify'] is True
+            assert mock_post.call_args.kwargs['timeout'] == downloader_module.REQUEST_TIMEOUT_SECONDS
+
+    @patch('phidown.downloader.requests.post')
+    def test_download_burst_insecure_opt_out_sets_verify_false(self, mock_post):
+        """Test insecure_skip_verify opt-out sets verify=False."""
+        burst_response = Mock()
+        burst_response.status_code = 200
+        burst_response.headers = {'Content-Disposition': 'filename=burst_test.zip'}
+        burst_response.iter_content = Mock(return_value=[b'test_data'])
+        mock_post.return_value = burst_response
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            downloader_module.download_burst_on_demand(
+                burst_id='12345678-1234-1234-1234-123456789abc',
+                token='static_token_string',
+                output_dir=Path(tmpdir),
+                insecure_skip_verify=True
+            )
+
+            assert mock_post.call_args.kwargs['verify'] is False
+            assert mock_post.call_args.kwargs['timeout'] == downloader_module.REQUEST_TIMEOUT_SECONDS
     
     @patch('phidown.downloader.requests.post')
     def test_download_burst_refreshes_token_on_redirect(self, mock_post):
@@ -254,6 +290,40 @@ class TestDownloadBurstWithTokenManager:
             
             # Verify all 3 POST requests were made (token + initial + redirect)
             assert mock_post.call_count == 3
+            # Verify both burst download calls are secure by default
+            assert mock_post.call_args_list[1].kwargs['verify'] is True
+            assert mock_post.call_args_list[2].kwargs['verify'] is True
+            assert mock_post.call_args_list[1].kwargs['timeout'] == downloader_module.REQUEST_TIMEOUT_SECONDS
+            assert mock_post.call_args_list[2].kwargs['timeout'] == downloader_module.REQUEST_TIMEOUT_SECONDS
+
+    @patch('phidown.downloader.requests.post')
+    def test_download_burst_redirect_keeps_insecure_verify_policy(self, mock_post):
+        """Test insecure_skip_verify policy is preserved across redirect calls."""
+        redirect_response = Mock()
+        redirect_response.status_code = 302
+        redirect_response.headers = {'Location': 'https://redirect.url'}
+
+        final_response = Mock()
+        final_response.status_code = 200
+        final_response.headers = {'Content-Disposition': 'filename=burst_redirect.zip'}
+        final_response.iter_content = Mock(return_value=[b'redirect_data'])
+
+        mock_post.side_effect = [redirect_response, final_response]
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            downloader_module.download_burst_on_demand(
+                burst_id='87654321-4321-4321-4321-123456789abc',
+                token='static_token_string',
+                output_dir=Path(tmpdir),
+                insecure_skip_verify=True
+            )
+
+            assert mock_post.call_count == 2
+            assert mock_post.call_args_list[0].kwargs['verify'] is False
+            assert mock_post.call_args_list[1].kwargs['verify'] is False
+            assert mock_post.call_args_list[0].kwargs['timeout'] == downloader_module.REQUEST_TIMEOUT_SECONDS
+            assert mock_post.call_args_list[1].kwargs['timeout'] == downloader_module.REQUEST_TIMEOUT_SECONDS
 
 
 if __name__ == '__main__':
