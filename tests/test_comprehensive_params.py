@@ -3,6 +3,13 @@ Comprehensive parameter verification tests
 
 This tests ALL documented parameters to ensure they work correctly.
 """
+import pytest
+
+pytest.skip(
+    "Exploratory network verification; excluded from automated unit test runs.",
+    allow_module_level=True,
+)
+
 from phidown.search import CopernicusDataSearcher
 import time
 

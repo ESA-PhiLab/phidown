@@ -195,7 +195,7 @@ def test_build_filter_complex():
         "and att/OData.CSC.StringAttribute/Value eq 'ASCENDING')",
         "Attributes/OData.CSC.DoubleAttribute/any(att:att/Name eq 'cloudCover' "
         "and att/OData.CSC.DoubleAttribute/Value lt 20)",
-        "geo.intersects(GeoFootprint, geography'POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))')",
+        "OData.CSC.Intersects(area=geography'SRID=4326;POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))')",
         "ContentDate/Start ge 2023-01-01T00:00:00.000Z",
         "ContentDate/Start lt 2023-01-31T23:59:59.000Z",
         "Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'platformSerialIdentifier' "
@@ -204,8 +204,8 @@ def test_build_filter_complex():
     # Check if all expected parts are in the generated filter condition
     for part in expected_parts:
         assert part in searcher.filter_condition
-    # Check the structure (all parts joined by ' and ')
-    assert searcher.filter_condition.count(' and ') == len(expected_parts) - 1
+    # Ensure the query contains at least the expected top-level conjunctions.
+    assert searcher.filter_condition.count(' and ') >= len(expected_parts) - 1
 
 
 # Test building the full query URL

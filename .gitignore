@@ -1,6 +1,10 @@
 # ALL Folders starting with S (but not docs/source)
 S*/
 !docs/source/
+# Allow publishing Codex skill definitions
+!skills/
+!skills/phidown/
+!skills/phidown/**
 *.s5cfg
 
 *.DS_store
@@ -146,3 +150,6 @@ cython_debug/
 .s5cfg
 .pdm-python
 .pdm-build
+
+*output/
+*ouputs/

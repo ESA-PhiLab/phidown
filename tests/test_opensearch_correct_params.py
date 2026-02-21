@@ -7,6 +7,13 @@ Based on the actual OpenSearch description XML, the correct parameter names are:
 - sensorMode (not operationalMode)
 - polarisation (not polarisationChannels)
 """
+import pytest
+
+pytest.skip(
+    "Exploratory network script; excluded from automated unit test runs.",
+    allow_module_level=True,
+)
+
 from phidown.search import CopernicusDataSearcher
 import time
 

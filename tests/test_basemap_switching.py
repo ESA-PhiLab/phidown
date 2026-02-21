@@ -6,7 +6,10 @@ This script creates a simple tool and simulates dropdown changes.
 
 import sys
 import os
+import pytest
 sys.path.insert(0, '.')
+
+pytest.importorskip("ipyleaflet")
 
 from phidown.interactive_tools import InteractivePolygonTool, create_polygon_tool
 from ipyleaflet import basemaps

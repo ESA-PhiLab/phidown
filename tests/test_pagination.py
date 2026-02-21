@@ -158,19 +158,22 @@ def test_pagination_handles_request_errors_gracefully():
         count=True
     )
     
-    # Mock first response successful
-    mock_response_1 = Mock()
-    mock_response_1.json.return_value = {
-        'value': [{'Id': f'product_{i}', 'Name': f'name_{i}'} for i in range(5)],
-        '@odata.count': 15
-    }
-    mock_response_1.raise_for_status = Mock()
-    
-    # Mock second response fails
-    mock_response_2 = Mock()
-    mock_response_2.raise_for_status.side_effect = Exception("Network error")
-    
-    with patch('requests.get', side_effect=[mock_response_1, mock_response_2]):
+    def mock_get(url, timeout=None):
+        # Initial request succeeds; all paginated requests fail.
+        if '$skip=' in url:
+            failed_response = Mock()
+            failed_response.raise_for_status.side_effect = Exception("Network error")
+            return failed_response
+
+        first_page = Mock()
+        first_page.json.return_value = {
+            'value': [{'Id': f'product_{i}', 'Name': f'name_{i}'} for i in range(5)],
+            '@odata.count': 15
+        }
+        first_page.raise_for_status = Mock()
+        return first_page
+
+    with patch('requests.get', side_effect=mock_get):
         # Should not raise exception, but return partial results
         df = searcher.execute_query()
         

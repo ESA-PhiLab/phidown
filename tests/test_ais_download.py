@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """Test script for AIS data download functionality."""
 
+import pytest
+
+pytest.skip(
+    "Exploratory network script; excluded from automated unit test runs.",
+    allow_module_level=True,
+)
+
 from phidown.ais import download_ais_data
 
 def test_ais_download():

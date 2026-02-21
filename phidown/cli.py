@@ -8,8 +8,9 @@ import argparse
 import sys
 import os
 import logging
+import json
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Sequence, Union
 
 from .search import CopernicusDataSearcher
 from .s5cmd_utils import pull_down
@@ -21,6 +22,45 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+
+def _parse_bbox_to_wkt(bbox: Union[str, Sequence[float]]) -> str:
+    """Convert bbox values (csv string or 4-item sequence) to WKT polygon."""
+    if isinstance(bbox, str):
+        parts = [p.strip() for p in bbox.split(',')]
+        if len(parts) != 4:
+            raise ValueError('BBox must have exactly 4 comma-separated values: min_lon,min_lat,max_lon,max_lat')
+        try:
+            min_lon, min_lat, max_lon, max_lat = map(float, parts)
+        except ValueError as exc:
+            raise ValueError('BBox values must be numeric') from exc
+    else:
+        if len(bbox) != 4:
+            raise ValueError('BBox must include 4 values: min_lon min_lat max_lon max_lat')
+        min_lon, min_lat, max_lon, max_lat = map(float, bbox)
+
+    if min_lon >= max_lon or min_lat >= max_lat:
+        raise ValueError('BBox must satisfy min_lon < max_lon and min_lat < max_lat')
+
+    return (
+        f'POLYGON(('
+        f'{min_lon} {min_lat}, '
+        f'{max_lon} {min_lat}, '
+        f'{max_lon} {max_lat}, '
+        f'{min_lon} {max_lat}, '
+        f'{min_lon} {min_lat}'
+        f'))'
+    )
+
+
+def _parse_columns(columns: Optional[str]) -> Optional[List[str]]:
+    """Parse comma-separated columns into a list."""
+    if columns is None:
+        return None
+    parsed = [c.strip() for c in columns.split(',') if c.strip()]
+    if not parsed:
+        raise ValueError('If provided, --columns must contain at least one column name')
+    return parsed
 
 
 def download_by_name(
@@ -150,19 +190,287 @@ def download_by_s3path(
         return False
 
 
+def list_products(
+    collection: str,
+    product_type: Optional[str] = None,
+    orbit_direction: Optional[str] = None,
+    cloud_cover: Optional[float] = None,
+    aoi_wkt: Optional[str] = None,
+    bbox: Optional[Union[str, Sequence[float]]] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    top: int = 50,
+    order_by: str = "ContentDate/Start desc",
+    output_format: str = "table",
+    columns: Optional[str] = None,
+    save_path: Optional[str] = None
+) -> bool:
+    """List products with AOI/date filters and optional output formats."""
+    try:
+        effective_aoi = aoi_wkt
+        if bbox:
+            effective_aoi = _parse_bbox_to_wkt(bbox)
+
+        selected_columns = _parse_columns(columns)
+
+        searcher = CopernicusDataSearcher()
+        searcher.query_by_filter(
+            collection_name=collection,
+            product_type=product_type,
+            orbit_direction=orbit_direction,
+            cloud_cover_threshold=cloud_cover,
+            aoi_wkt=effective_aoi,
+            start_date=start_date,
+            end_date=end_date,
+            top=top,
+            order_by=order_by
+        )
+        df = searcher.execute_query()
+
+        if df.empty:
+            logger.info('No products found for the selected filters.')
+            return True
+
+        if selected_columns:
+            missing_columns = [col for col in selected_columns if col not in df.columns]
+            if missing_columns:
+                logger.error(f'Requested columns are not available: {", ".join(missing_columns)}')
+                return False
+            out_df = df[selected_columns]
+        else:
+            default_columns = [
+                c for c in ['Name', 'S3Path', 'ContentDate', 'Collection', 'OriginDate', 'coverage'] if c in df.columns
+            ]
+            out_df = df[default_columns] if default_columns else df
+
+        if output_format == 'json':
+            rendered = out_df.to_json(orient='records', indent=2)
+        elif output_format == 'csv':
+            rendered = out_df.to_csv(index=False)
+        else:
+            rendered = out_df.to_string(index=False)
+
+        if save_path:
+            save_target = Path(save_path)
+            save_target.parent.mkdir(parents=True, exist_ok=True)
+            save_target.write_text(rendered, encoding='utf-8')
+            logger.info(f'Saved {len(out_df)} products to: {save_target}')
+        else:
+            print(rendered)
+
+        logger.info(f'Listed {len(out_df)} products.')
+        return True
+
+    except Exception as e:
+        logger.error(f'❌ Error during listing: {e}')
+        return False
+
+
+def burst_coverage_analysis(
+    aoi_wkt: Optional[str] = None,
+    bbox: Optional[Union[str, Sequence[float]]] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    polarisation: str = 'VV',
+    orbit_direction: Optional[str] = None,
+    relative_orbit_number: Optional[int] = None,
+    preferred_subswath: Optional[str] = None,
+    output_format: str = 'table',
+    columns: Optional[str] = None,
+    save_path: Optional[str] = None
+) -> bool:
+    """Run Sentinel-1 burst coverage analysis over AOI and dates."""
+    try:
+        effective_aoi = aoi_wkt
+        if bbox:
+            effective_aoi = _parse_bbox_to_wkt(bbox)
+
+        preferred = None
+        if preferred_subswath:
+            preferred = [item.strip().upper() for item in preferred_subswath.split(',') if item.strip()]
+            if not preferred:
+                raise ValueError('If provided, --preferred-subswath must contain at least one value')
+
+        selected_columns = _parse_columns(columns)
+
+        searcher = CopernicusDataSearcher()
+        df = searcher.find_optimal_bursts(
+            aoi_wkt=effective_aoi,
+            start_date=start_date,
+            end_date=end_date,
+            polarisation=polarisation,
+            orbit_direction=orbit_direction,
+            relative_orbit_number=relative_orbit_number,
+            preferred_subswath=preferred
+        )
+
+        if df.empty:
+            logger.info('No bursts found for the selected filters.')
+            return True
+
+        if selected_columns:
+            missing_columns = [col for col in selected_columns if col not in df.columns]
+            if missing_columns:
+                logger.error(f'Requested columns are not available: {", ".join(missing_columns)}')
+                return False
+            out_df = df[selected_columns]
+        else:
+            default_columns = [
+                c for c in [
+                    'Id', 'BurstId', 'SwathIdentifier', 'coverage', 'OrbitDirection',
+                    'RelativeOrbitNumber', 'PolarisationChannels', 'ContentDate', 'S3Path'
+                ] if c in df.columns
+            ]
+            out_df = df[default_columns] if default_columns else df
+
+        swath_counts = {}
+        if 'SwathIdentifier' in df.columns:
+            swath_counts = {str(k): int(v) for k, v in df['SwathIdentifier'].value_counts().to_dict().items()}
+
+        coverage_mean = None
+        coverage_max = None
+        if 'coverage' in df.columns:
+            coverage_mean = float(df['coverage'].dropna().mean()) if not df['coverage'].dropna().empty else None
+            coverage_max = float(df['coverage'].dropna().max()) if not df['coverage'].dropna().empty else None
+
+        summary = {
+            'total_bursts': int(len(df)),
+            'orbit_direction': orbit_direction,
+            'relative_orbit_number': relative_orbit_number,
+            'polarisation': polarisation,
+            'mean_coverage': coverage_mean,
+            'max_coverage': coverage_max,
+            'swath_counts': swath_counts,
+        }
+
+        if output_format == 'json':
+            rendered = json.dumps(
+                {'summary': summary, 'bursts': out_df.to_dict(orient='records')},
+                indent=2,
+                default=str
+            )
+        elif output_format == 'csv':
+            rendered = out_df.to_csv(index=False)
+        else:
+            summary_lines = [
+                f"total_bursts={summary['total_bursts']}",
+                f"polarisation={summary['polarisation']}",
+                f"mean_coverage={summary['mean_coverage']}",
+                f"max_coverage={summary['max_coverage']}",
+                f"swath_counts={summary['swath_counts']}",
+                "",
+            ]
+            rendered = "\n".join(summary_lines) + out_df.to_string(index=False)
+
+        if save_path:
+            save_target = Path(save_path)
+            save_target.parent.mkdir(parents=True, exist_ok=True)
+            save_target.write_text(rendered, encoding='utf-8')
+            logger.info(f'Saved burst analysis ({len(out_df)} rows) to: {save_target}')
+        else:
+            print(rendered)
+
+        logger.info(f'Burst coverage analysis completed: {len(out_df)} rows.')
+        return True
+
+    except Exception as e:
+        logger.error(f'❌ Error during burst coverage analysis: {e}')
+        return False
+
+
+def _validate_list_args(parser: argparse.ArgumentParser, args: argparse.Namespace, mode_label: str) -> None:
+    """Validate required spatial/temporal args for list operations."""
+    if args.aoi_wkt and args.bbox:
+        parser.error('Use only one spatial filter: --aoi-wkt or --bbox')
+    if not (args.aoi_wkt or args.bbox):
+        parser.error(f'{mode_label} requires a spatial filter: --aoi-wkt or --bbox')
+    if not (args.start_date or args.end_date):
+        parser.error(f'{mode_label} requires at least one temporal filter: --start-date or --end-date')
+
+
+def _main_list_subcommand(argv: Optional[Sequence[str]] = None) -> None:
+    """Handle `phidown list ...` subcommand."""
+    parser = argparse.ArgumentParser(
+        prog='phidown list',
+        description='List Copernicus products with AOI/date filters'
+    )
+    parser.add_argument('--collection', type=str, default='SENTINEL-1')
+    parser.add_argument('--product-type', type=str)
+    parser.add_argument('--orbit-direction', type=str, choices=['ASCENDING', 'DESCENDING'])
+    parser.add_argument('--cloud-cover', type=float)
+    parser.add_argument('--aoi-wkt', type=str)
+    parser.add_argument(
+        '--bbox',
+        type=float,
+        nargs=4,
+        metavar=('MIN_LON', 'MIN_LAT', 'MAX_LON', 'MAX_LAT')
+    )
+    parser.add_argument('--start-date', type=str)
+    parser.add_argument('--end-date', type=str)
+    parser.add_argument('--top', type=int, default=50)
+    parser.add_argument('--order-by', type=str, default='ContentDate/Start desc')
+    parser.add_argument('--format', dest='output_format', choices=['table', 'json', 'csv'], default='table')
+    parser.add_argument('--columns', type=str)
+    parser.add_argument('--save', type=str)
+    parser.add_argument('-v', '--verbose', action='store_true')
+
+    args = parser.parse_args(argv)
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    _validate_list_args(parser, args, mode_label='list')
+
+    success = list_products(
+        collection=args.collection,
+        product_type=args.product_type,
+        orbit_direction=args.orbit_direction,
+        cloud_cover=args.cloud_cover,
+        aoi_wkt=args.aoi_wkt,
+        bbox=args.bbox,
+        start_date=args.start_date,
+        end_date=args.end_date,
+        top=args.top,
+        order_by=args.order_by,
+        output_format=args.output_format,
+        columns=args.columns,
+        save_path=args.save
+    )
+    sys.exit(0 if success else 1)
+
+
 def main() -> None:
     """Main entry point for phidown CLI."""
+    # Support subcommand-style UX: `phidown list ...`
+    if len(sys.argv) > 1 and sys.argv[1] == 'list':
+        try:
+            _main_list_subcommand(sys.argv[2:])
+        except KeyboardInterrupt:
+            logger.warning('\n⚠️  Operation interrupted by user')
+            sys.exit(130)
+        except Exception as e:
+            logger.error(f'❌ Fatal error: {e}')
+            sys.exit(1)
+
     parser = argparse.ArgumentParser(
         prog='phidown',
         description='Download Copernicus satellite data from Data Space Ecosystem',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # List products using subcommand style
+  phidown list --collection SENTINEL-1 --product-type GRD --bbox -5 40 5 45 --start-date 2024-01-01T00:00:00 --end-date 2024-01-31T23:59:59
+
   # Download by product name
   phidown --name S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003 -o ./data
   
   # Download by S3 path
   phidown --s3path /eodata/Sentinel-1/SAR/IW_GRDH_1S/2024/05/03/... -o ./data
+
+  # List products over AOI + date range
+  phidown --list --collection SENTINEL-1 --product-type GRD --bbox -5 40 5 45 --start-date 2024-01-01T00:00:00 --end-date 2024-01-31T23:59:59
+
+  # Burst coverage analysis over AOI + date range
+  phidown --burst-coverage --bbox -5 40 5 45 --start-date 2024-08-02T00:00:00 --end-date 2024-08-15T23:59:59 --polarisation VV --format json
   
   # Reset configuration and enter new credentials
   phidown --name PRODUCT_NAME -o ./data --reset
@@ -183,6 +491,16 @@ Examples:
         '--s3path',
         type=str,
         help='S3 path to download (must start with /eodata/)'
+    )
+    input_group.add_argument(
+        '--list',
+        action='store_true',
+        help='List products using AOI/date filters'
+    )
+    input_group.add_argument(
+        '--burst-coverage',
+        action='store_true',
+        help='Analyze Sentinel-1 burst coverage over AOI/date range'
     )
     
     # Output configuration
@@ -219,6 +537,98 @@ Examples:
         action='store_true',
         help='Download specific file instead of entire directory (for S3 path only)'
     )
+
+    # Product listing options
+    parser.add_argument(
+        '--collection',
+        type=str,
+        default='SENTINEL-1',
+        help='Collection to search when using --list (default: SENTINEL-1)'
+    )
+    parser.add_argument(
+        '--product-type',
+        type=str,
+        help='Product type filter (e.g., GRD, SLC, S2MSI1C) for --list'
+    )
+    parser.add_argument(
+        '--orbit-direction',
+        type=str,
+        choices=['ASCENDING', 'DESCENDING'],
+        help='Orbit direction filter for --list/--burst-coverage'
+    )
+    parser.add_argument(
+        '--cloud-cover',
+        type=float,
+        help='Cloud cover threshold (0-100) for --list'
+    )
+    parser.add_argument(
+        '--aoi-wkt',
+        type=str,
+        help='AOI as WKT POLYGON for --list/--burst-coverage'
+    )
+    parser.add_argument(
+        '--bbox',
+        type=float,
+        nargs=4,
+        metavar=('MIN_LON', 'MIN_LAT', 'MAX_LON', 'MAX_LAT'),
+        help='AOI bbox for --list/--burst-coverage as four values: MIN_LON MIN_LAT MAX_LON MAX_LAT'
+    )
+    parser.add_argument(
+        '--start-date',
+        type=str,
+        help='Start date (ISO 8601) for --list/--burst-coverage'
+    )
+    parser.add_argument(
+        '--end-date',
+        type=str,
+        help='End date (ISO 8601) for --list/--burst-coverage'
+    )
+    parser.add_argument(
+        '--top',
+        type=int,
+        default=50,
+        help='Maximum number of results for --list (default: 50)'
+    )
+    parser.add_argument(
+        '--order-by',
+        type=str,
+        default='ContentDate/Start desc',
+        help='Sort expression for --list (default: ContentDate/Start desc)'
+    )
+    parser.add_argument(
+        '--format',
+        dest='output_format',
+        choices=['table', 'json', 'csv'],
+        default='table',
+        help='Output format for --list/--burst-coverage (default: table)'
+    )
+    parser.add_argument(
+        '--columns',
+        type=str,
+        help='Comma-separated output columns for --list/--burst-coverage'
+    )
+    parser.add_argument(
+        '--save',
+        type=str,
+        help='Save --list/--burst-coverage output to file instead of stdout'
+    )
+    parser.add_argument(
+        '--polarisation',
+        type=str,
+        choices=['VV', 'VH', 'HH', 'HV'],
+        default='VV',
+        help='Polarisation filter for --burst-coverage (default: VV)'
+    )
+    parser.add_argument(
+        '--relative-orbit-number',
+        type=int,
+        help='Relative orbit number filter for --burst-coverage'
+    )
+    parser.add_argument(
+        '--preferred-subswath',
+        type=str,
+        help='Comma-separated subswath preference for --burst-coverage (e.g., IW1,IW2,IW3)'
+    )
     
     # Verbosity
     parser.add_argument(
@@ -230,7 +640,7 @@ Examples:
     parser.add_argument(
         '--version',
         action='version',
-        version='%(prog)s 0.1.19'
+        version='%(prog)s 0.1.25'
     )
     
     args = parser.parse_args()
@@ -239,13 +649,51 @@ Examples:
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     
-    # Create output directory if it doesn't exist
-    output_path = Path(args.output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-    
     # Execute download based on input type
     try:
-        if args.name:
+        if args.list:
+            _validate_list_args(parser, args, mode_label='--list')
+
+            success = list_products(
+                collection=args.collection,
+                product_type=args.product_type,
+                orbit_direction=args.orbit_direction,
+                cloud_cover=args.cloud_cover,
+                aoi_wkt=args.aoi_wkt,
+                bbox=args.bbox,
+                start_date=args.start_date,
+                end_date=args.end_date,
+                top=args.top,
+                order_by=args.order_by,
+                output_format=args.output_format,
+                columns=args.columns,
+                save_path=args.save
+            )
+        elif args.burst_coverage:
+            if args.aoi_wkt and args.bbox:
+                parser.error('Use only one spatial filter: --aoi-wkt or --bbox')
+            if not (args.aoi_wkt or args.bbox):
+                parser.error('--burst-coverage requires a spatial filter: --aoi-wkt or --bbox')
+            if not args.start_date or not args.end_date:
+                parser.error('--burst-coverage requires both --start-date and --end-date')
+
+            success = burst_coverage_analysis(
+                aoi_wkt=args.aoi_wkt,
+                bbox=args.bbox,
+                start_date=args.start_date,
+                end_date=args.end_date,
+                polarisation=args.polarisation,
+                orbit_direction=args.orbit_direction,
+                relative_orbit_number=args.relative_orbit_number,
+                preferred_subswath=args.preferred_subswath,
+                output_format=args.output_format,
+                columns=args.columns,
+                save_path=args.save
+            )
+        elif args.name:
+            # Create output directory only for download workflows
+            output_path = Path(args.output_dir)
+            output_path.mkdir(parents=True, exist_ok=True)
             success = download_by_name(
                 product_name=args.name,
                 output_dir=args.output_dir,
@@ -254,6 +702,9 @@ Examples:
                 reset_config=args.reset
             )
         elif args.s3path:
+            # Create output directory only for download workflows
+            output_path = Path(args.output_dir)
+            output_path.mkdir(parents=True, exist_ok=True)
             success = download_by_s3path(
                 s3_path=args.s3path,
                 output_dir=args.output_dir,
@@ -263,7 +714,7 @@ Examples:
                 download_all=not args.no_download_all
             )
         else:
-            parser.error('Either --name or --s3path must be provided')
+            parser.error('Provide one mode: --name, --s3path, --list, or --burst-coverage')
             sys.exit(1)
         
         sys.exit(0 if success else 1)

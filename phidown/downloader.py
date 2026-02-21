@@ -5,10 +5,8 @@ import logging
 import os
 from pathlib import Path
 import requests
-import urllib3
 import uuid
-
-urllib3.disable_warnings()
+import time
 
 
 TOKEN_URL = 'https://identity.dataspace.copernicus.eu/auth/realms/cdse/protocol/openid-connect/token'
@@ -21,6 +19,97 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+REQUEST_TIMEOUT_SECONDS = 30
+
+
+class TokenManager:
+    """Manages OAuth2 tokens with automatic refresh for Copernicus Data Space.
+    
+    This class handles token lifecycle including automatic refresh before expiration
+    to ensure uninterrupted access to CDSE APIs during burst downloads.
+    
+    Attributes:
+        username: CDSE account username.
+        password: CDSE account password.
+        token_url: OAuth2 token endpoint URL.
+        client_id: OAuth2 client identifier.
+        access_token: Current access token (None if not yet acquired).
+        expiry: Token expiration time in epoch seconds.
+        
+    Example:
+        >>> token_mgr = TokenManager('user@example.com', 'password')
+        >>> token = token_mgr.get_access_token()
+        >>> # Token is automatically refreshed when expired
+        >>> token = token_mgr.get_access_token()
+    """
+    
+    # Token expiry buffer in seconds to refresh before actual expiration
+    EXPIRY_BUFFER_SECONDS = 60
+    
+    def __init__(self, username: str, password: str, 
+                 token_url: str = TOKEN_URL, client_id: str = CLIENT_ID):
+        """Initialize TokenManager with credentials.
+        
+        Args:
+            username: CDSE account username.
+            password: CDSE account password.
+            token_url: OAuth2 token endpoint URL (default: CDSE token URL).
+            client_id: OAuth2 client identifier (default: cdse-public).
+        """
+        self.username = username
+        self.password = password
+        self.token_url = token_url
+        self.client_id = client_id
+        self.access_token = None
+        # Initialize expiry to current time to force initial token fetch
+        self.expiry = time.time()
+
+    def get_access_token(self) -> str:
+        """Get current access token, refreshing if expired.
+        
+        This method checks if the current token is valid and refreshes it
+        if necessary before returning.
+        
+        Returns:
+            str: Valid access token for API requests.
+            
+        Raises:
+            requests.exceptions.HTTPError: If token refresh fails.
+        """
+        if self.access_token is None or time.time() > self.expiry:
+            self.refresh_access_token()
+        return self.access_token
+
+    def refresh_access_token(self) -> None:
+        """Refresh the access token using password grant.
+        
+        This method authenticates with CDSE using username/password credentials
+        to obtain a fresh access token. The expiry is set with a buffer
+        to ensure tokens are refreshed before actual expiration.
+        
+        Raises:
+            requests.exceptions.HTTPError: If authentication request fails.
+        """
+        logger.debug('Refreshing access token...')
+        
+        response = requests.post(
+            self.token_url,
+            data={
+                'username': self.username,
+                'password': self.password,
+                'client_id': self.client_id,
+                'grant_type': 'password'
+            },
+            timeout=REQUEST_TIMEOUT_SECONDS
+        )
+        response.raise_for_status()
+        
+        token_data = response.json()
+        self.access_token = token_data['access_token']
+        expires_in = token_data.get('expires_in', 3600)
+        self.expiry = time.time() + expires_in - self.EXPIRY_BUFFER_SECONDS
+        
+        logger.debug('Access token refreshed successfully')
 
 
 # Implementation based on https://github.com/eu-cdse/notebook-samples/blob/main/geo/bursts_processing_on_demand.ipynb
@@ -38,15 +127,17 @@ def get_token(username: str, password: str) -> str:
         str: The access token string to be used for authenticated API requests.
         
     Raises:
-        AssertionError: If username or password is empty.
+        ValueError: If username or password is empty.
         requests.exceptions.HTTPError: If the authentication request fails.
         
     Example:
         >>> token = get_token('myuser@example.com', 'mypassword')
         Acquired keycloak token!
     """
-    assert username, 'Username is required!'
-    assert password, 'Password is required!'
+    if not username:
+        raise ValueError('Username is required!')
+    if not password:
+        raise ValueError('Password is required!')
 
     logger.info('🔐 Authenticating with CDSE...')
     
@@ -58,6 +149,7 @@ def get_token(username: str, password: str) -> str:
             'password': password,
             'grant_type': 'password',
         },
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
 
@@ -68,7 +160,12 @@ def get_token(username: str, password: str) -> str:
 
 
 
-def download_burst_on_demand(burst_id: str, token: str, output_dir: Path) -> None:
+def download_burst_on_demand(
+    burst_id: str,
+    token,
+    output_dir: Path,
+    insecure_skip_verify: bool = False
+) -> None:
     """Download and save a Sentinel-1 burst product from CDSE.
     
     This function requests on-demand processing of a single Sentinel-1 burst
@@ -77,24 +174,26 @@ def download_burst_on_demand(burst_id: str, token: str, output_dir: Path) -> Non
     
     Args:
         burst_id: UUID of the burst to download from the CDSE catalogue.
-        token: Keycloak access token obtained from get_token().
+        token: Either a TokenManager instance or a string access token.
         output_dir: Directory path where the burst ZIP file will be saved.
         
     Raises:
-        AssertionError: If burst_id or token is empty.
+        ValueError: If burst_id or token is empty.
         RuntimeError: If burst processing fails or returns non-200 status.
         
     Example:
         >>> from pathlib import Path
-        >>> token = get_token('user@example.com', 'password')
-        >>> download_burst('12345678-1234-1234-1234-123456789abc', token, Path('./output'))
+        >>> token_mgr = TokenManager('user@example.com', 'password')
+        >>> download_burst('12345678-1234-1234-1234-123456789abc', token_mgr, Path('./output'))
         Processing burst...
         Processing has been successful!
         Saving output product...
         Output product has been saved to: ./output/burst_12345678.zip
     """
-    assert burst_id, 'Burst ID is required!'
-    assert token, 'Keycloak token is required!'
+    if not burst_id:
+        raise ValueError('Burst ID is required!')
+    if not token:
+        raise ValueError('Keycloak token is required!')
 
     try:
         uuid.UUID(burst_id)
@@ -103,25 +202,43 @@ def download_burst_on_demand(burst_id: str, token: str, output_dir: Path) -> Non
         raise ValueError('Burst ID is not a valid UUID!')
 
     logger.info(f'🛰️  Requesting on-demand processing for burst: {burst_id}')
+    if insecure_skip_verify:
+        logger.warning('⚠️  TLS certificate verification is disabled (insecure_skip_verify=True).')
 
-    response = requests.post(
-        f'https://catalogue.dataspace.copernicus.eu/odata/v1/Bursts({burst_id})/$value',
-        headers={'Authorization': f'Bearer {token}'},
-        verify=False,
-        allow_redirects=False,
-        stream=True,
+    def _post_with_token(url: str, force_refresh: bool = False):
+        if isinstance(token, TokenManager):
+            if force_refresh:
+                token.refresh_access_token()
+            token_str = token.get_access_token()
+        else:
+            token_str = token
+
+        return requests.post(
+            url,
+            headers={'Authorization': f'Bearer {token_str}'},
+            verify=not insecure_skip_verify,
+            allow_redirects=False,
+            stream=True,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+
+    def _post_with_auth_retry(url: str):
+        response = _post_with_token(url)
+        if response.status_code in (401, 403) and isinstance(token, TokenManager):
+            logger.warning(
+                f'⚠️  Received {response.status_code} from burst API. Refreshing token and retrying once.'
+            )
+            response = _post_with_token(url, force_refresh=True)
+        return response
+
+    response = _post_with_auth_retry(
+        f'https://catalogue.dataspace.copernicus.eu/odata/v1/Bursts({burst_id})/$value'
     )
 
     if 300 <= response.status_code < 400:
         redirect_url = response.headers['Location']
         logger.debug(f'Following redirect to: {redirect_url}')
-        response = requests.post(
-            redirect_url,
-            headers={'Authorization': f'Bearer {token}'},
-            verify=False,
-            stream=True,
-            allow_redirects=False,
-        )
+        response = _post_with_auth_retry(redirect_url)
 
     if response.status_code != 200:
         err_msg = (

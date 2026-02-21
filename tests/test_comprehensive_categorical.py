@@ -8,6 +8,13 @@ Tests ALL possible categorical values for each attribute from config.json:
 
 Goal: Document which specific values work for each parameter.
 """
+import pytest
+
+pytest.skip(
+    "Exploratory network sweep; excluded from automated unit test runs.",
+    allow_module_level=True,
+)
+
 from phidown.search import CopernicusDataSearcher
 import time
 

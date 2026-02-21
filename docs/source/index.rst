@@ -19,6 +19,7 @@ Welcome to Φ-Down Documentation
    cli
    user_guide
    ais_guide
+   s1_slc_burst_downloader
    api_reference
    examples
    sentinel1_reference

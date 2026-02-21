@@ -4,6 +4,13 @@ Find ACTUAL working parameter names for OData API
 The OpenSearch API uses different names than the OData API.
 This script tests BOTH naming conventions to find what actually works.
 """
+import pytest
+
+pytest.skip(
+    "Exploratory network script; excluded from automated unit test runs.",
+    allow_module_level=True,
+)
+
 from phidown.search import CopernicusDataSearcher
 
 

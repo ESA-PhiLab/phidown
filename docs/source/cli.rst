@@ -4,12 +4,17 @@
 Command-Line Interface (CLI)
 ===========================================
 
-**NEW in v0.1.22:** Φ-Down now includes a powerful command-line interface for downloading Copernicus satellite data directly from your terminal!
+**NEW:** Φ-Down includes a command-line interface for download, product listing, and burst coverage analysis directly from your terminal.
 
 Overview
 ========
 
-The ``phidown`` CLI provides a convenient way to download Earth Observation products without writing Python code. It supports downloading by product name or S3 path, with features like progress bars, credential management, and flexible output options.
+The ``phidown`` CLI provides a convenient way to work with Earth Observation products without writing Python code. It supports:
+
+- Download by product name
+- Download by S3 path
+- Product listing over AOI/date filters
+- Sentinel-1 burst coverage analysis over AOI/date filters
 
 Installation
 ============
@@ -60,6 +65,12 @@ After installation, you can use the ``phidown`` command directly:
    # Download by S3 path
    phidown --s3path /eodata/Sentinel-1/SAR/IW_GRDH_1S/2024/05/03/... -o ./data
 
+   # List products over area and dates
+   phidown --list --collection SENTINEL-1 --product-type GRD --bbox -5 40 5 45 --start-date 2024-01-01T00:00:00 --end-date 2024-01-31T23:59:59
+
+   # Burst coverage analysis over area and dates
+   phidown --burst-coverage --bbox -5 40 5 45 --start-date 2024-08-02T00:00:00 --end-date 2024-08-15T23:59:59 --polarisation VV --format json
+
 Command-Line Options
 ====================
 
@@ -90,6 +101,12 @@ Required Arguments (choose one)
    .. code-block:: bash
    
       phidown --s3path /eodata/Sentinel-1/SAR/IW_GRDH_1S/2024/05/03/S1A_IW_GRDH_1SDV.SAFE -o ./data
+
+``--list``
+   List products using AOI/date filters
+
+``--burst-coverage``
+   Analyze Sentinel-1 burst coverage over AOI/date range
 
 Optional Arguments
 ------------------
@@ -153,6 +170,81 @@ Optional Arguments
 
 ``-h, --help``
    Show help message and exit
+
+Listing and Analysis Filters
+----------------------------
+
+``--collection COLLECTION``
+   Collection for ``--list`` (default: ``SENTINEL-1``)
+
+``--product-type PRODUCT_TYPE``
+   Product type for ``--list`` (e.g., ``GRD``, ``SLC``, ``S2MSI1C``)
+
+``--orbit-direction {ASCENDING,DESCENDING}``
+   Orbit direction for ``--list`` and ``--burst-coverage``
+
+``--cloud-cover CLOUD_COVER``
+   Cloud cover threshold for ``--list`` (0-100)
+
+``--aoi-wkt AOI_WKT``
+   AOI as WKT POLYGON for ``--list`` or ``--burst-coverage``
+
+``--bbox MIN_LON MIN_LAT MAX_LON MAX_LAT``
+   AOI as bounding box for ``--list`` or ``--burst-coverage``
+
+``--start-date START_DATE`` and ``--end-date END_DATE``
+   ISO 8601 date filters for ``--list`` and ``--burst-coverage``
+
+``--top TOP``
+   Max number of products for ``--list`` (default: ``50``)
+
+``--order-by ORDER_BY``
+   Sorting expression for ``--list`` (default: ``ContentDate/Start desc``)
+
+``--polarisation {VV,VH,HH,HV}``
+   Polarisation for ``--burst-coverage`` (default: ``VV``)
+
+``--relative-orbit-number RELATIVE_ORBIT_NUMBER``
+   Optional relative orbit filter for ``--burst-coverage``
+
+``--preferred-subswath PREFERRED_SUBSWATH``
+   Comma-separated subswath preference order for ``--burst-coverage`` (e.g., ``IW1,IW2,IW3``)
+
+``--format {table,json,csv}``
+   Output format for ``--list`` and ``--burst-coverage`` (default: ``table``)
+
+``--columns COLUMNS``
+   Comma-separated columns to print for ``--list`` and ``--burst-coverage``
+
+``--save SAVE``
+   Save ``--list``/``--burst-coverage`` output to file instead of stdout
+
+Listing and Burst Coverage Examples
+===================================
+
+List products in CSV:
+
+.. code-block:: bash
+
+   phidown --list --collection SENTINEL-2 --product-type S2MSI1C --bbox 10 45 12 46 --start-date 2024-05-01T00:00:00 --end-date 2024-05-31T23:59:59 --cloud-cover 20 --format csv --save ./outputs/s2_list.csv
+
+List products with selected columns:
+
+.. code-block:: bash
+
+   phidown --list --collection SENTINEL-1 --product-type SLC --aoi-wkt "POLYGON((10 45, 12 45, 12 46, 10 46, 10 45))" --start-date 2024-08-01T00:00:00 --end-date 2024-08-31T23:59:59 --columns Name,S3Path,ContentDate,coverage
+
+Burst coverage analysis with default orbit recommendation:
+
+.. code-block:: bash
+
+   phidown --burst-coverage --bbox 10 45 12 46 --start-date 2024-08-02T00:00:00 --end-date 2024-08-15T23:59:59 --polarisation VV
+
+Burst coverage analysis with explicit orbit/subswath preferences:
+
+.. code-block:: bash
+
+   phidown --burst-coverage --aoi-wkt "POLYGON((10 45, 12 45, 12 46, 10 46, 10 45))" --start-date 2024-08-02T00:00:00 --end-date 2024-08-20T23:59:59 --orbit-direction DESCENDING --relative-orbit-number 22 --preferred-subswath IW1,IW2,IW3 --format json --save ./outputs/burst_coverage.json
 
 Configuration
 =============

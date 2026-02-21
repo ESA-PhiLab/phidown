@@ -50,6 +50,15 @@ This directory contains example notebooks demonstrating various capabilities of 
 - Analyze burst distribution and characteristics
 - Ideal for: InSAR time series, regional SAR analysis, efficient data access
 
+### 8. InSAR Processing Validation (`8_insar_processing_validation.ipynb`)
+**Step-by-step burst-mode validation workflow based on `examples/insar.py`**
+- Define reproducible task inputs, outputs, criteria, and constraints
+- Run `insar.py` in dry-run mode with orbit optimization
+- Validate generated artifacts (`search_results.csv`, `temporal_statistics.json`)
+- Check required columns and temporal metrics with explicit gates
+- Visualize AOI and burst footprints interactively with Folium via `phidown` package utilities
+- Ideal for: InSAR workflow QA, spatial validation, reproducible preprocessing checks
+
 
 ## Getting Started
 

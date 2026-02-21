@@ -9,6 +9,13 @@ Tests ALL parameters listed in config.json for:
 
 Goal: Verify which parameters work and document them properly.
 """
+import pytest
+
+pytest.skip(
+    "Exploratory network sweep; excluded from automated unit test runs.",
+    allow_module_level=True,
+)
+
 from phidown.search import CopernicusDataSearcher
 import time
 
