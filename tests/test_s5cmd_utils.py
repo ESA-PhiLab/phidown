@@ -98,11 +98,10 @@ def test_pull_down_passes_list_command_and_preserves_spaces(mock_run, tmp_path):
 
     assert ok is True
     kwargs = mock_run.call_args.kwargs
+    safe_name = s3_path.rsplit("/", 1)[-1]
+    expected_target = str(output_dir / safe_name) + "/"
     assert kwargs["command"] == [
         "cp",
         f"s3:/{s3_path}/*",
-        (
-            f"{output_dir}/"
-            "S1A_IW_RAW__0SDV_20240503T031926_20240503T031942_053701_0685FB_E003.SAFE/"
-        ),
+        expected_target,
     ]
