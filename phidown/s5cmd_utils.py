@@ -1,6 +1,6 @@
 import subprocess
 import os
-from typing import Optional, List
+from typing import Optional, List, Sequence, Union
 import configparser
 import logging
 import shlex
@@ -13,8 +13,27 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _strip_wrapping_quotes(value: str) -> str:
+    """Remove matching wrapping single/double quotes from a token."""
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        return value[1:-1]
+    return value
+
+
+def _split_command_args(command: str, platform_name: Optional[str] = None) -> List[str]:
+    """Split an s5cmd command string into args with platform-aware parsing.
+
+    On Windows (``nt``), ``shlex`` with ``posix=False`` correctly handles
+    backslashes in paths. We then strip wrapping quotes from each token.
+    """
+    effective_platform = platform_name or os.name
+    if effective_platform == "nt":
+        return [_strip_wrapping_quotes(arg) for arg in shlex.split(command, posix=False)]
+    return shlex.split(command)
+
+
 def run_s5cmd_with_config(
-    command: str,
+    command: Union[str, Sequence[str]],
     config_file: str = '.s5cfg',
     endpoint_url: Optional[str] = None,
     verbose: bool = False,
@@ -25,7 +44,10 @@ def run_s5cmd_with_config(
     file and handles endpoint URL configuration for the Copernicus Data Space.
 
     Args:
-        command: The s5cmd command to execute (without 's5cmd' prefix)
+        command: The s5cmd command to execute (without 's5cmd' prefix).
+            Can be a shell-like string (e.g. ``"cp s3://... /tmp/out/"``)
+            or a sequence of already-split args
+            (e.g. ``["cp", "s3://...", "/tmp/out/"]``).
         config_file: Path to s5cmd configuration file (default: '.s5cfg')
         endpoint_url: Optional endpoint URL override
         verbose: Whether to print command being executed
@@ -40,8 +62,14 @@ def run_s5cmd_with_config(
     Example:
         >>> output = run_s5cmd_with_config('ls s3://eodata/Sentinel-1/')
     """
-    if not command.strip():
-        raise ValueError('Command cannot be empty')
+    if isinstance(command, str):
+        if not command.strip():
+            raise ValueError('Command cannot be empty')
+        command_args = _split_command_args(command)
+    else:
+        command_args = [str(arg) for arg in command]
+        if not command_args or not any(arg.strip() for arg in command_args):
+            raise ValueError('Command cannot be empty')
 
     # Parse the config file
     config = configparser.ConfigParser()
@@ -70,8 +98,6 @@ def run_s5cmd_with_config(
         protocol = 'https' if use_https else 'http'
         cmd_parts.extend(['--endpoint-url', f'{protocol}://{host_base}'])
 
-    # Parse command properly using shlex to handle quotes and wildcards
-    command_args = shlex.split(command)
     cmd_parts.extend(command_args)
 
     if verbose:
@@ -235,9 +261,8 @@ def pull_down(
     else:
         s3_url = f's3:/{s3_path}'
 
-    # Build the cp command - don't use quotes in the command string
-    # The subprocess will handle arguments properly
-    command = f'cp {s3_url} {full_output_dir}/'
+    # Build cp command as argument list so paths with spaces work across platforms.
+    command = ['cp', s3_url, f'{full_output_dir}/']
 
     if show_progress and total_size and total_size > 0:
         # Suppress info logging when progress bar is shown
