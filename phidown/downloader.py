@@ -205,31 +205,40 @@ def download_burst_on_demand(
     if insecure_skip_verify:
         logger.warning('⚠️  TLS certificate verification is disabled (insecure_skip_verify=True).')
 
-    # Get token string from TokenManager or use token directly
-    token_str = token.get_access_token() if isinstance(token, TokenManager) else token
+    def _post_with_token(url: str, force_refresh: bool = False):
+        if isinstance(token, TokenManager):
+            if force_refresh:
+                token.refresh_access_token()
+            token_str = token.get_access_token()
+        else:
+            token_str = token
 
-    response = requests.post(
-        f'https://catalogue.dataspace.copernicus.eu/odata/v1/Bursts({burst_id})/$value',
-        headers={'Authorization': f'Bearer {token_str}'},
-        verify=not insecure_skip_verify,
-        allow_redirects=False,
-        stream=True,
-        timeout=REQUEST_TIMEOUT_SECONDS,
+        return requests.post(
+            url,
+            headers={'Authorization': f'Bearer {token_str}'},
+            verify=not insecure_skip_verify,
+            allow_redirects=False,
+            stream=True,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+
+    def _post_with_auth_retry(url: str):
+        response = _post_with_token(url)
+        if response.status_code in (401, 403) and isinstance(token, TokenManager):
+            logger.warning(
+                f'⚠️  Received {response.status_code} from burst API. Refreshing token and retrying once.'
+            )
+            response = _post_with_token(url, force_refresh=True)
+        return response
+
+    response = _post_with_auth_retry(
+        f'https://catalogue.dataspace.copernicus.eu/odata/v1/Bursts({burst_id})/$value'
     )
 
     if 300 <= response.status_code < 400:
         redirect_url = response.headers['Location']
         logger.debug(f'Following redirect to: {redirect_url}')
-        # Refresh token for redirect request if using TokenManager
-        token_str = token.get_access_token() if isinstance(token, TokenManager) else token
-        response = requests.post(
-            redirect_url,
-            headers={'Authorization': f'Bearer {token_str}'},
-            verify=not insecure_skip_verify,
-            stream=True,
-            allow_redirects=False,
-            timeout=REQUEST_TIMEOUT_SECONDS,
-        )
+        response = _post_with_auth_retry(redirect_url)
 
     if response.status_code != 200:
         err_msg = (

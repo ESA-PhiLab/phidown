@@ -3,6 +3,13 @@
 Test script to verify the interactive polygon tool works correctly.
 """
 
+import pytest
+
+pytest.skip(
+    "Interactive manual smoke script; excluded from automated unit test runs.",
+    allow_module_level=True,
+)
+
 # Test imports
 try:
     from phidown.interactive_tools import (

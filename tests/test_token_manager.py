@@ -325,6 +325,153 @@ class TestDownloadBurstWithTokenManager:
             assert mock_post.call_args_list[0].kwargs['timeout'] == downloader_module.REQUEST_TIMEOUT_SECONDS
             assert mock_post.call_args_list[1].kwargs['timeout'] == downloader_module.REQUEST_TIMEOUT_SECONDS
 
+    @pytest.mark.parametrize('auth_status', [401, 403])
+    @patch('phidown.downloader.requests.post')
+    def test_download_burst_retries_once_on_auth_error(self, mock_post, auth_status):
+        """Test forced token refresh and single retry on initial 401/403."""
+        token_response_1 = Mock()
+        token_response_1.json.return_value = {
+            'access_token': 'expired_token',
+            'expires_in': 3600
+        }
+        token_response_1.raise_for_status = Mock()
+
+        auth_error_response = Mock()
+        auth_error_response.status_code = auth_status
+        auth_error_response.headers = {'Content-Type': 'application/json'}
+        auth_error_response.json.return_value = {'detail': 'auth failed'}
+        auth_error_response.text = 'auth failed'
+
+        token_response_2 = Mock()
+        token_response_2.json.return_value = {
+            'access_token': 'refreshed_token',
+            'expires_in': 3600
+        }
+        token_response_2.raise_for_status = Mock()
+
+        success_response = Mock()
+        success_response.status_code = 200
+        success_response.headers = {'Content-Disposition': 'filename=burst_retry.zip'}
+        success_response.iter_content = Mock(return_value=[b'retry_data'])
+
+        # Call order:
+        # 1) initial token fetch, 2) first burst request (401/403),
+        # 3) forced token refresh, 4) retried burst request (200)
+        mock_post.side_effect = [
+            token_response_1,
+            auth_error_response,
+            token_response_2,
+            success_response
+        ]
+
+        token_mgr = downloader_module.TokenManager('user@example.com', 'password123')
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            downloader_module.download_burst_on_demand(
+                burst_id='12345678-1234-1234-1234-123456789abc',
+                token=token_mgr,
+                output_dir=Path(tmpdir)
+            )
+
+            output_file = Path(tmpdir) / 'burst_retry.zip'
+            assert output_file.exists()
+
+        assert mock_post.call_count == 4
+        assert mock_post.call_args_list[0].args[0] == downloader_module.TOKEN_URL
+        assert mock_post.call_args_list[2].args[0] == downloader_module.TOKEN_URL
+        assert mock_post.call_args_list[1].kwargs['headers']['Authorization'] == 'Bearer expired_token'
+        assert mock_post.call_args_list[3].kwargs['headers']['Authorization'] == 'Bearer refreshed_token'
+
+    @patch('phidown.downloader.requests.post')
+    def test_download_burst_retries_once_on_redirect_auth_error(self, mock_post):
+        """Test forced token refresh and single retry on redirect 401/403."""
+        token_response_1 = Mock()
+        token_response_1.json.return_value = {
+            'access_token': 'token_before_redirect',
+            'expires_in': 3600
+        }
+        token_response_1.raise_for_status = Mock()
+
+        redirect_response = Mock()
+        redirect_response.status_code = 302
+        redirect_response.headers = {'Location': 'https://redirect.url'}
+
+        redirect_auth_error_response = Mock()
+        redirect_auth_error_response.status_code = 403
+        redirect_auth_error_response.headers = {'Content-Type': 'application/json'}
+        redirect_auth_error_response.json.return_value = {'detail': 'redirect auth failed'}
+        redirect_auth_error_response.text = 'redirect auth failed'
+
+        token_response_2 = Mock()
+        token_response_2.json.return_value = {
+            'access_token': 'token_after_redirect_refresh',
+            'expires_in': 3600
+        }
+        token_response_2.raise_for_status = Mock()
+
+        final_response = Mock()
+        final_response.status_code = 200
+        final_response.headers = {'Content-Disposition': 'filename=burst_redirect_retry.zip'}
+        final_response.iter_content = Mock(return_value=[b'redirect_retry_data'])
+
+        # Call order:
+        # 1) initial token fetch, 2) first burst request (302),
+        # 3) redirect request (403), 4) forced token refresh,
+        # 5) retried redirect request (200)
+        mock_post.side_effect = [
+            token_response_1,
+            redirect_response,
+            redirect_auth_error_response,
+            token_response_2,
+            final_response
+        ]
+
+        token_mgr = downloader_module.TokenManager('user@example.com', 'password123')
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            downloader_module.download_burst_on_demand(
+                burst_id='87654321-4321-4321-4321-123456789abc',
+                token=token_mgr,
+                output_dir=Path(tmpdir)
+            )
+
+            output_file = Path(tmpdir) / 'burst_redirect_retry.zip'
+            assert output_file.exists()
+
+        assert mock_post.call_count == 5
+        assert mock_post.call_args_list[0].args[0] == downloader_module.TOKEN_URL
+        assert mock_post.call_args_list[3].args[0] == downloader_module.TOKEN_URL
+        assert mock_post.call_args_list[2].args[0] == 'https://redirect.url'
+        assert mock_post.call_args_list[4].args[0] == 'https://redirect.url'
+        assert mock_post.call_args_list[2].kwargs['headers']['Authorization'] == 'Bearer token_before_redirect'
+        assert mock_post.call_args_list[4].kwargs['headers']['Authorization'] == (
+            'Bearer token_after_redirect_refresh'
+        )
+
+    @pytest.mark.parametrize('auth_status', [401, 403])
+    @patch('phidown.downloader.requests.post')
+    def test_download_burst_static_token_does_not_retry_auth_error(self, mock_post, auth_status):
+        """Static token mode should not attempt token refresh on 401/403."""
+        auth_error_response = Mock()
+        auth_error_response.status_code = auth_status
+        auth_error_response.headers = {'Content-Type': 'application/json'}
+        auth_error_response.json.return_value = {'detail': 'auth failed'}
+        auth_error_response.text = 'auth failed'
+        mock_post.return_value = auth_error_response
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with pytest.raises(RuntimeError, match='Failed to process burst'):
+                downloader_module.download_burst_on_demand(
+                    burst_id='12345678-1234-1234-1234-123456789abc',
+                    token='static_token_string',
+                    output_dir=Path(tmpdir)
+                )
+
+        assert mock_post.call_count == 1
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

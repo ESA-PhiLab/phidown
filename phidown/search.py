@@ -74,14 +74,18 @@ def _extract_date_start(value: typing.Any) -> typing.Any:
 
 
 class CopernicusDataSearcher:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        config_path: typing.Optional[str] = None,
+        **query_kwargs: typing.Any
+    ) -> None:
         """
         Initialize the CopernicusDataSearcher.
         Configuration is loaded from the default path.
         Call query_by_filter() to set search parameters before executing a query.
         """
         self.base_url: str = "https://catalogue.dataspace.copernicus.eu/odata/v1/Products"
-        self.config: typing.Optional[dict] = self._load_config()  # Load config from default path
+        self.config: typing.Optional[dict] = self._load_config(config_path=config_path)
 
         # Initialize attributes to be set by query_by_filter
         self.collection_name: typing.Optional[str] = None
@@ -114,6 +118,10 @@ class CopernicusDataSearcher:
 
         # Initialize placeholders for query results
         self._initialize_placeholders()
+
+        # Backward-compatible constructor: allow passing query fields directly.
+        if query_kwargs:
+            self.query_by_filter(**query_kwargs)
 
     def query_by_filter(
         self,
@@ -206,8 +214,6 @@ class CopernicusDataSearcher:
         self._validate_time() # Validate start and end dates
 
         self.top = top
-        if self.count:
-            self.top = 1000
         self._validate_top()
 
         self.order_by = order_by
@@ -325,18 +331,18 @@ class CopernicusDataSearcher:
         default_order_by = "ContentDate/Start desc"
 
         if hasattr(self, 'order_by') and self.order_by:
-            try:
-                field, direction = self.order_by.split()
-                if field in valid_order_by_fields and direction in valid_order_by_directions:
-                    self.order_by = self.order_by
-                else:
-                    raise ValueError(
-                        f"Invalid order_by value: {self.order_by}. Must be one of: "
-                        f"{', '.join([f'{f} {d}' for f in valid_order_by_fields for d in valid_order_by_directions])}"
-                    )
-            except ValueError:
+            parts = self.order_by.split()
+            if len(parts) != 2:
                 raise ValueError(
                     f"Invalid order_by format: {self.order_by}. It must be in the format 'field direction'."
+                )
+            field, direction = parts
+            if field in valid_order_by_fields and direction in valid_order_by_directions:
+                self.order_by = self.order_by
+            else:
+                raise ValueError(
+                    f"Invalid order_by value: {self.order_by}. Must be one of: "
+                    f"{', '.join([f'{f} {d}' for f in valid_order_by_fields for d in valid_order_by_directions])}"
                 )
         else:
             self.order_by = default_order_by
@@ -428,7 +434,7 @@ class CopernicusDataSearcher:
                         raise ValueError(f'Longitude {lon} at position {i + 1} is out of valid range [-180, 180]')
                     if not (-90 <= lat <= 90):
                         raise ValueError(f'Latitude {lat} at position {i + 1} is out of valid range [-90, 90]')
-                    normalized_coords.append(f'{lon} {lat}')
+                    normalized_coords.append(f'{lon:g} {lat:g}')
                 except ValueError as e:
                     if 'could not convert' in str(e):
                         raise ValueError(f"Invalid coordinate values at position {i + 1}: '{pair}'. Must be numeric")
@@ -436,9 +442,7 @@ class CopernicusDataSearcher:
             
             # Check if polygon is closed (first and last coordinates must be the same)
             if normalized_coords[0] != normalized_coords[-1]:
-                # Auto-fix by closing the polygon
-                normalized_coords.append(normalized_coords[0])
-                print('Auto-corrected WKT polygon: Added closing coordinate to match the first point')
+                raise ValueError("WKT polygon must start and end with the same point")
             
             # Reconstruct the WKT string with proper formatting
             self.aoi_wkt = f"POLYGON(({', '.join(normalized_coords)}))"
@@ -573,7 +577,7 @@ class CopernicusDataSearcher:
                 try:
                     self.burst_id = int(self.burst_id)
                 except ValueError:
-                    raise ValueError(f"burst_id '{self.burst_id}' cannot be converted to integer")
+                    raise TypeError("burst_id must be an integer")
             elif not isinstance(self.burst_id, int):
                 raise TypeError("burst_id must be an integer")
         
@@ -583,7 +587,7 @@ class CopernicusDataSearcher:
                 try:
                     self.absolute_burst_id = int(self.absolute_burst_id)
                 except ValueError:
-                    raise ValueError(f"absolute_burst_id '{self.absolute_burst_id}' cannot be converted to integer")
+                    raise TypeError("absolute_burst_id must be an integer")
             elif not isinstance(self.absolute_burst_id, int):
                 raise TypeError("absolute_burst_id must be an integer")
         
@@ -593,7 +597,7 @@ class CopernicusDataSearcher:
                 try:
                     self.datatake_id = int(self.datatake_id)
                 except ValueError:
-                    raise ValueError(f"datatake_id '{self.datatake_id}' cannot be converted to integer")
+                    raise TypeError("datatake_id must be an integer")
             elif not isinstance(self.datatake_id, int):
                 raise TypeError("datatake_id must be an integer")
         
@@ -603,7 +607,7 @@ class CopernicusDataSearcher:
                 try:
                     self.relative_orbit_number = int(self.relative_orbit_number)
                 except ValueError:
-                    raise ValueError(f"relative_orbit_number '{self.relative_orbit_number}' cannot be converted to integer")
+                    raise TypeError("relative_orbit_number must be an integer")
             elif not isinstance(self.relative_orbit_number, int):
                 raise TypeError("relative_orbit_number must be an integer")
 

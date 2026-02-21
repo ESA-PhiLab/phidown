@@ -1,10 +1,15 @@
 """Tests for CLI module."""
 
 import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 import pandas as pd
-from phidown.cli import download_by_name, download_by_s3path, main
-import sys
+from phidown.cli import (
+    download_by_name,
+    download_by_s3path,
+    list_products,
+    burst_coverage_analysis,
+    main,
+)
 
 
 class TestDownloadByName:
@@ -162,3 +167,212 @@ class TestMainCLI:
             main()
         
         assert exc_info.value.code == 1
+
+    @patch('phidown.cli.list_products')
+    @patch(
+        'sys.argv',
+        [
+            'phidown',
+            '--list',
+            '--collection', 'SENTINEL-1',
+            '--product-type', 'GRD',
+            '--bbox', '-5', '40', '5', '45',
+            '--start-date', '2024-01-01T00:00:00',
+            '--end-date', '2024-01-31T23:59:59',
+            '--format', 'json'
+        ]
+    )
+    def test_cli_with_list(self, mock_list_products):
+        """Test CLI with --list argument."""
+        mock_list_products.return_value = True
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        mock_list_products.assert_called_once()
+
+    @patch('phidown.cli.list_products')
+    @patch(
+        'sys.argv',
+        [
+            'phidown',
+            'list',
+            '--collection', 'SENTINEL-1',
+            '--product-type', 'GRD',
+            '--bbox', '-5', '40', '5', '45',
+            '--start-date', '2024-01-01T00:00:00',
+            '--end-date', '2024-01-31T23:59:59',
+            '--format', 'json'
+        ]
+    )
+    def test_cli_subcommand_list(self, mock_list_products):
+        """Test subcommand-style list invocation."""
+        mock_list_products.return_value = True
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        mock_list_products.assert_called_once()
+
+    @patch('sys.argv', ['phidown', '--list', '--collection', 'SENTINEL-1', '--start-date', '2024-01-01T00:00:00'])
+    def test_cli_list_requires_spatial_filter(self):
+        """Test --list requires an AOI filter."""
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code != 0
+
+    @patch('sys.argv', ['phidown', 'list', '--collection', 'SENTINEL-1', '--start-date', '2024-01-01T00:00:00'])
+    def test_cli_subcommand_list_requires_spatial_filter(self):
+        """Test `phidown list` requires an AOI filter."""
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code != 0
+
+    @patch('phidown.cli.burst_coverage_analysis')
+    @patch(
+        'sys.argv',
+        [
+            'phidown',
+            '--burst-coverage',
+            '--bbox', '-5', '40', '5', '45',
+            '--start-date', '2024-08-02T00:00:00',
+            '--end-date', '2024-08-15T23:59:59',
+            '--polarisation', 'VV',
+            '--format', 'json'
+        ]
+    )
+    def test_cli_with_burst_coverage(self, mock_burst_coverage):
+        """Test CLI with --burst-coverage argument."""
+        mock_burst_coverage.return_value = True
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        mock_burst_coverage.assert_called_once()
+
+    @patch('sys.argv', ['phidown', '--burst-coverage', '--bbox', '-5', '40', '5', '45', '--start-date', '2024-08-02T00:00:00'])
+    def test_cli_burst_coverage_requires_end_date(self):
+        """Test --burst-coverage requires both start and end dates."""
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code != 0
+
+
+class TestListProducts:
+    """Test cases for list_products function."""
+
+    @patch('phidown.cli.CopernicusDataSearcher')
+    def test_list_products_with_bbox(self, mock_searcher_class):
+        """Test listing works and bbox is converted to WKT."""
+        mock_searcher = MagicMock()
+        mock_searcher_class.return_value = mock_searcher
+        mock_searcher.execute_query.return_value = pd.DataFrame(
+            {
+                'Name': ['P1'],
+                'S3Path': ['/eodata/path'],
+                'ContentDate': ['2024-01-01T00:00:00Z']
+            }
+        )
+
+        result = list_products(
+            collection='SENTINEL-1',
+            product_type='GRD',
+            bbox=[-5, 40, 5, 45],
+            start_date='2024-01-01T00:00:00',
+            end_date='2024-01-31T23:59:59',
+            output_format='json'
+        )
+
+        assert result is True
+        mock_searcher.query_by_filter.assert_called_once()
+        kwargs = mock_searcher.query_by_filter.call_args.kwargs
+        assert kwargs['aoi_wkt'].startswith('POLYGON((')
+
+    @patch('phidown.cli.CopernicusDataSearcher')
+    def test_list_products_save_csv(self, mock_searcher_class, tmp_path):
+        """Test listing output can be saved to a file."""
+        mock_searcher = MagicMock()
+        mock_searcher_class.return_value = mock_searcher
+        mock_searcher.execute_query.return_value = pd.DataFrame(
+            {
+                'Name': ['P1'],
+                'S3Path': ['/eodata/path']
+            }
+        )
+
+        output_file = tmp_path / 'products.csv'
+        result = list_products(
+            collection='SENTINEL-1',
+            aoi_wkt='POLYGON((-5 40, 5 40, 5 45, -5 45, -5 40))',
+            start_date='2024-01-01T00:00:00',
+            output_format='csv',
+            save_path=str(output_file)
+        )
+
+        assert result is True
+        assert output_file.exists()
+
+
+class TestBurstCoverageAnalysis:
+    """Test cases for burst_coverage_analysis function."""
+
+    @patch('phidown.cli.CopernicusDataSearcher')
+    def test_burst_coverage_analysis_json(self, mock_searcher_class):
+        """Test burst coverage analysis output in JSON format."""
+        mock_searcher = MagicMock()
+        mock_searcher_class.return_value = mock_searcher
+        mock_searcher.find_optimal_bursts.return_value = pd.DataFrame(
+            {
+                'Id': ['id1'],
+                'BurstId': [15804],
+                'SwathIdentifier': ['IW2'],
+                'coverage': [78.5],
+                'ContentDate': ['2024-08-05T00:00:00Z'],
+                'S3Path': ['/eodata/Sentinel-1/SAR/']
+            }
+        )
+
+        result = burst_coverage_analysis(
+            bbox=[-5, 40, 5, 45],
+            start_date='2024-08-02T00:00:00',
+            end_date='2024-08-15T23:59:59',
+            polarisation='VV',
+            output_format='json'
+        )
+
+        assert result is True
+        mock_searcher.find_optimal_bursts.assert_called_once()
+        kwargs = mock_searcher.find_optimal_bursts.call_args.kwargs
+        assert kwargs['aoi_wkt'].startswith('POLYGON((')
+
+    @patch('phidown.cli.CopernicusDataSearcher')
+    def test_burst_coverage_analysis_save_csv(self, mock_searcher_class, tmp_path):
+        """Test burst coverage analysis can save CSV output."""
+        mock_searcher = MagicMock()
+        mock_searcher_class.return_value = mock_searcher
+        mock_searcher.find_optimal_bursts.return_value = pd.DataFrame(
+            {
+                'Id': ['id1'],
+                'BurstId': [15804],
+                'SwathIdentifier': ['IW2'],
+                'coverage': [78.5]
+            }
+        )
+
+        output_file = tmp_path / 'burst_analysis.csv'
+        result = burst_coverage_analysis(
+            aoi_wkt='POLYGON((-5 40, 5 40, 5 45, -5 45, -5 40))',
+            start_date='2024-08-02T00:00:00',
+            end_date='2024-08-15T23:59:59',
+            output_format='csv',
+            save_path=str(output_file)
+        )
+
+        assert result is True
+        assert output_file.exists()

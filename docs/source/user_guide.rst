@@ -245,33 +245,36 @@ The download function uses S3 credentials by default. Make sure your `.s5cfg` fi
 Command Line Usage
 ------------------
 
-Φ-Down also provides a command-line interface for downloading data:
+Φ-Down also provides a command-line interface for downloading, listing products, and burst coverage analysis:
 
 .. code-block:: bash
 
-   # Basic usage
-   python -m phidown.downloader /eodata/Sentinel-1/SAR/IW_RAW__0S/2024/05/03/S1A_IW_RAW__0SDV_20240503T031926_20240503T031942_053701_0685FB_E003.SAFE
+   # Download by product name
+   phidown --name S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003 -o ./data
 
-   # Specify output directory
-   python -m phidown.downloader /eodata/Sentinel-1/... -o /path/to/output
+   # Download by S3 path
+   phidown --s3path /eodata/Sentinel-1/SAR/IW_RAW__0S/2024/05/03/... -o ./data
 
-   # Use custom config file
-   python -m phidown.downloader /eodata/Sentinel-1/... -c /path/to/config.s5cfg
+   # List products over AOI + dates
+   phidown --list --collection SENTINEL-1 --product-type GRD --bbox -5 40 5 45 --start-date 2024-01-01T00:00:00 --end-date 2024-01-31T23:59:59
 
-   # Download single file instead of entire directory
-   python -m phidown.downloader /eodata/Sentinel-1/... --no-download-all
-
-   # Reset credentials
-   python -m phidown.downloader /eodata/Sentinel-1/... --reset
+   # Burst coverage analysis
+   phidown --burst-coverage --bbox -5 40 5 45 --start-date 2024-08-02T00:00:00 --end-date 2024-08-15T23:59:59 --polarisation VV
 
 Available CLI options:
 
-* ``s3_path``: S3 path to the Sentinel data (must start with /eodata/)
+* ``--name``: Download by product name
+* ``--s3path``: Download by S3 path (must start with /eodata/)
+* ``--list``: List products over AOI/date filters
+* ``--burst-coverage``: Run Sentinel-1 burst coverage analysis over AOI/date filters
+* ``--aoi-wkt`` or ``--bbox``: AOI filter for listing/analysis
+* ``--start-date`` and ``--end-date``: Time filters
 * ``-o, --output-dir``: Local output directory (default: current directory)
 * ``-c, --config-file``: Path to s5cmd configuration file (default: .s5cfg)
-* ``-e, --endpoint-url``: Copernicus Data Space endpoint URL
 * ``--no-download-all``: Download only specific file instead of entire directory
 * ``--reset``: Reset configuration file and prompt for new credentials
+
+For full CLI documentation and examples, see :doc:`cli`.
 
 Interactive Tools
 -----------------

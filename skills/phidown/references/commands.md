@@ -21,6 +21,16 @@ phidown --s3path "/eodata/Sentinel-1/SAR/IW_GRDH_1S/2024/05/03/..." -o "./data"
 phidown --name "<PRODUCT_NAME>" -o "./data" --reset
 ```
 
+## List products over AOI and dates
+```bash
+phidown list --collection "SENTINEL-1" --product-type "GRD" --bbox -5 40 5 45 --start-date "2024-01-01T00:00:00" --end-date "2024-01-31T23:59:59" --format "csv" --save "./outputs/products.csv"
+```
+
+## Burst coverage analysis over AOI and dates
+```bash
+phidown --burst-coverage --aoi-wkt "POLYGON((10 45, 12 45, 12 46, 10 46, 10 45))" --start-date "2024-08-02T00:00:00" --end-date "2024-08-20T23:59:59" --polarisation "VV" --orbit-direction "DESCENDING" --preferred-subswath "IW1,IW2,IW3" --format "json" --save "./outputs/burst_coverage.json"
+```
+
 ## Python search and inspect
 ```python
 from phidown.search import CopernicusDataSearcher

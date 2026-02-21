@@ -5,6 +5,8 @@ from datetime import date, time
 from unittest.mock import Mock, patch
 import pandas as pd
 
+pytest.importorskip("huggingface_hub")
+
 from phidown.ais import AISDataHandler, download_ais_data
 
 
@@ -229,6 +231,6 @@ def test_download_ais_data_convenience_function():
         
         result = download_ais_data("2025-08-25")
         
-        mock_handler_class.assert_called_once_with(hf_repo_id="Lore0123/AISPortal")
+        mock_handler_class.assert_called_once_with(hf_repo_id="Lore0123/AISPortal", verbose=True)
         mock_handler.get_ais_data.assert_called_once_with("2025-08-25", None, None, None, None)
         assert isinstance(result, pd.DataFrame)

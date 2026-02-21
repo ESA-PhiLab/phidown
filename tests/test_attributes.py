@@ -10,6 +10,13 @@ It tests the corrected parameter names:
 - Correct timeliness codes (NRT, NTC)
 - Correct processing levels (L1, L2)
 """
+import pytest
+
+pytest.skip(
+    "Long-running network integration suite; excluded from automated unit test runs.",
+    allow_module_level=True,
+)
+
 from phidown.search import CopernicusDataSearcher
 import time
 

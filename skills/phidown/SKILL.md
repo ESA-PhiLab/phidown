@@ -1,6 +1,6 @@
 ---
 name: phidown
-description: Search, filter, and download Copernicus Data Space products with the phidown project. Use this skill when a user asks to find Sentinel products, query by AOI/date/product type, download by product name or S3 path, configure credentials (.s5cfg), troubleshoot phidown CLI/Python workflow issues, or prepare reproducible data-acquisition commands in the phidown repository.
+description: Search, filter, download, and analyze Copernicus Data Space products with the phidown project. Use this skill when a user asks to find Sentinel products, query by AOI/date/product type, run burst coverage analysis, download by product name or S3 path, configure credentials (.s5cfg), troubleshoot phidown CLI/Python workflows, or prepare reproducible data-acquisition commands in the phidown repository.
 ---
 
 # Phidown
@@ -24,7 +24,9 @@ python -m pip show phidown
 ### 2. Choose operation mode
 - Use CLI download by product name when the exact product name is known.
 - Use CLI download by S3 path when catalog lookup is unnecessary.
-- Use Python `CopernicusDataSearcher` when the user needs filtering by AOI/date/attributes.
+- Use CLI list subcommand (`phidown list ...`) when the user needs quick AOI/date product discovery.
+- Use CLI burst coverage mode for Sentinel-1 burst optimization over AOI/date.
+- Use Python `CopernicusDataSearcher` for advanced filtering, custom analysis, or notebook workflows.
 
 ### 3. Handle credentials safely
 - Use `.s5cfg` for S3 downloads (CLI path).
@@ -39,6 +41,14 @@ phidown --name "<PRODUCT_NAME>" -o "<OUTPUT_DIR>"
 - Download by S3 path:
 ```bash
 phidown --s3path "/eodata/..." -o "<OUTPUT_DIR>"
+```
+- List products over AOI/date:
+```bash
+phidown list --collection "SENTINEL-1" --product-type "GRD" --bbox -5 40 5 45 --start-date "2024-01-01T00:00:00" --end-date "2024-01-31T23:59:59" --format "table"
+```
+- Burst coverage analysis over AOI/date:
+```bash
+phidown --burst-coverage --bbox -5 40 5 45 --start-date "2024-08-02T00:00:00" --end-date "2024-08-15T23:59:59" --polarisation "VV" --format "json" --save "<OUTPUT_FILE>"
 ```
 - Search first, then inspect top rows:
 ```python
@@ -60,17 +70,22 @@ print(df[["Name", "S3Path"]].head(5))
 
 ### 5. Verify outcome
 - Confirm command exit status.
-- Confirm expected files exist under output directory.
-- Report what was downloaded (or why no product matched).
+- For downloads, confirm expected files exist under output directory.
+- For list/analysis with `--save`, confirm output file exists and is non-empty.
+- Report what was downloaded/listed/analyzed (or why no product matched).
 
 ## Guardrails
 - Keep paths absolute when scripting automation.
 - Validate S3 path starts with `/eodata/` before invoking download.
 - Validate AOI WKT is polygon and date strings are ISO 8601 when building search queries.
+- Prefer `phidown list ...` over `phidown --list ...` in new examples and user guidance.
+- For `--burst-coverage`, require both `--start-date` and `--end-date`.
+- Remember burst availability starts on 2024-08-02; earlier windows will return no bursts.
 - Prefer targeted tests over full suite when network-heavy tests are present.
 
 ## Troubleshooting
 - For empty search results, relax filters one at a time: AOI -> date range -> product type -> attributes.
+- For empty burst results, validate date window is on/after 2024-08-02 and relax orbit/subswath filters.
 - For auth failures, refresh `.s5cfg` using `--reset`.
 - For download instability, retry with reduced scope (`--no-download-all` for S3 path mode).
 

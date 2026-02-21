@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 requires-python = ">=3.9"
-license = { text = "GPLv3" }
+license = { text = "Apache-2.0" }
 
 [project.scripts]
 phidown = "phidown.cli:main"
@@ -46,6 +46,15 @@ dev = [
   "pytest>=7.0.0,<9.0.0",  # More conservative range
   "pytest-mock>=3.10.0",
   "flake8>=6.0.0,<8.0.0",  # More conservative range
+]
+test = [
+  "pytest>=7.0.0,<9.0.0",
+  "pytest-mock>=3.10.0",
+  "folium>=0.18.0",
+  "huggingface-hub>=0.35.0",
+  "ipyleaflet>=0.19.2",
+  "ipywidgets>=8.1.6",
+  "shapely>=2.0.0",
 ]
 docs = [
   "sphinx>=7.0.0,<8.0.0",  # Use 7.x for better compatibility
