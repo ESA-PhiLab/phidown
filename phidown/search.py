@@ -459,15 +459,21 @@ class CopernicusDataSearcher:
         Raises:
             ValueError: If the dates are not in ISO 8601 format or if the start date is not earlier than the end date.
         """
+        def normalize_iso8601(date_str: str) -> str:
+            # Python 3.10's datetime.fromisoformat does not accept a trailing 'Z'.
+            if date_str.endswith("Z"):
+                return f"{date_str[:-1]}+00:00"
+            return date_str
+
         def is_iso8601(date_str):
             try:
-                datetime.fromisoformat(date_str)
+                datetime.fromisoformat(normalize_iso8601(date_str))
                 return True
             except ValueError:
                 return False
 
         def parse_iso8601(date_str: str) -> datetime:
-            return datetime.fromisoformat(date_str)
+            return datetime.fromisoformat(normalize_iso8601(date_str))
 
         start_dt: typing.Optional[datetime] = None
         end_dt: typing.Optional[datetime] = None

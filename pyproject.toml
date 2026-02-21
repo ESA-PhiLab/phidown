@@ -73,11 +73,12 @@ build-backend = "pdm.backend"
 distribution = true
 
 [tool.pdm.build]
-includes = ["phidown/**"]
+# Package only source and required config files; avoid bundling local downloaded data (e.g. *.SAFE folders).
+includes = ["phidown/*.py", "phidown/**/*.py", "phidown/config.json"]
 
 [tool.pdm.sdist]
-# Include all files for source distribution
-includes = ["phidown/**", "README.md", "LICENSE"]
+# Keep source distributions lean and reproducible.
+includes = ["phidown/*.py", "phidown/**/*.py", "phidown/config.json", "README.md", "LICENSE"]
 
 [tool.pdm.wheel]
 # Universal wheel (pure Python, no platform-specific code)
