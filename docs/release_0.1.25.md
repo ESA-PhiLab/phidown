@@ -83,6 +83,4 @@ Updated phidown skill guidance and command patterns to include list and burst-co
 
 The same skill updates were synced to the active local skill path under `$CODEX_HOME/skills/phidown`.
 
-## Behavior Change Note
 
-Per request, `/Users/roberto.delprete/Library/CloudStorage/OneDrive-ESA/Desktop/Repos/phidown/phidown/search.py` was reverted to its original implementation state in this branch.
