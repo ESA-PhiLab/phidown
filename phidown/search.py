@@ -10,8 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 import copy 
 import asyncio
+import time
+import random
 
 from .downloader import pull_down, get_token, download_burst_on_demand, TokenManager
+from .download_state import DownloadStateStore, default_state_file, is_non_empty_file, is_product_complete
 
 # Optional shapely import for AOI coverage calculation
 try:
@@ -33,6 +36,12 @@ except ImportError:
 # Configure logging
 logger = logging.getLogger(__name__)
 REQUEST_TIMEOUT_SECONDS = 30
+
+
+def _compute_backoff_delay(attempt_index: int, backoff_base: float, backoff_max: float) -> float:
+    """Compute retry delay with exponential backoff and jitter."""
+    exponential = backoff_base * (2 ** attempt_index)
+    return min(backoff_max, exponential) + random.uniform(0.0, 0.5)
 
 # Set up S3 credentials in .s5cfg file!
 
@@ -1808,7 +1817,13 @@ class CopernicusDataSearcher:
         username: typing.Optional[str] = None,
         password: typing.Optional[str] = None,
         retry_count: int = 3,
-        verbose: bool = True
+        verbose: bool = True,
+        connect_timeout: float = REQUEST_TIMEOUT_SECONDS,
+        read_timeout: typing.Optional[float] = None,
+        state_file: typing.Optional[str] = None,
+        resume_mode: str = 'off',
+        backoff_base: float = 2.0,
+        backoff_max: float = 60.0,
     ) -> typing.Dict[str, typing.Any]:
         """Download burst products from a DataFrame.
         
@@ -1822,6 +1837,12 @@ class CopernicusDataSearcher:
             password: CDSE password. Required for burst downloads.
             retry_count: Number of retry attempts for failed downloads.
             verbose: Whether to print progress information.
+            connect_timeout: HTTP connection timeout in seconds.
+            read_timeout: HTTP read timeout in seconds (None => same as connect timeout).
+            state_file: Optional JSON state file path for resumable runs.
+            resume_mode: Resume mode ('off' or 'product').
+            backoff_base: Base delay in seconds for retry backoff.
+            backoff_max: Max delay in seconds for retry backoff.
             
         Returns:
             Dict containing:
@@ -1844,15 +1865,22 @@ class CopernicusDataSearcher:
         
         if data is None or data.empty:
             logger.warning("No burst products to download")
-            return {'downloaded': 0, 'failed': 0, 'details': []}
+            return {'downloaded': 0, 'failed': 0, 'skipped': 0, 'details': []}
         
         if username is None or password is None:
             raise ValueError("CDSE username and password are required for burst downloads. "
                            "Register at https://dataspace.copernicus.eu/")
+        if resume_mode not in {'off', 'product'}:
+            raise ValueError("resume_mode must be either 'off' or 'product'")
         
         # Ensure output directory exists
         output_path = Path(output_dir).absolute()
         output_path.mkdir(parents=True, exist_ok=True)
+
+        state_store: typing.Optional[DownloadStateStore] = None
+        if resume_mode != 'off':
+            resolved_state_file = state_file or default_state_file(str(output_path))
+            state_store = DownloadStateStore(resolved_state_file)
         
         # Create token manager for automatic token refresh
         if verbose:
@@ -1869,6 +1897,7 @@ class CopernicusDataSearcher:
         summary = {
             'downloaded': 0,
             'failed': 0,
+            'skipped': 0,
             'details': []
         }
         
@@ -1888,6 +1917,21 @@ class CopernicusDataSearcher:
             
             if verbose:
                 print(f"📥 Downloading burst {idx + 1}/{total} (BurstId: {burst_num})...")
+
+            if state_store is not None:
+                existing = state_store.get(str(burst_id))
+                existing_output = existing.get('output_path') if isinstance(existing, dict) else None
+                if existing and existing.get('status') == 'success' and existing_output and is_non_empty_file(existing_output):
+                    summary['skipped'] += 1
+                    summary['details'].append({
+                        'burst_id': burst_id,
+                        'burst_num': burst_num,
+                        'status': 'skipped',
+                        'reason': 'already_downloaded'
+                    })
+                    if verbose:
+                        print("   ⏭️  Skipped (already downloaded)")
+                    continue
             
             success = False
             last_error = None
@@ -1897,7 +1941,14 @@ class CopernicusDataSearcher:
                     download_burst_on_demand(
                         burst_id=burst_id,
                         token=token_manager,
-                        output_dir=output_path
+                        output_dir=output_path,
+                        connect_timeout=connect_timeout,
+                        read_timeout=read_timeout,
+                        retry_count=1,
+                        state_file=state_file,
+                        resume_mode=resume_mode,
+                        backoff_base=backoff_base,
+                        backoff_max=backoff_max,
                     )
                     success = True
                     break
@@ -1905,6 +1956,9 @@ class CopernicusDataSearcher:
                     last_error = str(e)
                     if verbose and attempt < retry_count - 1:
                         print(f"   ⚠️  Attempt {attempt + 1} failed, retrying...")
+                    if attempt < retry_count - 1:
+                        delay = _compute_backoff_delay(attempt, backoff_base=backoff_base, backoff_max=backoff_max)
+                        time.sleep(delay)
             
             if success:
                 summary['downloaded'] += 1
@@ -1927,7 +1981,10 @@ class CopernicusDataSearcher:
                     print(f"   ❌ Failed: {last_error}")
         
         if verbose:
-            print(f"\n📊 Download complete: {summary['downloaded']} succeeded, {summary['failed']} failed")
+            print(
+                f"\n📊 Download complete: {summary['downloaded']} succeeded, "
+                f"{summary['failed']} failed, {summary['skipped']} skipped"
+            )
         
         return summary
     
@@ -1939,7 +1996,13 @@ class CopernicusDataSearcher:
         retry_count: int = 3,
         validate: bool = True,
         verbose: bool = True,
-        show_progress: bool = True
+        show_progress: bool = True,
+        state_file: typing.Optional[str] = None,
+        resume_mode: str = 'off',
+        s5cmd_retry_count: typing.Optional[int] = None,
+        max_workers: typing.Optional[int] = None,
+        backoff_base: float = 2.0,
+        backoff_max: float = 60.0,
     ) -> typing.Dict[str, typing.Any]:
         """Download multiple SLC/GRD products from a DataFrame.
         
@@ -1954,6 +2017,12 @@ class CopernicusDataSearcher:
             validate: Whether to validate downloaded files (check manifest.safe exists).
             verbose: Whether to print progress information.
             show_progress: Whether to show tqdm progress bar.
+            state_file: Optional JSON state file path for resumable runs.
+            resume_mode: Resume mode ('off' or 'product').
+            s5cmd_retry_count: Optional internal retry count for s5cmd.
+            max_workers: Optional worker count for s5cmd.
+            backoff_base: Base delay in seconds for retry backoff.
+            backoff_max: Max delay in seconds for retry backoff.
             
         Returns:
             Dict containing:
@@ -1971,15 +2040,23 @@ class CopernicusDataSearcher:
         
         if data is None or data.empty:
             logger.warning("No products to download")
-            return {'downloaded': 0, 'failed': 0, 'details': []}
+            return {'downloaded': 0, 'failed': 0, 'skipped': 0, 'details': []}
+        if resume_mode not in {'off', 'product'}:
+            raise ValueError("resume_mode must be either 'off' or 'product'")
         
         # Ensure output directory exists
         abs_output_dir = os.path.abspath(output_dir)
         os.makedirs(abs_output_dir, exist_ok=True)
+
+        state_store: typing.Optional[DownloadStateStore] = None
+        if resume_mode != 'off':
+            resolved_state_file = state_file or default_state_file(abs_output_dir)
+            state_store = DownloadStateStore(resolved_state_file)
         
         summary = {
             'downloaded': 0,
             'failed': 0,
+            'skipped': 0,
             'details': []
         }
         
@@ -2000,34 +2077,100 @@ class CopernicusDataSearcher:
             
             if verbose:
                 print(f"📥 Downloading {idx + 1}/{total}: {product_name}...")
+
+            product_dir = os.path.join(abs_output_dir, product_name)
+            manifest_path = os.path.join(product_dir, 'manifest.safe')
+
+            if resume_mode != 'off' and is_product_complete(product_dir):
+                if state_store is not None:
+                    state_store.mark(
+                        product_name,
+                        'success',
+                        output_path=product_dir,
+                        extra={'s3_path': s3_path},
+                    )
+                summary['skipped'] += 1
+                summary['details'].append({
+                    'name': product_name,
+                    'status': 'skipped',
+                    'reason': 'already_downloaded'
+                })
+                if verbose:
+                    print("   ⏭️  Skipped (already downloaded)")
+                continue
+
+            if state_store is not None:
+                existing = state_store.get(product_name)
+                existing_output = existing.get('output_path') if isinstance(existing, dict) else None
+                if existing and existing.get('status') == 'success' and existing_output and is_product_complete(existing_output):
+                    summary['skipped'] += 1
+                    summary['details'].append({
+                        'name': product_name,
+                        'status': 'skipped',
+                        'reason': 'already_downloaded'
+                    })
+                    if verbose:
+                        print("   ⏭️  Skipped (already downloaded)")
+                    continue
             
             success = False
             last_error = None
             
             for attempt in range(retry_count):
                 try:
+                    if state_store is not None:
+                        state_store.mark(
+                            product_name,
+                            'in_progress',
+                            attempts=attempt + 1,
+                            output_path=product_dir,
+                            extra={'s3_path': s3_path},
+                        )
                     pull_down(
                         s3_path=s3_path,
                         output_dir=abs_output_dir,
                         config_file=config_file,
                         total_size=content_length,
-                        show_progress=show_progress
+                        show_progress=show_progress,
+                        retry_count=1,
+                        s5cmd_retry_count=s5cmd_retry_count,
+                        max_workers=max_workers,
+                        backoff_base=backoff_base,
+                        backoff_max=backoff_max,
                     )
                     
                     # Validate if enabled
                     if validate:
-                        product_dir = os.path.join(abs_output_dir, product_name)
-                        manifest_path = os.path.join(product_dir, 'manifest.safe')
                         if os.path.isdir(product_dir) and not os.path.exists(manifest_path):
                             raise ValueError("manifest.safe not found - download may be incomplete")
                     
                     success = True
+                    if state_store is not None:
+                        state_store.mark(
+                            product_name,
+                            'success',
+                            attempts=attempt + 1,
+                            output_path=product_dir,
+                            extra={'s3_path': s3_path},
+                        )
                     break
                     
                 except Exception as e:
                     last_error = str(e)
+                    if state_store is not None:
+                        state_store.mark(
+                            product_name,
+                            'failed',
+                            attempts=attempt + 1,
+                            error=last_error,
+                            output_path=product_dir,
+                            extra={'s3_path': s3_path},
+                        )
                     if verbose and attempt < retry_count - 1:
                         print(f"   ⚠️  Attempt {attempt + 1} failed, retrying...")
+                    if attempt < retry_count - 1:
+                        delay = _compute_backoff_delay(attempt, backoff_base=backoff_base, backoff_max=backoff_max)
+                        time.sleep(delay)
             
             if success:
                 summary['downloaded'] += 1
@@ -2048,6 +2191,9 @@ class CopernicusDataSearcher:
                     print(f"   ❌ Failed: {last_error}")
         
         if verbose:
-            print(f"\n📊 Download complete: {summary['downloaded']} succeeded, {summary['failed']} failed")
+            print(
+                f"\n📊 Download complete: {summary['downloaded']} succeeded, "
+                f"{summary['failed']} failed, {summary['skipped']} skipped"
+            )
         
         return summary

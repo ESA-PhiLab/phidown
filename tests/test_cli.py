@@ -136,6 +136,21 @@ class TestMainCLI:
         
         assert exc_info.value.code == 0
         mock_download.assert_called_once()
+
+    @patch('phidown.cli.download_by_name')
+    @patch('sys.argv', ['phidown', '--name', 'TEST_PRODUCT', '-o', '/tmp/test', '--robust'])
+    def test_cli_with_name_robust_defaults(self, mock_download):
+        """Test robust preset is forwarded to download helper."""
+        mock_download.return_value = True
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        kwargs = mock_download.call_args.kwargs
+        assert kwargs['retry_count'] == 5
+        assert kwargs['read_timeout'] == 900.0
+        assert kwargs['resume_mode'] == 'product'
     
     @patch('phidown.cli.download_by_s3path')
     @patch('sys.argv', ['phidown', '--s3path', '/eodata/test', '-o', '/tmp/test'])
