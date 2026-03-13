@@ -30,6 +30,7 @@ if "folium" not in sys.modules:
 
 from phidown.viz import (
     _coverage_to_color,
+    _geojson_coordinate_pairs,
     _normalize_footprint,
     _parse_wkt_polygon,
     plot_kml_coordinates,
@@ -78,6 +79,13 @@ def test_normalize_footprint_supports_multiple_formats_and_bad_wkt():
     assert _normalize_footprint('{"type":"Polygon","coordinates":[[[0,1],[1,1],[0,1]]]}')["type"] == "Polygon"
     assert _normalize_footprint("geography'SRID=4326;POLYGON((12.4 41.8, 12.6 41.8, 12.6 42.0, 12.4 42.0, 12.4 41.8))'")["type"] == "Polygon"
     assert _normalize_footprint("POLYGON((12.4 bad, 12.6 41.8))") is None
+
+
+def test_geojson_coordinate_pairs_flattens_supported_geometries():
+    assert _geojson_coordinate_pairs({"type": "Point", "coordinates": [12.4, 41.8]}) == [(12.4, 41.8)]
+    assert _geojson_coordinate_pairs(
+        {"type": "LineString", "coordinates": [[12.4, 41.8], [12.6, 42.0]]}
+    ) == [(12.4, 41.8), (12.6, 42.0)]
 
 
 @patch("builtins.open", new_callable=mock_open, read_data=SAMPLE_KML_CONTENT)
@@ -169,13 +177,11 @@ def test_plot_kml_coordinates_rejects_too_few_coordinates(mock_parse, mock_file)
 
 
 @patch("folium.Map")
-@patch("folium.Polygon")
 @patch("folium.GeoJson")
-def test_plot_product_footprints_geography_wkt(mock_geojson, mock_polygon, mock_map):
+def test_plot_product_footprints_geography_wkt(mock_geojson, mock_map):
     mock_map_instance = MagicMock()
     mock_map.return_value = mock_map_instance
     mock_geojson.return_value = MagicMock()
-    mock_polygon.return_value = MagicMock()
 
     df = pd.DataFrame(
         [
@@ -196,12 +202,38 @@ def test_plot_product_footprints_geography_wkt(mock_geojson, mock_polygon, mock_
 
     assert m == mock_map_instance
     mock_map.assert_called_once()
-    mock_polygon.assert_called_once()
-    mock_geojson.assert_called_once()
-    kwargs = mock_geojson.call_args.kwargs
+    assert mock_geojson.call_count == 2
+    kwargs = mock_geojson.call_args_list[-1].kwargs
     assert "AOI coverage" in kwargs["tooltip"]
     assert "10.50%" in kwargs["tooltip"]
     assert "popup" in kwargs
+
+
+@patch("folium.Map")
+@patch("folium.LayerControl")
+@patch("folium.GeoJson")
+def test_plot_product_footprints_accepts_point_aoi(mock_geojson, mock_layer_control, mock_map):
+    mock_map_instance = MagicMock()
+    mock_map.return_value = mock_map_instance
+    mock_geojson.return_value = MagicMock()
+
+    df = pd.DataFrame(
+        [
+            {
+                "Id": "x1",
+                "Name": "burst-1",
+                "coverage": 10.5,
+                "Footprint": "geography'SRID=4326;POLYGON((12.4 41.8, 12.6 41.8, 12.6 42.0, 12.4 42.0, 12.4 41.8))'",
+            }
+        ]
+    )
+
+    result = plot_product_footprints(df=df, aoi_wkt="POINT(12.4 41.8)", top_n=10)
+
+    assert result == mock_map_instance
+    mock_map.assert_called_once_with(location=[41.8, 12.4], zoom_start=9, tiles="CartoDB positron")
+    assert mock_geojson.call_count == 2
+    mock_layer_control.assert_called_once()
 
 
 @patch("folium.Map")

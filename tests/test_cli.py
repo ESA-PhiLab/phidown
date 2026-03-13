@@ -43,7 +43,7 @@ class TestDownloadByName:
 
     @patch('phidown.cli.pull_down')
     @patch('phidown.cli.CopernicusDataSearcher')
-    def test_successful_download(self, mock_searcher_class, mock_pull_down):
+    def test_successful_download(self, mock_searcher_class, mock_pull_down, tmp_path):
         """Test successful product download by name."""
         # Setup mock searcher
         mock_searcher = MagicMock()
@@ -57,12 +57,18 @@ class TestDownloadByName:
         mock_searcher.query_by_name.return_value = mock_df
         
         # Setup mock pull_down
-        mock_pull_down.return_value = True
+        def _fake_pull_down(**kwargs):
+            product_dir = tmp_path / 'test.SAFE'
+            product_dir.mkdir(parents=True, exist_ok=True)
+            (product_dir / 'manifest.safe').write_text('ok', encoding='utf-8')
+            return True
+
+        mock_pull_down.side_effect = _fake_pull_down
         
         # Execute
         result = download_by_name(
             product_name='TEST_PRODUCT',
-            output_dir='/tmp/test',
+            output_dir=str(tmp_path),
             show_progress=False
         )
         
@@ -70,6 +76,31 @@ class TestDownloadByName:
         assert result is True
         mock_searcher.query_by_name.assert_called_once_with('TEST_PRODUCT')
         mock_pull_down.assert_called_once()
+        assert mock_pull_down.call_args.kwargs['reset'] is False
+
+    @patch('phidown.cli.time.sleep', return_value=None)
+    @patch('phidown.cli.pull_down')
+    @patch('phidown.cli.CopernicusDataSearcher')
+    def test_download_by_name_only_resets_on_first_retry_attempt(self, mock_searcher_class, mock_pull_down, mock_sleep):
+        mock_searcher = MagicMock()
+        mock_searcher_class.return_value = mock_searcher
+        mock_searcher.query_by_name.return_value = pd.DataFrame(
+            {'S3Path': ['/eodata/Sentinel-1/SAR/test.SAFE'], 'ContentLength': [1024000]}
+        )
+        mock_pull_down.side_effect = [RuntimeError('transient'), None]
+
+        result = download_by_name(
+            product_name='TEST_PRODUCT',
+            output_dir='/tmp/test',
+            reset_config=True,
+            retry_count=2,
+            show_progress=False,
+        )
+
+        assert result is False
+        assert mock_pull_down.call_count == 2
+        assert mock_pull_down.call_args_list[0].kwargs['reset'] is True
+        assert mock_pull_down.call_args_list[1].kwargs['reset'] is False
     
     @patch('phidown.cli.CopernicusDataSearcher')
     def test_product_not_found(self, mock_searcher_class):
@@ -196,6 +227,7 @@ class TestDownloadByS3Path:
         
         assert result is True
         mock_pull_down.assert_called_once()
+        assert mock_pull_down.call_args.kwargs['reset'] is False
     
     def test_invalid_s3_path(self):
         """Test validation of S3 path format."""

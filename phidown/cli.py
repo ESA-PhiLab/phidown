@@ -220,6 +220,7 @@ def download_by_name(
         success = False
         attempts = max(1, int(retry_count))
         last_error = None
+        should_reset_config = reset_config
         for attempt in range(attempts):
             try:
                 if state_store is not None:
@@ -232,6 +233,8 @@ def download_by_name(
                     )
 
                 if use_native:
+                    attempt_reset = should_reset_config
+                    should_reset_config = False
                     result = download_s3_resumable(
                         s3_path=s3_path,
                         output_dir=abs_output_dir,
@@ -244,7 +247,7 @@ def download_by_name(
                         show_progress=show_progress,
                         attempts=attempt + 1,
                         persist_state=True,
-                        reset_config=reset_config,
+                        reset_config=attempt_reset,
                     )
                     if result.status == 'skipped':
                         logger.info('⏭️  Product already downloaded, skipping.')
@@ -252,13 +255,15 @@ def download_by_name(
                     if not is_product_complete(result.output_path):
                         raise ValueError('manifest.safe not found - download may be incomplete')
                 else:
+                    attempt_reset = should_reset_config
+                    should_reset_config = False
                     pull_down(
                         s3_path=s3_path,
                         output_dir=abs_output_dir,
                         config_file=config_file,
                         total_size=content_length,
                         show_progress=show_progress,
-                        reset=reset_config,
+                        reset=attempt_reset,
                         retry_count=1,
                         s5cmd_retry_count=s5cmd_retry_count,
                         max_workers=max_workers,
@@ -406,6 +411,7 @@ def download_by_s3path(
         success = False
         attempts = max(1, int(retry_count))
         last_error = None
+        should_reset_config = reset_config
         for attempt in range(attempts):
             try:
                 if state_store is not None:
@@ -418,6 +424,8 @@ def download_by_s3path(
                     )
 
                 if use_native:
+                    attempt_reset = should_reset_config
+                    should_reset_config = False
                     result = download_s3_resumable(
                         s3_path=s3_path,
                         output_dir=abs_output_dir,
@@ -430,7 +438,7 @@ def download_by_s3path(
                         show_progress=show_progress,
                         attempts=attempt + 1,
                         persist_state=True,
-                        reset_config=reset_config,
+                        reset_config=attempt_reset,
                     )
                     if result.status == 'skipped':
                         logger.info('⏭️  Target already downloaded, skipping.')
@@ -438,12 +446,14 @@ def download_by_s3path(
                     if download_all and not is_product_complete(result.output_path):
                         raise ValueError('manifest.safe not found - download may be incomplete')
                 else:
+                    attempt_reset = should_reset_config
+                    should_reset_config = False
                     pull_down(
                         s3_path=s3_path,
                         output_dir=abs_output_dir,
                         config_file=config_file,
                         show_progress=show_progress,
-                        reset=reset_config,
+                        reset=attempt_reset,
                         download_all=download_all,
                         retry_count=1,
                         s5cmd_retry_count=s5cmd_retry_count,
