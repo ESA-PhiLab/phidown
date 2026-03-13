@@ -41,11 +41,24 @@ def plot_kml_coordinates(kml_file: str, output_html: str = "map_overlay.html"):
     tree = ET.parse(kml_file)
     root = tree.getroot()
 
-    coordinates_text = root.find(".//gx:LatLonQuad/coordinates", namespace).text.strip()
-    coordinates = [
-        [float(coord.split(",")[1]), float(coord.split(",")[0])]
-        for coord in coordinates_text.split()
-    ]
+    coordinates_node = root.find(".//gx:LatLonQuad/coordinates", namespace)
+    if coordinates_node is None or not coordinates_node.text or not coordinates_node.text.strip():
+        raise ValueError("KML does not contain gx:LatLonQuad/coordinates data.")
+
+    coordinates = []
+    for coord in coordinates_node.text.split():
+        parts = coord.split(",")
+        if len(parts) < 2:
+            raise ValueError(f"Invalid KML coordinate: {coord}")
+        try:
+            lon = float(parts[0])
+            lat = float(parts[1])
+        except ValueError as exc:
+            raise ValueError(f"Invalid numeric KML coordinate: {coord}") from exc
+        coordinates.append([lat, lon])
+
+    if len(coordinates) < 3:
+        raise ValueError("KML polygon requires at least three coordinate pairs.")
 
     coordinates.append(coordinates[0])
     m = folium.Map(location=coordinates[0], zoom_start=10, tiles="CartoDB positron")
@@ -72,8 +85,17 @@ def _parse_wkt_polygon(aoi_wkt: str) -> List[List[float]]:
     coords_txt = aoi_wkt.split("((", 1)[1].split("))", 1)[0]
     coordinates: List[List[float]] = []
     for pair in coords_txt.split(","):
-        lon, lat = pair.strip().split()[:2]
-        coordinates.append([float(lat), float(lon)])
+        parts = pair.strip().split()
+        if len(parts) < 2:
+            raise ValueError(f"Invalid WKT coordinate pair: {pair}")
+        try:
+            lon = float(parts[0])
+            lat = float(parts[1])
+        except ValueError as exc:
+            raise ValueError(f"Invalid numeric WKT coordinate pair: {pair}") from exc
+        coordinates.append([lat, lon])
+    if not coordinates:
+        raise ValueError("Invalid AOI WKT. Polygon has no coordinates.")
     return coordinates
 
 
@@ -121,12 +143,17 @@ def _normalize_footprint(value: Any) -> Optional[Dict[str, Any]]:
         text = text.split(";", 1)[1].rstrip("'")
 
     if text.upper().startswith("POLYGON(("):
-        coords_txt = text.split("((", 1)[1].split("))", 1)[0]
-        ring: List[List[float]] = []
-        for pair in coords_txt.split(","):
-            lon, lat = pair.strip().split()[:2]
-            ring.append([float(lon), float(lat)])
-        return {"type": "Polygon", "coordinates": [ring]}
+        try:
+            coords_txt = text.split("((", 1)[1].split("))", 1)[0]
+            ring: List[List[float]] = []
+            for pair in coords_txt.split(","):
+                parts = pair.strip().split()
+                if len(parts) < 2:
+                    return None
+                ring.append([float(parts[0]), float(parts[1])])
+            return {"type": "Polygon", "coordinates": [ring]}
+        except (TypeError, ValueError):
+            return None
 
     return None
 

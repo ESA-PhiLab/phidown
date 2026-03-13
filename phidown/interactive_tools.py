@@ -625,7 +625,7 @@ def search_with_polygon(polygon_tool: InteractivePolygonTool,
     try:
         # Configure search
         searcher = CopernicusDataSearcher()
-        searcher._query_by_filter(
+        searcher.query_by_filter(
             collection_name=collection_name,
             product_type=product_type,
             orbit_direction=None,
