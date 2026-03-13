@@ -53,7 +53,15 @@ class BurstWorkflowConfig:
 
 
 def build_burst_workflow_config(config: Dict[str, Any]) -> BurstWorkflowConfig:
+    if not isinstance(config, dict):
+        raise TypeError("Workflow config must be a dictionary.")
+
     search = config.get("search", {})
+    if search is None:
+        search = {}
+    if not isinstance(search, dict):
+        raise TypeError("Workflow config 'search' section must be a dictionary.")
+
     return BurstWorkflowConfig(
         search=BurstSearchConfig(
             aoi_wkt=search.get("aoi_wkt", ""),
@@ -73,10 +81,13 @@ def build_burst_workflow_config(config: Dict[str, Any]) -> BurstWorkflowConfig:
 
 
 def _platform_filter(platforms: List[str]) -> Optional[str]:
-    if "ALL" in platforms:
+    if not platforms:
         return None
-    if len(platforms) == 1:
-        return platforms[0]
+    normalized = [str(platform).upper() for platform in platforms]
+    if "ALL" in normalized:
+        return None
+    if len(normalized) == 1:
+        return normalized[0]
     return None
 
 
@@ -89,6 +100,8 @@ def find_orbit_configuration(cfg: BurstSearchConfig, searcher: Optional[Copernic
         product_type="SLC",
         top=cfg.max_results,
     )
+    if not isinstance(analysis, dict):
+        analysis = {}
     rec = analysis.get("recommended") or {}
     return {
         "analysis": analysis,
@@ -144,6 +157,8 @@ def search_bursts(cfg: BurstSearchConfig, searcher: Optional[CopernicusDataSearc
 
 
 def compute_burst_statistics(df: pd.DataFrame, searcher: Optional[CopernicusDataSearcher] = None) -> Dict[str, Any]:
+    if df is None or df.empty:
+        return {}
     local_searcher = searcher or CopernicusDataSearcher()
     return local_searcher.compute_temporal_statistics(df)
 
@@ -166,7 +181,7 @@ def validate_burst_results(df: pd.DataFrame, stats: Dict[str, Any]) -> Dict[str,
         if "coverage" in df.columns and df["coverage"].notna().sum() == 0:
             warnings.append("Coverage column exists but contains only null values.")
 
-    if not stats:
+    if not isinstance(stats, dict) or not stats:
         warnings.append("Temporal statistics are empty.")
     elif "total_acquisitions" not in stats:
         errors.append("Temporal statistics missing total_acquisitions.")
@@ -207,10 +222,11 @@ def save_workflow_outputs(
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     paths: Dict[str, Path] = {}
+    export_df = df if df is not None else pd.DataFrame()
 
     if save_results_csv:
         csv_path = out / "search_results.csv"
-        df.to_csv(csv_path, index=False)
+        export_df.to_csv(csv_path, index=False)
         paths["search_results_csv"] = csv_path
 
     stats_path = out / "temporal_statistics.json"
@@ -225,7 +241,7 @@ def save_workflow_outputs(
     debug_path.write_text(json.dumps(debug, indent=2, default=str))
     paths["debug_summary_json"] = debug_path
 
-    coverage_plot_path = _save_coverage_plot(df, out, orbit=orbit)
+    coverage_plot_path = _save_coverage_plot(export_df, out, orbit=orbit)
     if coverage_plot_path is not None:
         paths["coverage_plot_png"] = coverage_plot_path
 
