@@ -180,3 +180,63 @@ def test_pagination_handles_request_errors_gracefully():
     # Should return at least the first page
     assert len(df) == 5
     assert 'product_0' in df['Id'].values
+
+
+def test_manual_skip_fetches_single_page():
+    """Test that manual skip fetches only the requested page."""
+    searcher = CopernicusDataSearcher()
+    searcher.query_by_filter(
+        collection_name='SENTINEL-1',
+        product_type='SLC',
+        top=5,
+        skip=10,
+    )
+
+    mock_response = Mock()
+    mock_response.json.return_value = {
+        'value': [{'Id': f'product_{i}', 'Name': f'name_{i}'} for i in range(10, 15)],
+        '@odata.count': 25,
+    }
+    mock_response.raise_for_status = Mock()
+
+    with patch('requests.get', return_value=mock_response) as mock_get:
+        df = searcher.execute_query()
+
+    assert mock_get.call_count == 1
+    assert len(df) == 5
+    assert '$skip=10' in mock_get.call_args[0][0]
+
+
+def test_count_and_skip_cannot_be_combined():
+    """Test that explicit skip is rejected when count pagination is enabled."""
+    searcher = CopernicusDataSearcher()
+
+    with pytest.raises(ValueError, match="count' and 'skip"):
+        searcher.query_by_filter(
+            collection_name='SENTINEL-1',
+            product_type='SLC',
+            top=5,
+            count=True,
+            skip=10,
+        )
+
+
+@pytest.mark.parametrize(
+    ("skip", "expected_exception", "message"),
+    [
+        (-1, ValueError, "greater than or equal to 0"),
+        ("10", TypeError, "must be an integer"),
+        (True, TypeError, "must be an integer"),
+    ],
+)
+def test_skip_validation(skip, expected_exception, message):
+    """Test validation of manual skip values."""
+    searcher = CopernicusDataSearcher()
+
+    with pytest.raises(expected_exception, match=message):
+        searcher.query_by_filter(
+            collection_name='SENTINEL-1',
+            product_type='SLC',
+            top=5,
+            skip=skip,
+        )

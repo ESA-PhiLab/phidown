@@ -445,6 +445,21 @@ class TestBurstModeQueryBuilding:
         assert '$top=50' in url
         assert '$orderby=ContentDate/Start desc' in url
 
+    def test_build_query_with_skip(self):
+        """Test query building with manual skip in burst mode."""
+        searcher = CopernicusDataSearcher()
+        searcher.query_by_filter(
+            burst_mode=True,
+            burst_id=15804,
+            start_date='2024-08-01T00:00:00.000Z',
+            end_date='2024-08-15T00:00:00.000Z',
+            top=50,
+            skip=100,
+        )
+        url = searcher._build_query()
+        assert '$skip=100' in url
+        assert '$expand=Attributes' not in url
+
 
 class TestBurstModeBackwardCompatibility:
     """Test that burst mode doesn't break existing functionality."""

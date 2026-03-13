@@ -91,23 +91,66 @@ def test_searcher_invalid_cloud_cover_high():
 
 # Test invalid AOI WKT format
 def test_searcher_invalid_aoi_wkt_format():
-    with pytest.raises(ValueError, match="must be a valid WKT POLYGON"):
+    with pytest.raises(ValueError, match="must be valid WKT"):
         CopernicusDataSearcher(
             config_path=CONFIG_PATH,
             collection_name='SENTINEL-1',
             product_type='SLC',
-            aoi_wkt='INVALID WKT'
+            aoi_wkt='POINT(12.4)'
         )
 
 
-# Test invalid AOI WKT polygon (start/end points differ)
-def test_searcher_invalid_aoi_wkt_polygon():
-    with pytest.raises(ValueError, match="must start and end with the same point"):
+@pytest.mark.parametrize(
+    "aoi_wkt",
+    [
+        'POINT(12.4 41.9)',
+        'MULTIPOINT((12.4 41.9), (12.5 42.0))',
+        'LINESTRING(12.4 41.9, 12.5 42.0)',
+        'MULTILINESTRING((12.4 41.9, 12.5 42.0), (12.6 42.1, 12.7 42.2))',
+        'POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))',
+        'MULTIPOLYGON(((0 0, 1 0, 1 1, 0 1, 0 0)), ((2 2, 3 2, 3 3, 2 3, 2 2)))',
+    ],
+)
+def test_searcher_accepts_supported_aoi_wkt_geometries(aoi_wkt):
+    searcher = CopernicusDataSearcher(
+        config_path=CONFIG_PATH,
+        collection_name='SENTINEL-1',
+        product_type='SLC',
+        aoi_wkt=aoi_wkt,
+    )
+    assert searcher.aoi_wkt == aoi_wkt
+
+
+def test_searcher_rejects_unsupported_aoi_wkt_geometry():
+    with pytest.raises(ValueError, match="Unsupported AOI WKT geometry type 'GEOMETRYCOLLECTION'"):
         CopernicusDataSearcher(
             config_path=CONFIG_PATH,
             collection_name='SENTINEL-1',
             product_type='SLC',
-            aoi_wkt='POLYGON((0 0, 1 0, 1 1, 0 1))'
+            aoi_wkt='GEOMETRYCOLLECTION(POINT(0 0), POINT(1 1))'
+        )
+
+
+@pytest.mark.parametrize(
+    ("aoi_wkt", "message"),
+    [
+        (
+            'POLYGON((0 0, 1 0, 1 1, 0 1))',
+            'WKT polygon ring must start and end with the same point',
+        ),
+        (
+            'POLYGON((0 0, 1 0, 0 0))',
+            'WKT polygon ring must have at least 4 coordinate pairs',
+        ),
+    ],
+)
+def test_searcher_rejects_invalid_polygon_rings(aoi_wkt, message):
+    with pytest.raises(ValueError, match=message):
+        CopernicusDataSearcher(
+            config_path=CONFIG_PATH,
+            collection_name='SENTINEL-1',
+            product_type='SLC',
+            aoi_wkt=aoi_wkt,
         )
 
 
@@ -222,6 +265,41 @@ def test_build_query():
         f"&$orderby={searcher.order_by}&$top={searcher.top}&$expand=Attributes"
     )
     assert url == expected_url
+
+
+def test_build_query_with_skip():
+    searcher = CopernicusDataSearcher(
+        config_path=CONFIG_PATH,
+        collection_name='SENTINEL-1',
+        product_type='GRD',
+        top=10,
+        skip=20,
+    )
+    url = searcher._build_query()
+    assert "&$skip=20" in url
+
+
+@pytest.mark.parametrize(
+    "aoi_wkt",
+    [
+        'POINT(12.4 41.9)',
+        'MULTIPOINT((12.4 41.9), (12.5 42.0))',
+        'LINESTRING(12.4 41.9, 12.5 42.0)',
+        'MULTILINESTRING((12.4 41.9, 12.5 42.0), (12.6 42.1, 12.7 42.2))',
+        'POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))',
+        'MULTIPOLYGON(((0 0, 1 0, 1 1, 0 1, 0 0)), ((2 2, 3 2, 3 3, 2 3, 2 2)))',
+    ],
+)
+def test_build_query_serializes_supported_aoi_geometries(aoi_wkt):
+    searcher = CopernicusDataSearcher(
+        config_path=CONFIG_PATH,
+        collection_name='SENTINEL-1',
+        product_type='GRD',
+        aoi_wkt=aoi_wkt,
+        top=10,
+    )
+    url = searcher._build_query()
+    assert f"geography'SRID=4326;{aoi_wkt}'" in url
 
 # Add more tests for execute_query and display_results using mocking (pytest-mock)
 # These would involve mocking the 'requests.get' call and the pandas DataFrame creation.
