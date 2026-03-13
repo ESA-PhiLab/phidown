@@ -6,6 +6,7 @@ import pandas as pd
 from phidown.cli import (
     download_by_name,
     download_by_s3path,
+    _resolve_download_mode,
     list_products,
     burst_coverage_analysis,
     main,
@@ -15,6 +16,31 @@ from phidown.cli import (
 class TestDownloadByName:
     """Test cases for download_by_name function."""
     
+    @patch('phidown.cli.pull_down')
+    @patch('phidown.cli.download_s3_resumable')
+    @patch('phidown.cli.CopernicusDataSearcher')
+    def test_safe_mode_uses_native_download(self, mock_searcher_class, mock_native, mock_pull_down, tmp_path):
+        mock_searcher = MagicMock()
+        mock_searcher_class.return_value = mock_searcher
+        mock_searcher.query_by_name.return_value = pd.DataFrame(
+            {'S3Path': ['/eodata/Sentinel-1/SAR/test.SAFE'], 'ContentLength': [1024000]}
+        )
+        product_dir = tmp_path / 'test.SAFE'
+        product_dir.mkdir(parents=True)
+        (product_dir / 'manifest.safe').write_text('ok', encoding='utf-8')
+        mock_native.return_value = MagicMock(status='downloaded', output_path=str(product_dir))
+
+        result = download_by_name(
+            product_name='TEST_PRODUCT',
+            output_dir=str(tmp_path),
+            mode='safe',
+            show_progress=False,
+        )
+
+        assert result is True
+        mock_native.assert_called_once()
+        mock_pull_down.assert_not_called()
+
     @patch('phidown.cli.pull_down')
     @patch('phidown.cli.CopernicusDataSearcher')
     def test_successful_download(self, mock_searcher_class, mock_pull_down):
@@ -79,10 +105,84 @@ class TestDownloadByName:
         # Verify
         assert result is False
 
+    @patch('phidown.cli.pull_down')
+    @patch('phidown.cli.download_s3_resumable')
+    @patch('phidown.cli.CopernicusDataSearcher')
+    def test_resume_mode_uses_native_download(self, mock_searcher_class, mock_native, mock_pull_down, tmp_path):
+        mock_searcher = MagicMock()
+        mock_searcher_class.return_value = mock_searcher
+        mock_searcher.query_by_name.return_value = pd.DataFrame(
+            {'S3Path': ['/eodata/Sentinel-1/SAR/test.SAFE'], 'ContentLength': [1024000]}
+        )
+        product_dir = tmp_path / 'test.SAFE'
+        product_dir.mkdir(parents=True)
+        (product_dir / 'manifest.safe').write_text('ok', encoding='utf-8')
+        mock_native.return_value = MagicMock(status='downloaded', output_path=str(product_dir))
+
+        result = download_by_name(
+            product_name='TEST_PRODUCT',
+            output_dir=str(tmp_path),
+            show_progress=False,
+            resume_mode='product',
+            connect_timeout=12.0,
+            read_timeout=45.0,
+        )
+
+        assert result is True
+        mock_native.assert_called_once()
+        kwargs = mock_native.call_args.kwargs
+        assert kwargs['connect_timeout'] == 12.0
+        assert kwargs['read_timeout'] == 45.0
+        mock_pull_down.assert_not_called()
+
+    @patch('phidown.cli.pull_down')
+    @patch('phidown.cli.download_s3_resumable')
+    @patch('phidown.cli.CopernicusDataSearcher')
+    def test_timeout_flags_use_native_download(self, mock_searcher_class, mock_native, mock_pull_down, tmp_path):
+        mock_searcher = MagicMock()
+        mock_searcher_class.return_value = mock_searcher
+        mock_searcher.query_by_name.return_value = pd.DataFrame(
+            {'S3Path': ['/eodata/Sentinel-1/SAR/test.SAFE'], 'ContentLength': [1024000]}
+        )
+        product_dir = tmp_path / 'test.SAFE'
+        product_dir.mkdir(parents=True)
+        (product_dir / 'manifest.safe').write_text('ok', encoding='utf-8')
+        mock_native.return_value = MagicMock(status='downloaded', output_path=str(product_dir))
+
+        result = download_by_name(
+            product_name='TEST_PRODUCT',
+            output_dir=str(tmp_path),
+            show_progress=False,
+            resume_mode='off',
+            connect_timeout=5.0,
+            read_timeout=20.0,
+        )
+
+        assert result is True
+        mock_native.assert_called_once()
+        mock_pull_down.assert_not_called()
+
 
 class TestDownloadByS3Path:
     """Test cases for download_by_s3path function."""
     
+    @patch('phidown.cli.pull_down')
+    @patch('phidown.cli.download_s3_resumable')
+    def test_s3path_safe_mode_uses_native_download(self, mock_native, mock_pull_down):
+        mock_native.return_value = MagicMock(status='downloaded')
+
+        result = download_by_s3path(
+            s3_path='/eodata/Sentinel-1/SAR/test.SAFE',
+            output_dir='/tmp/test',
+            mode='safe',
+            show_progress=False,
+            download_all=False,
+        )
+
+        assert result is True
+        mock_native.assert_called_once()
+        mock_pull_down.assert_not_called()
+
     @patch('phidown.cli.pull_down')
     def test_successful_download(self, mock_pull_down):
         """Test successful download by S3 path."""
@@ -121,6 +221,47 @@ class TestDownloadByS3Path:
         call_kwargs = mock_pull_down.call_args[1]
         assert call_kwargs['download_all'] is False
 
+    @patch('phidown.cli.pull_down')
+    @patch('phidown.cli.download_s3_resumable')
+    def test_s3path_resume_mode_uses_native_download(self, mock_native, mock_pull_down):
+        mock_native.return_value = MagicMock(status='downloaded')
+
+        result = download_by_s3path(
+            s3_path='/eodata/Sentinel-1/SAR/test.SAFE',
+            output_dir='/tmp/test',
+            show_progress=False,
+            download_all=False,
+            resume_mode='product',
+            connect_timeout=9.0,
+            read_timeout=30.0,
+        )
+
+        assert result is True
+        kwargs = mock_native.call_args.kwargs
+        assert kwargs['download_all'] is False
+        assert kwargs['connect_timeout'] == 9.0
+        assert kwargs['read_timeout'] == 30.0
+        mock_pull_down.assert_not_called()
+
+    @patch('phidown.cli.pull_down')
+    @patch('phidown.cli.download_s3_resumable')
+    def test_s3path_timeout_flags_use_native_download(self, mock_native, mock_pull_down):
+        mock_native.return_value = MagicMock(status='downloaded')
+
+        result = download_by_s3path(
+            s3_path='/eodata/Sentinel-1/SAR/test.SAFE',
+            output_dir='/tmp/test',
+            show_progress=False,
+            download_all=False,
+            resume_mode='off',
+            connect_timeout=7.0,
+            read_timeout=15.0,
+        )
+
+        assert result is True
+        mock_native.assert_called_once()
+        mock_pull_down.assert_not_called()
+
 
 class TestMainCLI:
     """Test cases for main CLI entry point."""
@@ -150,7 +291,26 @@ class TestMainCLI:
         kwargs = mock_download.call_args.kwargs
         assert kwargs['retry_count'] == 5
         assert kwargs['read_timeout'] == 900.0
-        assert kwargs['resume_mode'] == 'product'
+        assert kwargs['mode'] == 'safe'
+
+    @patch('phidown.cli.download_by_name')
+    @patch('sys.argv', ['phidown', '--name', 'TEST_PRODUCT', '-o', '/tmp/test', '--mode', 'safe'])
+    def test_cli_with_name_safe_mode(self, mock_download):
+        mock_download.return_value = True
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        kwargs = mock_download.call_args.kwargs
+        assert kwargs['mode'] == 'safe'
+        assert kwargs['retry_count'] == 5
+        assert kwargs['read_timeout'] == 900.0
+
+
+def test_resolve_download_mode_resume_mode_compatibility():
+    assert _resolve_download_mode('fast', resume_mode='product') == 'safe'
+    assert _resolve_download_mode('safe', resume_mode='off') == 'fast'
     
     @patch('phidown.cli.download_by_s3path')
     @patch('sys.argv', ['phidown', '--s3path', '/eodata/test', '-o', '/tmp/test'])
