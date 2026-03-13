@@ -3,8 +3,24 @@ Changelog
 
 This document tracks all notable changes to Φ-Down.
 
+.. note::
+
+   The package metadata currently reports version ``0.1.25``. The changelog
+   entries below have not yet been backfilled for every patch release after
+   ``0.1.22``.
+
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
+
+[Unreleased]
+------------
+
+### Added
+- ``query_by_filter(skip=...)`` for manual page offsets when fetching a single result page at a time
+
+### Changed
+- Documented manual pagination examples in the README and Sphinx guides
+- Clarified that ``count=True`` still performs eager multi-page retrieval and cannot be combined with ``skip``
 
 [0.1.22] - 2025-10-18
 ---------------------

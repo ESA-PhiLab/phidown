@@ -1,119 +1,154 @@
 Getting Started
 ===============
 
-Welcome to Φ-Down! This guide will help you get up and running with downloading Copernicus satellite data.
-
-What is Φ-Down?
----------------
-
-Φ-Down is a Python library that provides a simple interface to search and download Earth Observation data from the Copernicus Data Space Ecosystem. It supports all major Sentinel missions and provides both programmatic access and interactive tools.
+Phi-Down provides a Python API and CLI for searching Copernicus Data Space
+products and downloading them through S3.
 
 Prerequisites
 -------------
 
-Before using Φ-Down, you'll need:
+Before you begin, make sure you have:
 
-1. **Python 3.9+** - Φ-Down requires Python 3.9 or later
-2. **Copernicus Data Space Account** - Register at `<https://dataspace.copernicus.eu/>`_
-3. **S3 Credentials** (required) - Get S3 credentials from the `S3 Key Manager <https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials>`_
+1. Python 3.9 or newer
+2. A Copernicus Data Space account: `<https://dataspace.copernicus.eu/>`_
+3. S3 credentials from the `S3 Key Manager <https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials>`_
+4. ``s5cmd`` installed if you plan to download products
 
-First Steps
------------
+Install Phi-Down
+----------------
 
-1. **Install Φ-Down**:
+.. code-block:: bash
 
-   .. code-block:: bash
+   pip install phidown
 
-      pip install phidown
+Configure S3 Credentials
+------------------------
 
-2. **Set up your S3 credentials**:
+Phi-Down reads CDSE S3 credentials from an ``.s5cfg`` file. By default it
+looks for ``.s5cfg`` in your current working directory, but you can also pass a
+custom path with the CLI ``-c/--config-file`` option or the Python
+``config_file=...`` argument.
 
-   Create a `.s5cfg` file in your working directory:
+Create a minimal ``.s5cfg`` file:
 
-   .. code-block:: yaml
+.. code-block:: ini
 
-      [default]
-      aws_access_key_id = your_access_key
-      aws_secret_access_key = access_key_secret
-      aws_region = eu-central-1
-      host_base = eodata.dataspace.copernicus.eu
-      host_bucket = eodata.dataspace.copernicus.eu
-      use_https = true
-      check_ssl_certificate = true
+   [default]
+   aws_access_key_id = your_access_key
+   aws_secret_access_key = your_secret_key
+   aws_region = eu-central-1
+   host_base = eodata.dataspace.copernicus.eu
+   host_bucket = eodata.dataspace.copernicus.eu
+   use_https = true
+   check_ssl_certificate = true
 
-   Replace `your_access_key` and `access_key_secret` with your actual S3 credentials.
+Guidelines:
 
-3. **Your first search**:
+* Keep the section name as ``[default]``. Phi-Down currently reads credentials
+  from that section.
+* ``aws_access_key_id`` and ``aws_secret_access_key`` are the critical values.
+  The rest should normally stay as shown above for CDSE.
+* ``host_base`` and ``host_bucket`` should both remain
+  ``eodata.dataspace.copernicus.eu``.
+* ``aws_region`` should remain ``eu-central-1`` unless CDSE changes its S3
+  endpoint requirements.
+* Values may be quoted or unquoted; Phi-Down strips wrapping quotes when
+  loading the file.
+* Phi-Down reads this file and forwards the values to ``s5cmd`` at runtime.
+  Treat it as the Phi-Down download credential file, not as a generic
+  replacement for every standalone ``s5cmd`` workflow.
+* Do not commit ``.s5cfg`` to version control. On shared systems, restrict file
+  permissions if possible, for example with ``chmod 600 .s5cfg``.
 
-   .. code-block:: python
+If you prefer to store the file outside the project directory, for example at
+``~/.config/phidown/cdse.s5cfg``, point Phi-Down at it explicitly:
 
-      from phidown import CopernicusDataSearcher
+.. code-block:: bash
 
-      # Initialize the searcher
-      searcher = CopernicusDataSearcher()
-      
-      # Search for Sentinel-2 data over Rome
-      searcher.query_by_filter(
-         collection_name='SENTINEL-2',
-         aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
-         start_date='2023-01-01',
-         end_date='2023-01-31'
-      )
-      
-      df = searcher.execute_query()
+   phidown --name PRODUCT_NAME -o ./data -c ~/.config/phidown/cdse.s5cfg
 
-      # Display results
-      print(f"Number of results: {len(df)}")
-      # Display the first few rows of the DataFrame
-      print(searcher.display_results(top_n=15))
+.. code-block:: python
 
-4. **Download data**:
+   from pathlib import Path
+   from phidown import CopernicusDataSearcher
 
-   Download a product using its name from the search results:
+   searcher = CopernicusDataSearcher()
 
-   .. code-block:: python
-      """
-      Args:
-         product_name (str): Name of the product to download (from search results)
-         config_file (str): Path to the configuration file containing authentication credentials
-         output_dir (str): Directory where the downloaded product will be saved
+   searcher.download_product(
+       eo_product_name="PRODUCT_NAME",
+       output_dir="./data",
+       config_file=str(Path.home() / ".config/phidown/cdse.s5cfg"),
+   )
 
-      Note:
-         - Update the config_file path to point to your actual .s5cfg file
-         - Update the output_dir path to your desired download location
-         - The example downloads the first product from the search results (df.iloc[0])
-      """
-      searcher.download_product('EO_PRODUCT_NAME',
-                                 config_file='path/to/your/config/file/.s5cfg',
-                                 output_dir='path/to/your/download/directory/')
-
-
-
-What's Next?
+First Search
 ------------
 
-* Read the :doc:`user_guide` for detailed usage instructions
-* Check out the :doc:`examples` for common use cases
-* Explore the :doc:`api_reference` for complete API documentation
-* Review mission-specific guides:
-  - :doc:`sentinel1_reference` for SAR data parameters
-  - :doc:`sentinel2_reference` for optical data parameters  
-  - :doc:`sentinel3_reference` for ocean/land data parameters
-  - :doc:`ccm_reference` for Copernicus Contributing Missions access
-* Try the interactive tools for polygon selection and visualization
+The standard search flow is:
+
+1. Create ``CopernicusDataSearcher``
+2. Configure filters with ``query_by_filter()``
+3. Execute the request with ``execute_query()``
+
+.. code-block:: python
+
+   from phidown import CopernicusDataSearcher
+
+   searcher = CopernicusDataSearcher()
+   searcher.query_by_filter(
+       collection_name="SENTINEL-2",
+       product_type="S2MSI2A",
+       aoi_wkt="POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))",
+       start_date="2024-05-01T00:00:00",
+       end_date="2024-05-31T23:59:59",
+       top=20,
+   )
+   results = searcher.execute_query()
+
+   print(f"Found {len(results)} products")
+   print(searcher.display_results(top_n=5))
+
+First Download
+--------------
+
+Download a product by name from Python:
+
+.. code-block:: python
+
+   from phidown import CopernicusDataSearcher
+
+   searcher = CopernicusDataSearcher()
+   searcher.download_product(
+       eo_product_name="S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003",
+       output_dir="./data",
+       config_file=".s5cfg",
+   )
+
+Or use the CLI directly:
+
+.. code-block:: bash
+
+   phidown --name S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003 -o ./data
+
+Useful Next Steps
+-----------------
+
+* Read :doc:`user_guide` for the main workflows
+* Read :doc:`cli` for terminal usage
+* Read :doc:`examples` for end-to-end snippets
+* Read :doc:`sentinel1_burst_mode` and :doc:`burst_mode` for burst workflows
 
 Common Issues
 -------------
 
-**Authentication errors**: Make sure your credentials are correct and your account is active.
+Authentication errors
+   Regenerate your S3 credentials, update ``.s5cfg``, and make sure you are
+   using the intended file path if you keep credentials outside the working
+   directory.
 
-**Network timeouts**: Large files may take time to download. Consider using S3 credentials for faster access.
+Empty search results
+   Tight filters, unavailable dates, or invalid AOI geometries are the most
+   common causes.
 
-**Import errors**: Ensure all dependencies are installed. Some features require optional dependencies like ``ipyleaflet``.
-
-Need Help?
-----------
-
-* Check the `GitHub Issues <https://github.com/ESA-PhiLab/phidown/issues>`_ page
-* Join the `PhiLab LinkedIn Group <https://www.linkedin.com/groups/8984375/>`_
-* Contact the author on `LinkedIn <https://www.linkedin.com/in/roberto-del-prete-8175a7147/>`_
+Download failures
+   Confirm that ``s5cmd`` is installed and the product path begins with
+   ``/eodata/`` when using direct S3 downloads.

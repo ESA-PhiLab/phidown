@@ -65,6 +65,20 @@ use_https = true
 check_ssl_certificate = true
 ```
 
+Guidelines:
+- Keep the section name as `[default]`.
+- By default, Phi-Down looks for `.s5cfg` in the current working directory.
+- Use `-c/--config-file` in the CLI or `config_file=...` in Python if the file lives elsewhere.
+- Keep `host_base` and `host_bucket` set to `eodata.dataspace.copernicus.eu`.
+- Treat `.s5cfg` as a secret and do not commit it to git.
+- On multi-user systems, restrict permissions when possible, for example `chmod 600 .s5cfg`.
+
+Example custom path:
+
+```bash
+phidown --name PRODUCT_NAME -o ./data -c ~/.config/phidown/cdse.s5cfg
+```
+
 If credentials are not removed automatically, revoke them in the CDSE S3 Credentials Manager:
 <https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials>
 
@@ -86,6 +100,30 @@ df = searcher.execute_query()
 print(f"Results: {len(df)}")
 print(searcher.display_results(top_n=5))
 ```
+
+### Manual pagination with `skip`
+
+```python
+from phidown.search import CopernicusDataSearcher
+
+filters = dict(
+    collection_name="SENTINEL-1",
+    product_type="GRD",
+    start_date="2024-01-01T00:00:00",
+    end_date="2024-01-31T23:59:59",
+    top=20,
+)
+
+searcher = CopernicusDataSearcher()
+searcher.query_by_filter(**filters, skip=0)
+page_1 = searcher.execute_query()
+
+searcher.query_by_filter(**filters, skip=20)
+page_2 = searcher.execute_query()
+```
+
+Use `skip` when a frontend needs one page at a time. `count=True` still
+performs eager multi-page retrieval and cannot be combined with `skip`.
 
 ### Sentinel-1 burst mode
 
