@@ -182,6 +182,30 @@ def _compute_backoff_delay(attempt_index: int, backoff_base: float, backoff_max:
     return min(backoff_max, exponential) + random.uniform(0.0, 0.5)
 
 
+def ensure_s5cmd_config(config_file: str, reset: bool = False) -> None:
+    """Ensure the s5cmd credential file exists, optionally recreating it."""
+    if os.path.exists(config_file) and not reset:
+        return
+
+    access_key = input('Enter Access Key ID: ').strip()
+    secret_key = input('Enter Secret Access Key: ').strip()
+
+    config_content = f"""[default]
+                    aws_access_key_id = {access_key}
+                    aws_secret_access_key = {secret_key}
+                    aws_region = eu-central-1
+                    host_base = eodata.dataspace.copernicus.eu
+                    host_bucket = eodata.dataspace.copernicus.eu
+                    use_https = true
+                    check_ssl_certificate = true
+                    """
+
+    with open(config_file, 'w') as f:
+        f.write(config_content)
+
+    logger.info(f'Created configuration file: {config_file}')
+
+
 def get_directory_size(directory: str) -> int:
     """Calculate total size of all files in a directory recursively.
     
@@ -271,26 +295,7 @@ def pull_down(
         raise ValueError('Output directory arg cannot be empty')
     if not os.path.isabs(output_dir):
         raise ValueError('Output directory must be an absolute path')
-    # validate config file:
-    # try to create one config file if it does not exist
-    if not os.path.exists(config_file) or reset:
-        access_key = input('Enter Access Key ID: ').strip()
-        secret_key = input('Enter Secret Access Key: ').strip()
-
-        config_content = f"""[default]
-                        aws_access_key_id = {access_key}
-                        aws_secret_access_key = {secret_key}
-                        aws_region = eu-central-1
-                        host_base = eodata.dataspace.copernicus.eu
-                        host_bucket = eodata.dataspace.copernicus.eu
-                        use_https = true
-                        check_ssl_certificate = true
-                        """
-
-        with open(config_file, 'w') as f:
-            f.write(config_content)
-
-        logger.info(f'Created configuration file: {config_file}')
+    ensure_s5cmd_config(config_file, reset=reset)
 
     if not os.path.exists(config_file):
         raise FileNotFoundError(f'Configuration file {config_file} still not found.')
@@ -408,3 +413,7 @@ def pull_down(
         raise last_exception
     
     return True
+
+
+# Backward-compatible alias used by older docs and notebooks.
+download = pull_down

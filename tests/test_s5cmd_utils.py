@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from phidown.s5cmd_utils import _split_command_args, pull_down, run_s5cmd_with_config
+from phidown.s5cmd_utils import _split_command_args, get_directory_size, pull_down, run_s5cmd_with_config
 
 
 def _write_s5cfg(path):
@@ -101,6 +101,20 @@ def test_run_s5cmd_with_config_rejects_empty_command_sequence(tmp_path):
     _write_s5cfg(cfg)
     with pytest.raises(ValueError, match="Command cannot be empty"):
         run_s5cmd_with_config([], config_file=str(cfg))
+
+
+def test_get_directory_size_counts_nested_files(tmp_path):
+    root = tmp_path / "data"
+    child = root / "nested"
+    child.mkdir(parents=True)
+    (root / "a.bin").write_bytes(b"1234")
+    (child / "b.bin").write_bytes(b"12")
+
+    assert get_directory_size(str(root)) == 6
+
+
+def test_get_directory_size_missing_directory_returns_zero(tmp_path):
+    assert get_directory_size(str(tmp_path / "missing")) == 0
 
 
 @patch("phidown.s5cmd_utils.run_s5cmd_with_config")

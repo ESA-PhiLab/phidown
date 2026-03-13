@@ -252,30 +252,33 @@ def download_burst_on_demand(
             logger.info(f'⏭️  Burst {burst_id} already downloaded, skipping.')
             return
 
-    def _post_with_token(url: str, force_refresh: bool = False):
+    def _post_with_token(url: str, force_refresh: bool = False, range_start: Optional[int] = None):
         if isinstance(token, TokenManager):
             if force_refresh:
                 token.refresh_access_token()
             token_str = token.get_access_token()
         else:
             token_str = token
+        headers = {'Authorization': f'Bearer {token_str}'}
+        if range_start is not None and range_start > 0:
+            headers['Range'] = f'bytes={range_start}-'
 
         return requests.post(
             url,
-            headers={'Authorization': f'Bearer {token_str}'},
+            headers=headers,
             verify=not insecure_skip_verify,
             allow_redirects=False,
             stream=True,
             timeout=timeout_value,
         )
 
-    def _post_with_auth_retry(url: str):
-        response = _post_with_token(url)
+    def _post_with_auth_retry(url: str, range_start: Optional[int] = None):
+        response = _post_with_token(url, range_start=range_start)
         if response.status_code in (401, 403) and isinstance(token, TokenManager):
             logger.warning(
                 f'⚠️  Received {response.status_code} from burst API. Refreshing token and retrying once.'
             )
-            response = _post_with_token(url, force_refresh=True)
+            response = _post_with_token(url, force_refresh=True, range_start=range_start)
         return response
 
     last_error: Optional[Exception] = None
@@ -291,16 +294,40 @@ def download_burst_on_demand(
                     extra={'burst_id': burst_id},
                 )
 
+            existing_record = state_store.get(burst_id) if state_store is not None else None
+            existing_output = existing_record.get('output_path') if isinstance(existing_record, dict) else None
+            existing_temp_output = (
+                Path(existing_output).with_suffix(Path(existing_output).suffix + '.part')
+                if existing_output else None
+            )
+            resume_from = 0
+            if existing_temp_output is not None and existing_temp_output.exists():
+                resume_from = existing_temp_output.stat().st_size
+
             response = _post_with_auth_retry(
                 f'https://catalogue.dataspace.copernicus.eu/odata/v1/Bursts({burst_id})/$value'
+                ,
+                range_start=resume_from,
             )
 
             if 300 <= response.status_code < 400:
                 redirect_url = response.headers['Location']
                 logger.debug(f'Following redirect to: {redirect_url}')
-                response = _post_with_auth_retry(redirect_url)
+                response = _post_with_auth_retry(redirect_url, range_start=resume_from)
 
-            if response.status_code != 200:
+            if resume_from > 0 and response.status_code != 206:
+                logger.warning('⚠️  Burst endpoint did not honor range request. Restarting from byte 0.')
+                resume_from = 0
+                if existing_temp_output is not None and existing_temp_output.exists():
+                    existing_temp_output.unlink()
+                response = _post_with_auth_retry(
+                    f'https://catalogue.dataspace.copernicus.eu/odata/v1/Bursts({burst_id})/$value'
+                )
+                if 300 <= response.status_code < 400:
+                    redirect_url = response.headers['Location']
+                    response = _post_with_auth_retry(redirect_url)
+
+            if response.status_code not in (200, 206):
                 err_msg = (
                     response.json()
                     if response.headers.get('Content-Type') == 'application/json'
@@ -321,8 +348,9 @@ def download_burst_on_demand(
             temp_output_path = output_path.with_suffix(output_path.suffix + '.part')
             logger.info(f'💾 Downloading burst to: {output_path}')
 
-            total_size = 0
-            with open(temp_output_path, 'wb') as target_file:
+            total_size = resume_from
+            write_mode = 'ab' if resume_from > 0 else 'wb'
+            with open(temp_output_path, write_mode) as target_file:
                 for chunk in response.iter_content(chunk_size=8192):
                     if not chunk:
                         continue
@@ -342,24 +370,22 @@ def download_burst_on_demand(
                     'success',
                     attempts=attempt + 1,
                     output_path=str(output_path),
-                    extra={'size_bytes': total_size},
+                    extra={'size_bytes': total_size, 'partial_bytes': total_size},
                 )
             return
         except Exception as exc:
             last_error = exc
-            if temp_output_path is not None and temp_output_path.exists():
-                try:
-                    temp_output_path.unlink()
-                except Exception:
-                    pass
-
             if state_store is not None:
+                partial_bytes = None
+                if temp_output_path is not None and temp_output_path.exists():
+                    partial_bytes = temp_output_path.stat().st_size
                 state_store.mark(
                     burst_id,
                     'failed',
                     attempts=attempt + 1,
                     error=str(exc),
                     output_path=str(output_path) if output_path is not None else None,
+                    extra={'partial_bytes': partial_bytes} if partial_bytes is not None else None,
                 )
 
             should_retry = attempt < attempts - 1 and not isinstance(exc, ValueError)
