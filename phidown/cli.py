@@ -66,7 +66,7 @@ def _resolve_download_mode(
     if robust:
         _warn_deprecated_option('--robust', '--mode safe')
         effective_mode = 'safe'
-    if resume_mode is not None:
+    if resume_mode is not None and resume_mode != 'off':
         _warn_deprecated_option('resume_mode/--resume-mode', 'mode/--mode')
         effective_mode = 'safe' if resume_mode == 'product' else 'fast'
     if effective_mode == 'fast' and (read_timeout is not None or float(connect_timeout) != 30.0):
