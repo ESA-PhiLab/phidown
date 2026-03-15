@@ -3521,12 +3521,13 @@ wheels = [
 
 [[package]]
 name = "phidown"
-version = "0.1.25"
+version = "0.1.26"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
     { name = "pandas" },
     { name = "pyyaml" },
+    { name = "requests" },
     { name = "s5cmd" },
     { name = "tqdm" },
 ]
@@ -3615,6 +3616,7 @@ requires-dist = [
     { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.10.0" },
     { name = "pyyaml", specifier = ">=6.0.0" },
     { name = "rasterio", marker = "extra == 'viz'", specifier = ">=1.4.3" },
+    { name = "requests", specifier = ">=2.32.5" },
     { name = "s5cmd" },
     { name = "setuptools", marker = "extra == 'viz'", specifier = ">=80.9.0" },
     { name = "shapely", marker = "extra == 'ais'", specifier = ">=2.0.0" },

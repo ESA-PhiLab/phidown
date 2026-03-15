@@ -1409,8 +1409,18 @@ class CopernicusDataSearcher:
     def download_product(self, eo_product_name: str, 
                         output_dir: str, 
                         config_file = '.s5cfg',
+                        mode: str = 'fast',
                         verbose=True,
-                        show_progress=True):
+                        show_progress=True,
+                        retry_count: int = 1,
+                        connect_timeout: float = 30.0,
+                        read_timeout: typing.Optional[float] = None,
+                        state_file: typing.Optional[str] = None,
+                        s5cmd_retry_count: typing.Optional[int] = None,
+                        max_workers: typing.Optional[int] = None,
+                        backoff_base: float = 2.0,
+                        backoff_max: float = 60.0,
+                        reset_config: bool = False):
         """
         Download the EO product using the downloader module.
         
@@ -1418,17 +1428,29 @@ class CopernicusDataSearcher:
             eo_product_name: Name of the EO product to download
             output_dir: Local output directory for downloaded files
             config_file: Path to s5cmd configuration file
+            mode: Download mode ('fast' for s5cmd, 'safe' for resumable native downloads)
             verbose: Whether to print download information
             show_progress: Whether to show tqdm progress bar during download
+            retry_count: Number of command-level retry attempts
+            connect_timeout: Network connection timeout in seconds for native transfers
+            read_timeout: Network read timeout in seconds for native transfers
+            state_file: Optional JSON state file path for resumable runs
+            s5cmd_retry_count: Optional internal retry count for s5cmd
+            max_workers: Optional worker count for s5cmd
+            backoff_base: Base delay in seconds for retry backoff
+            backoff_max: Max delay in seconds for retry backoff
+            reset_config: Whether to reset configuration and prompt for credentials
         
         Returns:
             bool: True if download was successful, False otherwise
         """
+        if mode not in {'fast', 'safe'}:
+            raise ValueError("mode must be either 'fast' or 'safe'")
+            
         res = self.query_by_name(eo_product_name)
         if res.empty:
             print(f"No product found with name: {eo_product_name}")
             return False
-        
         
         # file size in bytes
         content_length = res['ContentLength'].iloc[0]
@@ -1439,16 +1461,69 @@ class CopernicusDataSearcher:
         if verbose:
             print(f"Downloading product: {eo_product_name}")
             print(f"Output directory: {abs_output_dir}")
+            print(f"Mode: {mode}")
         
         s3path = res['S3Path'].iloc[0]
-        # Call the downloader function with progress bar
-        pull_down(
-            s3_path=s3path,
-            output_dir=abs_output_dir,
-            config_file=config_file,
-            total_size=content_length,
-            show_progress=show_progress
+        
+        # Choose download method based on mode
+        if mode == 'safe':
+            # Use resumable native download with command-level retries.
+            attempts = max(1, int(retry_count))
+            should_reset_config = reset_config
+            last_error = None
+
+            for attempt in range(attempts):
+                try:
+                    result = download_s3_resumable(
+                        s3_path=s3path,
+                        output_dir=abs_output_dir,
+                        config_file=config_file,
+                        download_all=True,
+                        state_file=state_file,
+                        state_item_id=f'name:{eo_product_name}',
+                        connect_timeout=connect_timeout,
+                        read_timeout=read_timeout,
+                        show_progress=show_progress,
+                        attempts=attempt + 1,
+                        persist_state=True,
+                        reset_config=should_reset_config,
+                    )
+                    return result.status in ('downloaded', 'skipped')
+                except Exception as exc:
+                    last_error = str(exc)
+                    should_reset_config = False
+                    if attempt < attempts - 1:
+                        delay = _compute_backoff_delay(
+                            attempt,
+                            backoff_base=backoff_base,
+                            backoff_max=backoff_max,
+                        )
+                        if verbose:
+                            print(
+                                f"Safe download attempt {attempt + 1}/{attempts} failed "
+                                f"({exc}). Retrying in {delay:.1f}s..."
+                            )
+                        time.sleep(delay)
+
+            if verbose and last_error is not None:
+                print(f"Safe download failed after {attempts} attempts: {last_error}")
+            return False
+        else:
+            # Use fast s5cmd download
+            success = pull_down(
+                s3_path=s3path,
+                output_dir=abs_output_dir,
+                config_file=config_file,
+                total_size=content_length,
+                show_progress=show_progress,
+                retry_count=retry_count,
+                s5cmd_retry_count=s5cmd_retry_count,
+                max_workers=max_workers,
+                backoff_base=backoff_base,
+                backoff_max=backoff_max,
+                reset=reset_config,
             )
+            return success
     # -------------------------------------------------------------------------
     # Orbit Optimization Methods
     # -------------------------------------------------------------------------
