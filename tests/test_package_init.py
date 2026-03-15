@@ -31,7 +31,7 @@ def test_importing_submodule_does_not_require_unrelated_runtime_deps(monkeypatch
 
     try:
         module = importlib.import_module("phidown.download_state")
-        assert module.default_state_file("/tmp").endswith(".phidown_download_state.json")
+        assert module.default_state_file("/tmp").endswith(".phidown/download_state.json")
     finally:
         _clear_phidown_modules()
         sys.modules.update(removed)

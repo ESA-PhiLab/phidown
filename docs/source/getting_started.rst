@@ -121,13 +121,29 @@ Download a product by name from Python:
        eo_product_name="S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003",
        output_dir="./data",
        config_file=".s5cfg",
+       mode="fast",  # default: fast (s5cmd), or safe (resumable)
+   )
+
+For unstable connections, use safe mode with automatic retries:
+
+.. code-block:: python
+
+   searcher.download_product(
+       eo_product_name="S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003",
+       output_dir="./data",
+       mode="safe",
+       retry_count=5,
    )
 
 Or use the CLI directly:
 
 .. code-block:: bash
 
+   # Fast mode (default)
    phidown --name S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003 -o ./data
+
+   # Safe mode with retries
+   phidown --name S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003 -o ./data --mode safe --retry-count 5
 
 Useful Next Steps
 -----------------

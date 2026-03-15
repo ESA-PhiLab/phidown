@@ -58,7 +58,7 @@ These options apply to download workflows:
 * ``--mode fast``: Prefer the ``s5cmd`` transfer path for maximum throughput
 * ``--mode safe``: Prefer the resumable native transfer path for interruption recovery
 * ``--retry-count``: Command-level retry count
-* ``--state-file``: Custom JSON state file path
+* ``--state-file``: Custom JSON state file path (default: ``.phidown/download_state.json`` in output directory)
 * ``--s5cmd-retry-count``: Internal retry count passed to ``s5cmd``
 * ``--max-workers``: Worker count passed to ``s5cmd``
 * ``--backoff-base`` and ``--backoff-max``: Exponential retry backoff controls

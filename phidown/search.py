@@ -1474,6 +1474,9 @@ class CopernicusDataSearcher:
 
             for attempt in range(attempts):
                 try:
+                    if verbose and attempts > 1:
+                        print(f"\n🔄 Attempt {attempt + 1}/{attempts}")
+                    
                     result = download_s3_resumable(
                         s3_path=s3path,
                         output_dir=abs_output_dir,
@@ -1488,6 +1491,8 @@ class CopernicusDataSearcher:
                         persist_state=True,
                         reset_config=should_reset_config,
                     )
+                    if verbose and attempts > 1:
+                        print(f"✅ Download successful on attempt {attempt + 1}/{attempts}")
                     return result.status in ('downloaded', 'skipped')
                 except Exception as exc:
                     last_error = str(exc)
@@ -1498,15 +1503,18 @@ class CopernicusDataSearcher:
                             backoff_base=backoff_base,
                             backoff_max=backoff_max,
                         )
-                        if verbose:
-                            print(
-                                f"Safe download attempt {attempt + 1}/{attempts} failed "
-                                f"({exc}). Retrying in {delay:.1f}s..."
-                            )
+                        # Always print retry messages (important for user feedback)
+                        print(
+                            f"\n⚠️  Attempt {attempt + 1}/{attempts} failed: {type(exc).__name__}\n"
+                            f"    Retrying in {delay:.1f}s...\n"
+                        )
                         time.sleep(delay)
+                    else:
+                        # Last attempt failed
+                        print(f"\n❌ All {attempts} attempts failed")
 
-            if verbose and last_error is not None:
-                print(f"Safe download failed after {attempts} attempts: {last_error}")
+            if last_error is not None:
+                print(f"Final error: {last_error}")
             return False
         else:
             # Use fast s5cmd download

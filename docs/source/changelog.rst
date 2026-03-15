@@ -27,6 +27,13 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 - ``query_by_filter(skip=...)`` for manual page offsets when fetching a single result page at a time
 - ``mode="fast"`` and ``mode="safe"`` for product downloads in the Python API and CLI
 - Native resumable product download support with persisted state tracking and dedicated tests
+- Enhanced retry behavior in safe mode with automatic exponential backoff and clear progress messages:
+
+  * 🔄 Attempt indicators showing current/total attempts
+  * ⚠️ Retry warnings with countdown timers before next attempt
+  * ✅ Success confirmation messages
+  * ❌ Failure summaries after exhausting all retries
+  
 - Support for additional AOI WKT geometry types across search helpers and footprint visualization
     
   .. code-block:: python
@@ -56,6 +63,7 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 - Clarified that ``count=True`` still performs eager multi-page retrieval and cannot be combined with ``skip``
 - ``fast`` mode now prefers the ``s5cmd`` transfer path, while ``safe`` mode uses native resumable downloads
 - CLI and user guides now document ``--mode`` as the primary download selector and treat ``--robust`` / ``--resume-mode`` as compatibility paths
+- Download state files are now stored in ``.phidown/download_state.json`` subdirectory to keep metadata separate from downloaded products
 
 ### Fixed
 - Resolved a download mode precedence bug where ``resume_mode='off'`` could override

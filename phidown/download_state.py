@@ -18,8 +18,14 @@ def utc_now_iso() -> str:
 
 
 def default_state_file(output_dir: str) -> str:
-    """Return the default state file path for an output directory."""
-    return str(Path(output_dir) / '.phidown_download_state.json')
+    """Return the default state file path for an output directory.
+    
+    The state file is stored in a .phidown subdirectory to keep
+    download metadata separate from downloaded products.
+    """
+    state_dir = Path(output_dir) / '.phidown'
+    state_dir.mkdir(parents=True, exist_ok=True)
+    return str(state_dir / 'download_state.json')
 
 
 def is_product_complete(product_dir: str) -> bool:
