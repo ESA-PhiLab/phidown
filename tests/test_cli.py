@@ -340,10 +340,6 @@ class TestMainCLI:
         assert kwargs['read_timeout'] == 900.0
 
 
-def test_resolve_download_mode_resume_mode_compatibility():
-    assert _resolve_download_mode('fast', resume_mode='product') == 'safe'
-    assert _resolve_download_mode('safe', resume_mode='off') == 'fast'
-    
     @patch('phidown.cli.download_by_s3path')
     @patch('sys.argv', ['phidown', '--s3path', '/eodata/test', '-o', '/tmp/test'])
     def test_cli_with_s3path(self, mock_download):
@@ -583,3 +579,10 @@ class TestBurstCoverageAnalysis:
 
         assert result is True
         assert output_file.exists()
+
+
+def test_resolve_download_mode_resume_mode_compatibility():
+    with pytest.warns(DeprecationWarning, match='Both mode and resume_mode were provided'):
+        assert _resolve_download_mode('fast', resume_mode='product') == 'safe'
+    with pytest.warns(DeprecationWarning, match='resume_mode="off" is deprecated'):
+        assert _resolve_download_mode('safe', resume_mode='off') == 'safe'

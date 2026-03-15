@@ -1,17 +1,17 @@
 [project]
 name = "phidown"
-version = "0.1.25"
+version = "0.1.26"
 description = "Get access to Copernicus data with a pythonic easy interface. Get your products in seconds not in months."
 authors = [
   { name = "Roberto Del Prete", email = "roberto.delprete@esa.int; robertodelprete88@gmail.com" }
 ]
 
 dependencies = [
-  "pandas>=1.5.2",        # keep as is, already minimum version
+  "pandas>=1.5.2",        
   "boto3>=1.34.0",
   "s5cmd",
   "tqdm>=4.65.0",
-  "pyyaml>=6.0.0",        # for YAML config file support
+  "pyyaml>=6.0.0",        
 ]
 
 requires-python = ">=3.9"

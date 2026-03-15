@@ -15,19 +15,52 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 [Unreleased]
 ------------
 
+*(None)*
+
+### Added
+- *(reserved for future release notes)*
+
+[0.1.26] - 2026-03-15
+---------------------
+
 ### Added
 - ``query_by_filter(skip=...)`` for manual page offsets when fetching a single result page at a time
 - ``mode="fast"`` and ``mode="safe"`` for product downloads in the Python API and CLI
 - Native resumable product download support with persisted state tracking and dedicated tests
 - Support for additional AOI WKT geometry types across search helpers and footprint visualization
+    
+  .. code-block:: python
+  
+     from phidown.search import CopernicusDataSearcher
+  
+     filters = dict(
+         collection_name="SENTINEL-1",
+         product_type="GRD",
+         start_date="2024-01-01T00:00:00",
+         end_date="2024-01-31T23:59:59",
+         top=20,
+     )
+  
+     searcher = CopernicusDataSearcher()
+     searcher.query_by_filter(**filters, skip=0)
+     page_1 = searcher.execute_query()
+  
+     searcher.query_by_filter(**filters, skip=20)
+     page_2 = searcher.execute_query()
+  
+     # Use `skip` when a frontend needs one page at a time.
+     # `count=True` still performs eager multi-page retrieval and cannot be combined with `skip`.
 
 ### Changed
-- Documented manual pagination examples in the README and Sphinx guides
+ - Documented manual pagination examples in Sphinx guides
 - Clarified that ``count=True`` still performs eager multi-page retrieval and cannot be combined with ``skip``
 - ``fast`` mode now prefers the ``s5cmd`` transfer path, while ``safe`` mode uses native resumable downloads
 - CLI and user guides now document ``--mode`` as the primary download selector and treat ``--robust`` / ``--resume-mode`` as compatibility paths
 
 ### Fixed
+- Resolved a download mode precedence bug where ``resume_mode='off'`` could override
+  an explicitly provided ``mode='safe'``, causing downloads to run in non-resumable
+  ``fast`` mode unexpectedly.
 - Product footprint plotting now accepts non-polygon AOIs that are valid in the search API
 - Download retries no longer re-prompt credentials on every attempt when ``--reset`` is used
 

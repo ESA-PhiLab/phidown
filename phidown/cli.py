@@ -63,10 +63,25 @@ def _resolve_download_mode(
         raise ValueError("resume_mode must be either 'off' or 'product'")
 
     effective_mode = mode
+    if resume_mode is not None:
+        if mode == 'safe' and resume_mode == 'off':
+            warnings.warn(
+                'Both mode and resume_mode were provided; resume_mode="off" is deprecated and does not override explicit mode="safe".',
+                DeprecationWarning,
+                stacklevel=3,
+            )
+        elif mode == 'fast' and resume_mode == 'product':
+            warnings.warn(
+                'Both mode and resume_mode were provided; legacy resume_mode="product" overrides mode="fast" and maps to mode="safe".',
+                DeprecationWarning,
+                stacklevel=3,
+            )
+            effective_mode = 'safe'
     if robust:
         _warn_deprecated_option('--robust', '--mode safe')
         effective_mode = 'safe'
-    if resume_mode is not None and resume_mode != 'off':
+    if resume_mode is not None and resume_mode == 'product' and not (mode == 'fast' and resume_mode == 'product'):
+        # Keep compatibility with callers passing only the deprecated flag.
         _warn_deprecated_option('resume_mode/--resume-mode', 'mode/--mode')
         effective_mode = 'safe' if resume_mode == 'product' else 'fast'
     if effective_mode == 'fast' and (read_timeout is not None or float(connect_timeout) != 30.0):
