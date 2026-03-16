@@ -14,7 +14,9 @@ from phidown.download_state import (
 
 def test_default_state_file_path(tmp_path):
     out = default_state_file(str(tmp_path))
-    assert out.endswith('.phidown/download_state.json')
+    # Use os.path.join for platform-independent path checking
+    expected_suffix = os.path.join('.phidown', 'download_state.json')
+    assert out.endswith(expected_suffix)
     # Verify the .phidown directory is created
     assert (tmp_path / '.phidown').is_dir()
 
