@@ -2,9 +2,17 @@ import argparse
 import ast
 import json
 import xml.etree.ElementTree as ET
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import folium
+
+from .search import (
+    _coordinates_from_sequence,
+    _parse_coordinate,
+    _parse_wkt_geometry,
+    _split_wkt_components,
+    _unwrap_wkt_group,
+)
 
 
 def _coverage_to_color(value: Optional[float]) -> str:
@@ -41,11 +49,24 @@ def plot_kml_coordinates(kml_file: str, output_html: str = "map_overlay.html"):
     tree = ET.parse(kml_file)
     root = tree.getroot()
 
-    coordinates_text = root.find(".//gx:LatLonQuad/coordinates", namespace).text.strip()
-    coordinates = [
-        [float(coord.split(",")[1]), float(coord.split(",")[0])]
-        for coord in coordinates_text.split()
-    ]
+    coordinates_node = root.find(".//gx:LatLonQuad/coordinates", namespace)
+    if coordinates_node is None or not coordinates_node.text or not coordinates_node.text.strip():
+        raise ValueError("KML does not contain gx:LatLonQuad/coordinates data.")
+
+    coordinates = []
+    for coord in coordinates_node.text.split():
+        parts = coord.split(",")
+        if len(parts) < 2:
+            raise ValueError(f"Invalid KML coordinate: {coord}")
+        try:
+            lon = float(parts[0])
+            lat = float(parts[1])
+        except ValueError as exc:
+            raise ValueError(f"Invalid numeric KML coordinate: {coord}") from exc
+        coordinates.append([lat, lon])
+
+    if len(coordinates) < 3:
+        raise ValueError("KML polygon requires at least three coordinate pairs.")
 
     coordinates.append(coordinates[0])
     m = folium.Map(location=coordinates[0], zoom_start=10, tiles="CartoDB positron")
@@ -72,8 +93,17 @@ def _parse_wkt_polygon(aoi_wkt: str) -> List[List[float]]:
     coords_txt = aoi_wkt.split("((", 1)[1].split("))", 1)[0]
     coordinates: List[List[float]] = []
     for pair in coords_txt.split(","):
-        lon, lat = pair.strip().split()[:2]
-        coordinates.append([float(lat), float(lon)])
+        parts = pair.strip().split()
+        if len(parts) < 2:
+            raise ValueError(f"Invalid WKT coordinate pair: {pair}")
+        try:
+            lon = float(parts[0])
+            lat = float(parts[1])
+        except ValueError as exc:
+            raise ValueError(f"Invalid numeric WKT coordinate pair: {pair}") from exc
+        coordinates.append([lat, lon])
+    if not coordinates:
+        raise ValueError("Invalid AOI WKT. Polygon has no coordinates.")
     return coordinates
 
 
@@ -120,15 +150,70 @@ def _normalize_footprint(value: Any) -> Optional[Dict[str, Any]]:
     if text.startswith("geography'SRID=4326;"):
         text = text.split(";", 1)[1].rstrip("'")
 
-    if text.upper().startswith("POLYGON(("):
-        coords_txt = text.split("((", 1)[1].split("))", 1)[0]
-        ring: List[List[float]] = []
-        for pair in coords_txt.split(","):
-            lon, lat = pair.strip().split()[:2]
-            ring.append([float(lon), float(lat)])
-        return {"type": "Polygon", "coordinates": [ring]}
+    try:
+        geometry_type, body = _parse_wkt_geometry(text)
+
+        if geometry_type == "POINT":
+            return {"type": "Point", "coordinates": list(_parse_coordinate(_unwrap_wkt_group(body)))}
+
+        if geometry_type == "MULTIPOINT":
+            coords: List[List[float]] = []
+            for component in _split_wkt_components(_unwrap_wkt_group(body)):
+                if component.startswith("("):
+                    coords.append(list(_parse_coordinate(_unwrap_wkt_group(component))))
+                else:
+                    coords.append(list(_parse_coordinate(component)))
+            return {"type": "MultiPoint", "coordinates": coords}
+
+        if geometry_type == "LINESTRING":
+            return {"type": "LineString", "coordinates": [list(pair) for pair in _coordinates_from_sequence(_unwrap_wkt_group(body))]}
+
+        if geometry_type == "MULTILINESTRING":
+            lines: List[List[List[float]]] = []
+            for component in _split_wkt_components(_unwrap_wkt_group(body)):
+                lines.append([list(pair) for pair in _coordinates_from_sequence(_unwrap_wkt_group(component))])
+            return {"type": "MultiLineString", "coordinates": lines}
+
+        if geometry_type == "POLYGON":
+            rings: List[List[List[float]]] = []
+            for ring in _split_wkt_components(_unwrap_wkt_group(body)):
+                rings.append([list(pair) for pair in _coordinates_from_sequence(_unwrap_wkt_group(ring))])
+            return {"type": "Polygon", "coordinates": rings}
+
+        if geometry_type == "MULTIPOLYGON":
+            polygons: List[List[List[List[float]]]] = []
+            for polygon in _split_wkt_components(_unwrap_wkt_group(body)):
+                rings: List[List[List[float]]] = []
+                for ring in _split_wkt_components(_unwrap_wkt_group(polygon)):
+                    rings.append([list(pair) for pair in _coordinates_from_sequence(_unwrap_wkt_group(ring))])
+                polygons.append(rings)
+            return {"type": "MultiPolygon", "coordinates": polygons}
+    except (TypeError, ValueError):
+        return None
 
     return None
+
+
+def _geojson_coordinate_pairs(geojson: Dict[str, Any]) -> List[Tuple[float, float]]:
+    """Flatten GeoJSON coordinates into ``(lon, lat)`` pairs."""
+    geometry_type = geojson.get("type")
+    coords = geojson.get("coordinates")
+    if geometry_type is None or coords is None:
+        return []
+
+    pairs: List[Tuple[float, float]] = []
+
+    def _walk(value: Any) -> None:
+        if not isinstance(value, list):
+            return
+        if len(value) >= 2 and all(isinstance(item, (int, float)) for item in value[:2]):
+            pairs.append((float(value[0]), float(value[1])))
+            return
+        for item in value:
+            _walk(item)
+
+    _walk(coords)
+    return pairs
 
 
 def plot_product_footprints(
@@ -172,26 +257,27 @@ def plot_product_footprints(
         else:
             raise ValueError("No footprint column found. Expected 'GeoFootprint' or 'Footprint'.")
 
-    aoi_latlon = _parse_wkt_polygon(aoi_wkt) if aoi_wkt else None
+    aoi_geojson = _normalize_footprint(aoi_wkt) if aoi_wkt else None
+    aoi_pairs = _geojson_coordinate_pairs(aoi_geojson) if aoi_geojson else []
 
-    if aoi_latlon and len(aoi_latlon) > 1:
-        core = aoi_latlon[:-1]
-        center_lat = sum(p[0] for p in core) / len(core)
-        center_lon = sum(p[1] for p in core) / len(core)
+    if aoi_pairs:
+        center_lat = sum(pair[1] for pair in aoi_pairs) / len(aoi_pairs)
+        center_lon = sum(pair[0] for pair in aoi_pairs) / len(aoi_pairs)
     else:
         center_lat, center_lon = 0.0, 0.0
 
     m = folium.Map(location=[center_lat, center_lon], zoom_start=zoom_start, tiles="CartoDB positron")
 
-    if aoi_latlon:
+    if aoi_geojson:
         aoi_group = folium.FeatureGroup(name="AOI", show=True)
-        folium.Polygon(
-            locations=aoi_latlon,
-            color="black",
-            weight=3,
-            fill=True,
-            fill_color="black",
-            fill_opacity=0.08,
+        folium.GeoJson(
+            data=aoi_geojson,
+            style_function=lambda _: {
+                "color": "black",
+                "weight": 3,
+                "fillColor": "black",
+                "fillOpacity": 0.08,
+            },
             tooltip="AOI",
         ).add_to(aoi_group)
         aoi_group.add_to(m)

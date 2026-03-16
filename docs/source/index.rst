@@ -19,9 +19,9 @@ Welcome to Φ-Down Documentation
    cli
    user_guide
    ais_guide
-   s1_slc_burst_downloader
    api_reference
    examples
+   burst_mode
    sentinel1_reference
    sentinel1_burst_mode
    sentinel2_reference
@@ -70,12 +70,13 @@ Search for data:
    from phidown import CopernicusDataSearcher
 
    searcher = CopernicusDataSearcher()
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
        start_date='2023-01-01',
        end_date='2023-01-31'
    )
+   results = searcher.execute_query()
 
 Indices and tables
 ==================
@@ -83,4 +84,3 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-

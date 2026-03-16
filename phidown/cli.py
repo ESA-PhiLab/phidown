@@ -9,11 +9,16 @@ import sys
 import os
 import logging
 import json
+import time
+import random
+import warnings
 from pathlib import Path
 from typing import Optional, List, Sequence, Union
 
 from .search import CopernicusDataSearcher
 from .s5cmd_utils import pull_down
+from .download_state import DownloadStateStore, default_state_file, is_product_complete
+from .native_download import download_s3_resumable
 
 # Configure logger
 logging.basicConfig(
@@ -22,6 +27,67 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+
+def _compute_backoff_delay(attempt_index: int, backoff_base: float, backoff_max: float) -> float:
+    """Compute retry delay with exponential backoff and jitter."""
+    exponential = backoff_base * (2 ** attempt_index)
+    return min(backoff_max, exponential) + random.uniform(0.0, 0.5)
+
+
+def _dir_has_files(directory: str) -> bool:
+    if not os.path.isdir(directory):
+        return False
+    return any(os.path.isfile(os.path.join(directory, name)) for name in os.listdir(directory))
+
+
+def _warn_deprecated_option(option_name: str, replacement: str) -> None:
+    warnings.warn(
+        f'{option_name} is deprecated; use {replacement} instead.',
+        DeprecationWarning,
+        stacklevel=3,
+    )
+
+
+def _resolve_download_mode(
+    mode: str = 'fast',
+    *,
+    resume_mode: Optional[str] = None,
+    connect_timeout: float = 30.0,
+    read_timeout: Optional[float] = None,
+    robust: bool = False,
+) -> str:
+    if mode not in {'fast', 'safe'}:
+        raise ValueError("mode must be either 'fast' or 'safe'")
+    if resume_mode is not None and resume_mode not in {'off', 'product'}:
+        raise ValueError("resume_mode must be either 'off' or 'product'")
+
+    effective_mode = mode
+    if resume_mode is not None:
+        if mode == 'safe' and resume_mode == 'off':
+            warnings.warn(
+                'Both mode and resume_mode were provided; resume_mode="off" is deprecated and does not override explicit mode="safe".',
+                DeprecationWarning,
+                stacklevel=3,
+            )
+        elif mode == 'fast' and resume_mode == 'product':
+            warnings.warn(
+                'Both mode and resume_mode were provided; legacy resume_mode="product" overrides mode="fast" and maps to mode="safe".',
+                DeprecationWarning,
+                stacklevel=3,
+            )
+            effective_mode = 'safe'
+    if robust:
+        _warn_deprecated_option('--robust', '--mode safe')
+        effective_mode = 'safe'
+    if resume_mode is not None and resume_mode == 'product' and not (mode == 'fast' and resume_mode == 'product'):
+        # Keep compatibility with callers passing only the deprecated flag.
+        _warn_deprecated_option('resume_mode/--resume-mode', 'mode/--mode')
+        effective_mode = 'safe' if resume_mode == 'product' else 'fast'
+    if effective_mode == 'fast' and (read_timeout is not None or float(connect_timeout) != 30.0):
+        _warn_deprecated_option('connect_timeout/read_timeout', 'mode="safe"')
+        effective_mode = 'safe'
+    return effective_mode
 
 
 def _parse_bbox_to_wkt(bbox: Union[str, Sequence[float]]) -> str:
@@ -67,8 +133,18 @@ def download_by_name(
     product_name: str,
     output_dir: str,
     config_file: str = '.s5cfg',
+    mode: str = 'fast',
     show_progress: bool = True,
-    reset_config: bool = False
+    reset_config: bool = False,
+    retry_count: int = 1,
+    connect_timeout: float = 30.0,
+    read_timeout: Optional[float] = None,
+    state_file: Optional[str] = None,
+    resume_mode: Optional[str] = None,
+    s5cmd_retry_count: Optional[int] = None,
+    max_workers: Optional[int] = None,
+    backoff_base: float = 2.0,
+    backoff_max: float = 60.0,
 ) -> bool:
     """Download a product by its name from Copernicus Data Space.
     
@@ -76,8 +152,18 @@ def download_by_name(
         product_name: Full name of the Copernicus product to download.
         output_dir: Directory where the product will be downloaded.
         config_file: Path to s5cmd configuration file with credentials.
+        mode: Download mode ('fast' for s5cmd, 'safe' for resumable native downloads).
         show_progress: Whether to display download progress bar.
         reset_config: Whether to reset configuration and prompt for credentials.
+        retry_count: Number of command-level retry attempts.
+        connect_timeout: Network connection timeout in seconds for native transfers.
+        read_timeout: Network read timeout in seconds for native transfers.
+        state_file: Optional JSON state file path for resumable runs.
+        resume_mode: Deprecated legacy resume selector. Prefer ``mode``.
+        s5cmd_retry_count: Optional internal retry count for s5cmd.
+        max_workers: Optional worker count for s5cmd.
+        backoff_base: Base delay in seconds for retry backoff.
+        backoff_max: Max delay in seconds for retry backoff.
         
     Returns:
         bool: True if download was successful, False otherwise.
@@ -89,6 +175,12 @@ def download_by_name(
         ... )
     """
     try:
+        effective_mode = _resolve_download_mode(
+            mode,
+            resume_mode=resume_mode,
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
+        )
         logger.info(f'🔍 Searching for product: {product_name}')
         
         # Search for the product
@@ -112,20 +204,124 @@ def download_by_name(
         
         # Download the product
         logger.info(f'⬇️  Starting download to: {output_dir}')
-        
-        success = pull_down(
-            s3_path=s3_path,
-            output_dir=os.path.abspath(output_dir),
-            config_file=config_file,
-            total_size=content_length,
-            show_progress=show_progress,
-            reset=reset_config
-        )
-        
+
+        abs_output_dir = os.path.abspath(output_dir)
+        safe_name = os.path.basename(s3_path.rstrip('/'))
+        product_dir = os.path.join(abs_output_dir, safe_name)
+        use_native = effective_mode == 'safe'
+
+        state_store: Optional[DownloadStateStore] = None
+        state_item_id = f'name:{product_name}'
+        if not use_native and resume_mode not in (None, 'off'):
+            resolved_state_file = state_file or default_state_file(abs_output_dir)
+            state_store = DownloadStateStore(resolved_state_file)
+
+            if is_product_complete(product_dir):
+                state_store.mark(
+                    state_item_id,
+                    'success',
+                    output_path=product_dir,
+                    extra={'product_name': product_name, 's3_path': s3_path}
+                )
+                logger.info('⏭️  Product already downloaded, skipping.')
+                return True
+
+            existing = state_store.get(state_item_id)
+            existing_output = existing.get('output_path') if isinstance(existing, dict) else None
+            if existing and existing.get('status') == 'success' and existing_output and is_product_complete(existing_output):
+                logger.info('⏭️  Product already downloaded (state file), skipping.')
+                return True
+
+        success = False
+        attempts = max(1, int(retry_count))
+        last_error = None
+        should_reset_config = reset_config
+        for attempt in range(attempts):
+            try:
+                if state_store is not None:
+                    state_store.mark(
+                        state_item_id,
+                        'in_progress',
+                        attempts=attempt + 1,
+                        output_path=product_dir,
+                        extra={'product_name': product_name, 's3_path': s3_path}
+                    )
+
+                if use_native:
+                    attempt_reset = should_reset_config
+                    should_reset_config = False
+                    result = download_s3_resumable(
+                        s3_path=s3_path,
+                        output_dir=abs_output_dir,
+                        config_file=config_file,
+                        download_all=True,
+                        state_file=state_file,
+                        state_item_id=state_item_id,
+                        connect_timeout=connect_timeout,
+                        read_timeout=read_timeout,
+                        show_progress=show_progress,
+                        attempts=attempt + 1,
+                        persist_state=True,
+                        reset_config=attempt_reset,
+                    )
+                    if result.status == 'skipped':
+                        logger.info('⏭️  Product already downloaded, skipping.')
+                        return True
+                    if not is_product_complete(result.output_path):
+                        raise ValueError('manifest.safe not found - download may be incomplete')
+                else:
+                    attempt_reset = should_reset_config
+                    should_reset_config = False
+                    pull_down(
+                        s3_path=s3_path,
+                        output_dir=abs_output_dir,
+                        config_file=config_file,
+                        total_size=content_length,
+                        show_progress=show_progress,
+                        reset=attempt_reset,
+                        retry_count=1,
+                        s5cmd_retry_count=s5cmd_retry_count,
+                        max_workers=max_workers,
+                        backoff_base=backoff_base,
+                        backoff_max=backoff_max,
+                    )
+
+                    if not is_product_complete(product_dir):
+                        raise ValueError('manifest.safe not found - download may be incomplete')
+
+                if state_store is not None:
+                    state_store.mark(
+                        state_item_id,
+                        'success',
+                        attempts=attempt + 1,
+                        output_path=product_dir,
+                        extra={'product_name': product_name, 's3_path': s3_path}
+                    )
+                success = True
+                break
+            except Exception as e:
+                last_error = str(e)
+                if state_store is not None:
+                    state_store.mark(
+                        state_item_id,
+                        'failed',
+                        attempts=attempt + 1,
+                        output_path=product_dir,
+                        error=last_error,
+                        extra={'product_name': product_name, 's3_path': s3_path}
+                    )
+                if attempt < attempts - 1:
+                    delay = _compute_backoff_delay(attempt, backoff_base=backoff_base, backoff_max=backoff_max)
+                    logger.warning(
+                        f'⚠️  Attempt {attempt + 1}/{attempts} failed ({e}). '
+                        f'Retrying in {delay:.1f}s...'
+                    )
+                    time.sleep(delay)
+
         if success:
             logger.info('✅ Download completed successfully!')
         else:
-            logger.error('❌ Download failed!')
+            logger.error(f'❌ Download failed! {last_error}')
             
         return success
         
@@ -138,9 +334,19 @@ def download_by_s3path(
     s3_path: str,
     output_dir: str,
     config_file: str = '.s5cfg',
+    mode: str = 'fast',
     show_progress: bool = True,
     reset_config: bool = False,
-    download_all: bool = True
+    download_all: bool = True,
+    retry_count: int = 1,
+    connect_timeout: float = 30.0,
+    read_timeout: Optional[float] = None,
+    state_file: Optional[str] = None,
+    resume_mode: Optional[str] = None,
+    s5cmd_retry_count: Optional[int] = None,
+    max_workers: Optional[int] = None,
+    backoff_base: float = 2.0,
+    backoff_max: float = 60.0,
 ) -> bool:
     """Download a product directly using its S3 path.
     
@@ -148,9 +354,19 @@ def download_by_s3path(
         s3_path: S3 path of the product (starting with /eodata/).
         output_dir: Directory where the product will be downloaded.
         config_file: Path to s5cmd configuration file with credentials.
+        mode: Download mode ('fast' for s5cmd, 'safe' for resumable native downloads).
         show_progress: Whether to display download progress bar.
         reset_config: Whether to reset configuration and prompt for credentials.
         download_all: If True, downloads entire directory; otherwise specific file.
+        retry_count: Number of command-level retry attempts.
+        connect_timeout: Network connection timeout in seconds for native transfers.
+        read_timeout: Network read timeout in seconds for native transfers.
+        state_file: Optional JSON state file path for resumable runs.
+        resume_mode: Deprecated legacy resume selector. Prefer ``mode``.
+        s5cmd_retry_count: Optional internal retry count for s5cmd.
+        max_workers: Optional worker count for s5cmd.
+        backoff_base: Base delay in seconds for retry backoff.
+        backoff_max: Max delay in seconds for retry backoff.
         
     Returns:
         bool: True if download was successful, False otherwise.
@@ -165,23 +381,135 @@ def download_by_s3path(
         if not s3_path.startswith('/eodata/'):
             logger.error(f'❌ Invalid S3 path format. Must start with /eodata/')
             return False
+        effective_mode = _resolve_download_mode(
+            mode,
+            resume_mode=resume_mode,
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
+        )
         
         logger.info(f'📦 S3 Path: {s3_path}')
         logger.info(f'⬇️  Starting download to: {output_dir}')
-        
-        success = pull_down(
-            s3_path=s3_path,
-            output_dir=os.path.abspath(output_dir),
-            config_file=config_file,
-            show_progress=show_progress,
-            reset=reset_config,
-            download_all=download_all
-        )
+
+        abs_output_dir = os.path.abspath(output_dir)
+        safe_name = os.path.basename(s3_path.rstrip('/'))
+        target_dir = os.path.join(abs_output_dir, safe_name)
+        use_native = effective_mode == 'safe'
+
+        state_store: Optional[DownloadStateStore] = None
+        state_item_id = f's3:{s3_path}'
+        if not use_native and resume_mode not in (None, 'off'):
+            resolved_state_file = state_file or default_state_file(abs_output_dir)
+            state_store = DownloadStateStore(resolved_state_file)
+
+            already_complete = is_product_complete(target_dir) if download_all else _dir_has_files(target_dir)
+            if already_complete:
+                state_store.mark(
+                    state_item_id,
+                    'success',
+                    output_path=target_dir,
+                    extra={'s3_path': s3_path}
+                )
+                logger.info('⏭️  Target already downloaded, skipping.')
+                return True
+
+            existing = state_store.get(state_item_id)
+            existing_output = existing.get('output_path') if isinstance(existing, dict) else None
+            if existing and existing.get('status') == 'success' and existing_output:
+                complete_from_state = (
+                    is_product_complete(existing_output) if download_all else _dir_has_files(existing_output)
+                )
+                if complete_from_state:
+                    logger.info('⏭️  Target already downloaded (state file), skipping.')
+                    return True
+
+        success = False
+        attempts = max(1, int(retry_count))
+        last_error = None
+        should_reset_config = reset_config
+        for attempt in range(attempts):
+            try:
+                if state_store is not None:
+                    state_store.mark(
+                        state_item_id,
+                        'in_progress',
+                        attempts=attempt + 1,
+                        output_path=target_dir,
+                        extra={'s3_path': s3_path}
+                    )
+
+                if use_native:
+                    attempt_reset = should_reset_config
+                    should_reset_config = False
+                    result = download_s3_resumable(
+                        s3_path=s3_path,
+                        output_dir=abs_output_dir,
+                        config_file=config_file,
+                        download_all=download_all,
+                        state_file=state_file,
+                        state_item_id=state_item_id,
+                        connect_timeout=connect_timeout,
+                        read_timeout=read_timeout,
+                        show_progress=show_progress,
+                        attempts=attempt + 1,
+                        persist_state=True,
+                        reset_config=attempt_reset,
+                    )
+                    if result.status == 'skipped':
+                        logger.info('⏭️  Target already downloaded, skipping.')
+                        return True
+                    if download_all and not is_product_complete(result.output_path):
+                        raise ValueError('manifest.safe not found - download may be incomplete')
+                else:
+                    attempt_reset = should_reset_config
+                    should_reset_config = False
+                    pull_down(
+                        s3_path=s3_path,
+                        output_dir=abs_output_dir,
+                        config_file=config_file,
+                        show_progress=show_progress,
+                        reset=attempt_reset,
+                        download_all=download_all,
+                        retry_count=1,
+                        s5cmd_retry_count=s5cmd_retry_count,
+                        max_workers=max_workers,
+                        backoff_base=backoff_base,
+                        backoff_max=backoff_max,
+                    )
+
+                if state_store is not None:
+                    state_store.mark(
+                        state_item_id,
+                        'success',
+                        attempts=attempt + 1,
+                        output_path=target_dir,
+                        extra={'s3_path': s3_path}
+                    )
+                success = True
+                break
+            except Exception as e:
+                last_error = str(e)
+                if state_store is not None:
+                    state_store.mark(
+                        state_item_id,
+                        'failed',
+                        attempts=attempt + 1,
+                        output_path=target_dir,
+                        error=last_error,
+                        extra={'s3_path': s3_path}
+                    )
+                if attempt < attempts - 1:
+                    delay = _compute_backoff_delay(attempt, backoff_base=backoff_base, backoff_max=backoff_max)
+                    logger.warning(
+                        f'⚠️  Attempt {attempt + 1}/{attempts} failed ({e}). '
+                        f'Retrying in {delay:.1f}s...'
+                    )
+                    time.sleep(delay)
         
         if success:
             logger.info('✅ Download completed successfully!')
         else:
-            logger.error('❌ Download failed!')
+            logger.error(f'❌ Download failed! {last_error}')
             
         return success
         
@@ -524,6 +852,12 @@ Examples:
         action='store_true',
         help='Reset configuration file and prompt for new credentials'
     )
+    parser.add_argument(
+        '--mode',
+        choices=['fast', 'safe'],
+        default='fast',
+        help='Download mode: fast uses s5cmd, safe uses resumable native downloads'
+    )
     
     # Download options
     parser.add_argument(
@@ -536,6 +870,59 @@ Examples:
         '--no-download-all',
         action='store_true',
         help='Download specific file instead of entire directory (for S3 path only)'
+    )
+
+    # Robustness options
+    parser.add_argument(
+        '--robust',
+        action='store_true',
+        help='Deprecated legacy preset. Prefer --mode safe'
+    )
+    parser.add_argument(
+        '--retry-count',
+        type=int,
+        help='Number of command-level retry attempts for downloads'
+    )
+    parser.add_argument(
+        '--connect-timeout',
+        type=float,
+        help='Network connection timeout in seconds'
+    )
+    parser.add_argument(
+        '--read-timeout',
+        type=float,
+        help='Network read timeout in seconds'
+    )
+    parser.add_argument(
+        '--resume-mode',
+        choices=['off', 'product'],
+        default=None,
+        help='Deprecated legacy resume selector. Prefer --mode {fast,safe}'
+    )
+    parser.add_argument(
+        '--state-file',
+        type=str,
+        help='Path to JSON state file used for resumable downloads'
+    )
+    parser.add_argument(
+        '--s5cmd-retry-count',
+        type=int,
+        help='Internal retry count passed to s5cmd (--retry-count)'
+    )
+    parser.add_argument(
+        '--max-workers',
+        type=int,
+        help='Number of workers passed to s5cmd (--numworkers)'
+    )
+    parser.add_argument(
+        '--backoff-base',
+        type=float,
+        help='Base delay in seconds for exponential retry backoff'
+    )
+    parser.add_argument(
+        '--backoff-max',
+        type=float,
+        help='Maximum delay in seconds for exponential retry backoff'
     )
 
     # Product listing options
@@ -648,6 +1035,23 @@ Examples:
     # Set logging level
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    effective_mode = _resolve_download_mode(
+        args.mode,
+        resume_mode=args.resume_mode,
+        connect_timeout=args.connect_timeout if args.connect_timeout is not None else 30.0,
+        read_timeout=args.read_timeout,
+        robust=args.robust,
+    )
+    effective_retry_count = args.retry_count if args.retry_count is not None else (5 if effective_mode == 'safe' else 1)
+    effective_connect_timeout = args.connect_timeout if args.connect_timeout is not None else 30.0
+    effective_read_timeout = args.read_timeout if args.read_timeout is not None else (900.0 if effective_mode == 'safe' else None)
+    effective_backoff_base = args.backoff_base if args.backoff_base is not None else 2.0
+    effective_backoff_max = args.backoff_max if args.backoff_max is not None else 60.0
+    effective_s5cmd_retry_count = (
+        args.s5cmd_retry_count if args.s5cmd_retry_count is not None else (10 if effective_mode == 'safe' else None)
+    )
+    effective_max_workers = args.max_workers
     
     # Execute download based on input type
     try:
@@ -698,8 +1102,18 @@ Examples:
                 product_name=args.name,
                 output_dir=args.output_dir,
                 config_file=args.config_file,
+                mode=effective_mode,
                 show_progress=not args.no_progress,
-                reset_config=args.reset
+                reset_config=args.reset,
+                retry_count=effective_retry_count,
+                connect_timeout=effective_connect_timeout,
+                read_timeout=effective_read_timeout,
+                state_file=args.state_file,
+                resume_mode=args.resume_mode,
+                s5cmd_retry_count=effective_s5cmd_retry_count,
+                max_workers=effective_max_workers,
+                backoff_base=effective_backoff_base,
+                backoff_max=effective_backoff_max,
             )
         elif args.s3path:
             # Create output directory only for download workflows
@@ -709,9 +1123,19 @@ Examples:
                 s3_path=args.s3path,
                 output_dir=args.output_dir,
                 config_file=args.config_file,
+                mode=effective_mode,
                 show_progress=not args.no_progress,
                 reset_config=args.reset,
-                download_all=not args.no_download_all
+                download_all=not args.no_download_all,
+                retry_count=effective_retry_count,
+                connect_timeout=effective_connect_timeout,
+                read_timeout=effective_read_timeout,
+                state_file=args.state_file,
+                resume_mode=args.resume_mode,
+                s5cmd_retry_count=effective_s5cmd_retry_count,
+                max_workers=effective_max_workers,
+                backoff_base=effective_backoff_base,
+                backoff_max=effective_backoff_max,
             )
         else:
             parser.error('Provide one mode: --name, --s3path, --list, or --burst-coverage')

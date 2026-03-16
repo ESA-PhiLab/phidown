@@ -4,122 +4,53 @@ Installation
 Requirements
 ------------
 
-Φ-Down requires Python 3.9 or later. It has been tested on:
+Phi-Down requires:
 
-* Python 3.9, 3.10, 3.11, 3.12
-* macOS, Linux, Windows
+* Python 3.9 or newer
+* ``s5cmd`` on your ``PATH`` for S3 downloads
+* Copernicus Data Space credentials for authenticated downloads
 
-Dependencies
-------------
+Install from PyPI
+-----------------
 
-Core dependencies (automatically installed):
-
-* ``s5cmd`` - High-performance S3 client for data downloads
-* ``pandas`` - Data manipulation and analysis
-* ``ipyleaflet`` - Interactive maps for Jupyter notebooks
-* ``huggingface-hub`` - Access to Hugging Face model hub
-
-Optional dependency groups:
-
-**ais** - AIS (vessel tracking) support:
-
-* ``shapely`` - Geometric operations for spatial data
-
-**viz** - Visualization tools:
-
-* ``ipywidgets`` - Interactive widgets for Jupyter
-* ``folium`` - Web-based interactive maps
-
-**dev** - Development tools:
-
-* ``pytest`` - Testing framework
-* ``pytest-mock`` - Mocking library for tests
-* ``flake8`` - Code style checker
-
-**docs** - Documentation tools:
-
-* ``sphinx`` - Documentation generator
-* ``sphinx-rtd-theme`` - Read the Docs theme for Sphinx
-* ``sphinx-autodoc-typehints`` - Type hints support in documentation
-* ``myst-parser`` - Markdown parser for Sphinx
-* ``sphinx-copybutton`` - Copy button for code blocks
-* ``sphinx-autoapi`` - Automatic API documentation generation
-
-Installing from PyPI
---------------------
-
-The easiest way to install Φ-Down is using pip:
+Install the base package:
 
 .. code-block:: bash
 
    pip install phidown
 
-This will install the core package with all required dependencies.
-
-Installing with Optional Features
-----------------------------------
-
-Φ-Down comes with several optional dependency groups that enable additional functionality:
-
-**Visualization Tools**
-
-To use interactive features like polygon selection tools and maps:
+Install optional feature groups as needed:
 
 .. code-block:: bash
 
-   pip install phidown[viz]
+   # Interactive plotting and footprint maps
+   pip install "phidown[viz]"
 
-This installs visualization dependencies (``ipywidgets``, ``folium``).
+   # AIS download and filtering support
+   pip install "phidown[ais]"
 
-**AIS (Automatic Identification System) Support**
+   # Notebook-oriented dependencies
+   pip install "phidown[jupyter_env]"
 
-For vessel tracking and maritime monitoring features:
+   # Development, tests, and documentation
+   pip install "phidown[dev,test,docs]"
 
-.. code-block:: bash
+Optional Dependency Groups
+--------------------------
 
-   pip install phidown[ais]
+Phi-Down exposes these optional dependency groups in ``pyproject.toml``:
 
-This installs geometry processing dependencies (``shapely``).
+* ``viz``: Folium, raster/plotting, and map visualization helpers
+* ``ais``: AIS download support, including spatial filtering dependencies
+* ``jupyter_env``: Jupyter widgets and notebook integrations
+* ``dev``: Development tools such as ``pytest`` and ``flake8``
+* ``test``: Test-only dependencies used by the local suite
+* ``docs``: Sphinx and related documentation tooling
 
-**Development Tools**
+Install from Source
+-------------------
 
-For contributing to the project or running tests:
-
-.. code-block:: bash
-
-   pip install phidown[dev]
-
-This installs testing and code quality tools (``pytest``, ``pytest-mock``, ``flake8``).
-
-**Documentation Tools**
-
-For building and contributing to documentation:
-
-.. code-block:: bash
-
-   pip install phidown[docs]
-
-This installs documentation dependencies (``sphinx``, ``sphinx-rtd-theme``, etc.).
-
-**All Optional Features**
-
-To install everything at once:
-
-.. code-block:: bash
-
-   pip install phidown[ais,viz,dev,docs]
-
-.. note::
-   For most users, we recommend installing with visualization support for the best experience:
-   
-   .. code-block:: bash
-   
-      pip install phidown[viz]
-
-Installing from Source
-----------------------
-
-To install the latest development version:
+Using ``pip``:
 
 .. code-block:: bash
 
@@ -127,23 +58,16 @@ To install the latest development version:
    cd phidown
    pip install -e .
 
-For development with specific optional dependencies:
+With optional extras:
 
 .. code-block:: bash
 
-   git clone https://github.com/ESA-PhiLab/phidown.git
-   cd phidown
-   
-   # Install with visualization support
-   pip install -e .[viz]
-   
-   # Install with all optional features
-   pip install -e .[ais,viz,dev,docs]
+   pip install -e ".[viz,ais,dev,test,docs]"
 
-Using PDM (Recommended for Development)
------------------------------------------
+Using PDM
+---------
 
-If you're contributing to Φ-Down, use PDM for dependency management:
+For local development, PDM matches the repository setup:
 
 .. code-block:: bash
 
@@ -151,125 +75,113 @@ If you're contributing to Φ-Down, use PDM for dependency management:
    cd phidown
    pdm install
 
-This installs all core dependencies. For optional dependency groups:
+To include optional groups:
 
 .. code-block:: bash
 
-   # Install with visualization support
-   pdm install --group viz
+   pdm install -G viz -G ais -G dev -G test -G docs -G jupyter_env
 
-   # Install with AIS support
-   pdm install --group ais
+Install ``s5cmd``
+-----------------
 
-   # Install with development tools
-   pdm install --group dev
-
-   # Install with documentation tools
-   pdm install --group docs
-
-   # Install all optional groups
-   pdm install --group viz --group ais --group dev --group docs
-
-Conda Installation
-------------------
-
-Currently, Φ-Down is not available on conda-forge, but you can install it in a conda environment:
+Phi-Down uses ``s5cmd`` for S3 transfers. Install it separately if you plan to
+download data:
 
 .. code-block:: bash
 
-   conda create -n phidown python=3.12
-   conda activate phidown
-   pip install phidown
+   brew install peak/tap/s5cmd
+
+or
+
+.. code-block:: bash
+
+   go install github.com/peak/s5cmd/v2@latest
+
+Then verify:
+
+.. code-block:: bash
+
+   s5cmd version
+
+Configure ``.s5cfg``
+--------------------
+
+Phi-Down uses an ``.s5cfg`` file to source CDSE S3 credentials for download
+operations.
+
+Recommended template:
+
+.. code-block:: ini
+
+   [default]
+   aws_access_key_id = your_access_key
+   aws_secret_access_key = your_secret_key
+   aws_region = eu-central-1
+   host_base = eodata.dataspace.copernicus.eu
+   host_bucket = eodata.dataspace.copernicus.eu
+   use_https = true
+   check_ssl_certificate = true
+
+Guidelines:
+
+* Keep the section name as ``[default]``.
+* Store the file in the working directory as ``.s5cfg`` if you want to rely on
+  Phi-Down defaults.
+* If you keep credentials elsewhere, pass the path explicitly with
+  ``-c/--config-file`` in the CLI or ``config_file=...`` in Python.
+* Keep ``host_base`` and ``host_bucket`` aligned with the CDSE endpoint shown
+  above.
+* Phi-Down parses this file itself and then sets the relevant environment
+  variables for ``s5cmd``.
+* Avoid committing the file to git. Add ``.s5cfg`` to your local ignore rules
+  if needed.
+* Rotate credentials in the CDSE S3 key manager if a file is exposed or copied
+  to an untrusted environment.
+
+Example custom path usage:
+
+.. code-block:: bash
+
+   phidown --name PRODUCT_NAME -o ./data -c ~/.config/phidown/cdse.s5cfg
+
+.. code-block:: python
+
+   from pathlib import Path
+   from phidown import CopernicusDataSearcher
+
+   searcher = CopernicusDataSearcher()
+   searcher.download_product(
+       eo_product_name="PRODUCT_NAME",
+       output_dir="./data",
+       config_file=str(Path.home() / ".config/phidown/cdse.s5cfg"),
+   )
 
 Verification
 ------------
 
-To verify your installation:
+Check that the package imports and reports the expected version:
 
 .. code-block:: python
 
    import phidown
    print(phidown.__version__)
 
-   # Test basic functionality
    from phidown import CopernicusDataSearcher
    searcher = CopernicusDataSearcher()
-   print("✓ Installation successful!")
-
-Docker Installation
---------------------
-
-A Docker image is available for containerized usage:
-
-.. code-block:: bash
-
-   docker pull ghcr.io/esa-philab/phidown:latest
-
-Or build from source:
-
-.. code-block:: bash
-
-   git clone https://github.com/ESA-PhiLab/phidown.git
-   cd phidown
-   docker build -t phidown .
+   print(type(searcher).__name__)
 
 Troubleshooting
 ---------------
 
-**ImportError for optional dependencies**:
+``s5cmd: command not found``
+   Install ``s5cmd`` and make sure it is available on your ``PATH``.
 
-If you see errors about missing ``ipyleaflet`` or ``ipywidgets``, install visualization dependencies:
+Missing optional dependencies
+   Install the relevant extra, such as ``phidown[viz]`` or ``phidown[ais]``.
 
-.. code-block:: bash
+Import errors in notebooks
+   Install ``phidown[jupyter_env]`` for widget and notebook integrations.
 
-   pip install phidown[viz]
-
-**SSL Certificate errors**:
-
-On some systems, you may encounter SSL issues. Try:
-
-.. code-block:: bash
-
-   pip install --trusted-host pypi.org --trusted-host pypi.python.org phidown
-
-**Permission errors on Windows**:
-
-Run your command prompt as administrator or use:
-
-.. code-block:: bash
-
-   pip install --user phidown
-
-**Dependency conflicts**:
-
-If you have conflicts with existing packages, consider using a virtual environment:
-
-.. code-block:: bash
-
-   python -m venv phidown_env
-   source phidown_env/bin/activate  # On Windows: phidown_env\Scripts\activate
-   pip install phidown
-
-Upgrading
----------
-
-To upgrade to the latest version:
-
-.. code-block:: bash
-
-   pip install --upgrade phidown
-
-To upgrade with visualization dependencies:
-
-.. code-block:: bash
-
-   pip install --upgrade phidown[viz]
-
-Uninstalling
-------------
-
-To remove Φ-Down:
-
-.. code-block:: bash
-
-   pip uninstall phidown
+Authentication failures
+   Recreate your ``.s5cfg`` file with fresh Copernicus Data Space S3
+   credentials before retrying downloads.

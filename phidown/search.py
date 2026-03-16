@@ -10,8 +10,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 import copy 
 import asyncio
+import time
+import random
+import re
+import warnings
 
 from .downloader import pull_down, get_token, download_burst_on_demand, TokenManager
+from .download_state import DownloadStateStore, default_state_file, is_non_empty_file, is_product_complete
+from .native_download import download_s3_resumable
 
 # Optional shapely import for AOI coverage calculation
 try:
@@ -33,6 +39,247 @@ except ImportError:
 # Configure logging
 logger = logging.getLogger(__name__)
 REQUEST_TIMEOUT_SECONDS = 30
+_SUPPORTED_AOI_WKT_TYPES = (
+    "POINT",
+    "MULTIPOINT",
+    "LINESTRING",
+    "MULTILINESTRING",
+    "POLYGON",
+    "MULTIPOLYGON",
+)
+_WKT_NUMBER_PATTERN = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
+_WKT_COORDINATE_RE = re.compile(
+    rf"^\s*{_WKT_NUMBER_PATTERN}\s+{_WKT_NUMBER_PATTERN}\s*$"
+)
+
+
+def _compute_backoff_delay(attempt_index: int, backoff_base: float, backoff_max: float) -> float:
+    """Compute retry delay with exponential backoff and jitter."""
+    exponential = backoff_base * (2 ** attempt_index)
+    return min(backoff_max, exponential) + random.uniform(0.0, 0.5)
+
+
+def _resolve_product_download_mode(mode: str = 'fast', *, resume_mode: typing.Optional[str] = None) -> str:
+    if mode not in {'fast', 'safe'}:
+        raise ValueError("mode must be either 'fast' or 'safe'")
+    if resume_mode is None:
+        return mode
+    if resume_mode not in {'off', 'product'}:
+        raise ValueError("resume_mode must be either 'off' or 'product'")
+    warnings.warn(
+        'resume_mode is deprecated; use mode="fast" or mode="safe" instead.',
+        DeprecationWarning,
+        stacklevel=3,
+    )
+    return 'safe' if resume_mode == 'product' else 'fast'
+
+
+def _split_wkt_components(text: str) -> typing.List[str]:
+    """Split comma-separated WKT components while respecting nested parentheses."""
+    parts: typing.List[str] = []
+    depth = 0
+    start = 0
+
+    for index, char in enumerate(text):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth < 0:
+                raise ValueError("unbalanced parentheses")
+        elif char == "," and depth == 0:
+            part = text[start:index].strip()
+            if not part:
+                raise ValueError("empty geometry component")
+            parts.append(part)
+            start = index + 1
+
+    if depth != 0:
+        raise ValueError("unbalanced parentheses")
+
+    tail = text[start:].strip()
+    if not tail:
+        raise ValueError("empty geometry component")
+    parts.append(tail)
+    return parts
+
+
+def _parse_wkt_geometry(aoi_wkt: str) -> typing.Tuple[str, str]:
+    """Return the normalized WKT geometry type and body."""
+    normalized_wkt = " ".join(aoi_wkt.split())
+    match = re.match(r"([A-Za-z]+)", normalized_wkt)
+    if match is None:
+        raise ValueError("missing geometry type")
+
+    geometry_type = match.group(1).upper()
+    body = normalized_wkt[match.end():].strip()
+    if not body:
+        raise ValueError("missing geometry body")
+    return geometry_type, body
+
+
+def _unwrap_wkt_group(text: str) -> str:
+    """Return the contents of a single balanced parenthesized WKT group."""
+    stripped = text.strip()
+    if not stripped.startswith("(") or not stripped.endswith(")"):
+        raise ValueError("missing outer parentheses")
+
+    depth = 0
+    for index, char in enumerate(stripped):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth < 0:
+                raise ValueError("unbalanced parentheses")
+            if depth == 0 and index != len(stripped) - 1:
+                raise ValueError("unexpected trailing geometry text")
+
+    if depth != 0:
+        raise ValueError("unbalanced parentheses")
+
+    inner = stripped[1:-1].strip()
+    if not inner:
+        raise ValueError("empty geometry body")
+    return inner
+
+
+def _parse_coordinate(text: str) -> typing.Tuple[float, float]:
+    """Parse and validate a 2D WKT coordinate pair."""
+    if not _WKT_COORDINATE_RE.fullmatch(text):
+        raise ValueError(f"invalid coordinate pair: {text!r}")
+    lon_text, lat_text = text.split()
+    return float(lon_text), float(lat_text)
+
+
+def _validate_coordinate(text: str) -> None:
+    """Validate a 2D WKT coordinate pair."""
+    _parse_coordinate(text)
+
+
+def _coordinates_from_sequence(text: str) -> typing.List[typing.Tuple[float, float]]:
+    """Parse a comma-separated sequence of coordinate pairs."""
+    return [_parse_coordinate(component) for component in _split_wkt_components(text)]
+
+
+def _validate_coordinate_sequence(text: str) -> None:
+    """Validate a comma-separated sequence of 2D WKT coordinate pairs."""
+    _coordinates_from_sequence(text)
+
+
+def _validate_point_body(body: str) -> None:
+    _validate_coordinate(_unwrap_wkt_group(body))
+
+
+def _validate_linestring_body(body: str) -> None:
+    _validate_coordinate_sequence(_unwrap_wkt_group(body))
+
+
+def _validate_multipoint_body(body: str) -> None:
+    for component in _split_wkt_components(_unwrap_wkt_group(body)):
+        if component.startswith("("):
+            _validate_coordinate(_unwrap_wkt_group(component))
+        else:
+            _validate_coordinate(component)
+
+
+def _validate_multilinestring_body(body: str) -> None:
+    for component in _split_wkt_components(_unwrap_wkt_group(body)):
+        _validate_coordinate_sequence(_unwrap_wkt_group(component))
+
+
+def _validate_polygon_ring(ring: str) -> None:
+    coords = _coordinates_from_sequence(_unwrap_wkt_group(ring))
+    if len(coords) < 4:
+        raise ValueError("WKT polygon ring must have at least 4 coordinate pairs")
+    if coords[0] != coords[-1]:
+        raise ValueError("WKT polygon ring must start and end with the same point")
+
+
+def _validate_polygon_body(body: str) -> None:
+    for ring in _split_wkt_components(_unwrap_wkt_group(body)):
+        _validate_polygon_ring(ring)
+
+
+def _validate_multipolygon_body(body: str) -> None:
+    for polygon in _split_wkt_components(_unwrap_wkt_group(body)):
+        _validate_polygon_body(polygon)
+
+
+def _validate_supported_aoi_wkt(aoi_wkt: str) -> None:
+    """Validate AOI WKT syntax for the supported CDSE geometry allowlist."""
+    geometry_type, body = _parse_wkt_geometry(aoi_wkt)
+    if geometry_type not in _SUPPORTED_AOI_WKT_TYPES:
+        supported = ", ".join(_SUPPORTED_AOI_WKT_TYPES)
+        raise ValueError(
+            f"Unsupported AOI WKT geometry type '{geometry_type}'. Supported types: {supported}"
+        )
+    if body.upper() == "EMPTY":
+        return
+
+    validators = {
+        "POINT": _validate_point_body,
+        "MULTIPOINT": _validate_multipoint_body,
+        "LINESTRING": _validate_linestring_body,
+        "MULTILINESTRING": _validate_multilinestring_body,
+        "POLYGON": _validate_polygon_body,
+        "MULTIPOLYGON": _validate_multipolygon_body,
+    }
+    validators[geometry_type](body)
+
+
+def _strip_closing_coordinate(
+    coords: typing.List[typing.Tuple[float, float]]
+) -> typing.List[typing.Tuple[float, float]]:
+    if len(coords) > 1 and coords[0] == coords[-1]:
+        return coords[:-1]
+    return coords
+
+
+def _centroid_coordinates_from_body(
+    geometry_type: str,
+    body: str,
+) -> typing.List[typing.Tuple[float, float]]:
+    if body.upper() == "EMPTY":
+        raise ValueError("AOI WKT geometry cannot be EMPTY")
+
+    if geometry_type == "POINT":
+        return [_parse_coordinate(_unwrap_wkt_group(body))]
+
+    if geometry_type == "MULTIPOINT":
+        coords: typing.List[typing.Tuple[float, float]] = []
+        for component in _split_wkt_components(_unwrap_wkt_group(body)):
+            if component.startswith("("):
+                coords.append(_parse_coordinate(_unwrap_wkt_group(component)))
+            else:
+                coords.append(_parse_coordinate(component))
+        return coords
+
+    if geometry_type == "LINESTRING":
+        return _coordinates_from_sequence(_unwrap_wkt_group(body))
+
+    if geometry_type == "MULTILINESTRING":
+        coords = []
+        for component in _split_wkt_components(_unwrap_wkt_group(body)):
+            coords.extend(_coordinates_from_sequence(_unwrap_wkt_group(component)))
+        return coords
+
+    if geometry_type == "POLYGON":
+        rings = _split_wkt_components(_unwrap_wkt_group(body))
+        return _strip_closing_coordinate(_coordinates_from_sequence(_unwrap_wkt_group(rings[0])))
+
+    if geometry_type == "MULTIPOLYGON":
+        coords = []
+        for polygon in _split_wkt_components(_unwrap_wkt_group(body)):
+            rings = _split_wkt_components(_unwrap_wkt_group(polygon))
+            coords.extend(
+                _strip_closing_coordinate(
+                    _coordinates_from_sequence(_unwrap_wkt_group(rings[0]))
+                )
+            )
+        return coords
+
+    raise ValueError(f"Unsupported AOI WKT geometry type '{geometry_type}'")
 
 # Set up S3 credentials in .s5cfg file!
 
@@ -114,6 +361,7 @@ class CopernicusDataSearcher:
         # Set default values for top and order_by
         self.top: int = 1000
         self.count: bool = False
+        self.skip: typing.Optional[int] = None
         self.order_by: str = "ContentDate/Start desc"
 
         # Initialize placeholders for query results
@@ -131,11 +379,12 @@ class CopernicusDataSearcher:
         orbit_direction: typing.Optional[str] = None,
         cloud_cover_threshold: typing.Optional[float] = None,
         attributes: typing.Optional[typing.Dict[str, typing.Union[str, int, float]]] = None,
-        aoi_wkt: typing.Optional[str] = None,  # Disclaimers: Polygon must start and end with the same point. Coordinates must be given in EPSG 4326
+        aoi_wkt: typing.Optional[str] = None,  # Coordinates should be expressed as WKT in EPSG:4326 for CDSE spatial filters.
         start_date: typing.Optional[str] = None,
         end_date: typing.Optional[str] = None,
         top: int = 1000,
-        count: bool = False,  
+        count: bool = False,
+        skip: typing.Optional[int] = None,
         order_by: str = "ContentDate/Start desc",
         # Burst mode parameters
         burst_mode: bool = False,
@@ -161,10 +410,14 @@ class CopernicusDataSearcher:
             orbit_direction (str, optional): Orbit direction to filter (e.g., 'ASCENDING', 'DESCENDING'). Defaults to None.
             cloud_cover_threshold (float, optional): Maximum cloud cover percentage to filter. Defaults to None.
             attributes (typing.Dict[str, typing.Union[str, int, float]], optional): Additional attributes for filtering. Defaults to None.
-            aoi_wkt (str, optional): Area of Interest in WKT format. Defaults to None.
+            aoi_wkt (str, optional): Area of Interest in WKT format. Supported types are
+                POINT, MULTIPOINT, LINESTRING, MULTILINESTRING, POLYGON, and MULTIPOLYGON.
+                The query builder serializes the AOI as SRID 4326 for CDSE. Defaults to None.
             start_date (str, optional): Start date for filtering (ISO 8601 format). Defaults to None.
             end_date (str, optional): End date for filtering (ISO 8601 format). Defaults to None.
             top (int, optional): Maximum number of results to retrieve. Defaults to 1000.
+            count (bool, optional): Request result count and auto-fetch all pages when needed. Defaults to False.
+            skip (int, optional): Number of matching results to skip for manual pagination. Defaults to None.
             order_by (str, optional): Field and direction to order results by. Defaults to "ContentDate/Start desc".
             burst_mode (bool, optional): Enable Sentinel-1 SLC Burst mode searching. Defaults to False.
             burst_id (int, optional): Burst ID to filter (burst mode only). Defaults to None.
@@ -189,6 +442,10 @@ class CopernicusDataSearcher:
             self.base_url = base_url
             
         self.count = count  # Set or override count option
+        self.skip = skip
+        self._validate_skip()
+        if self.count and self.skip is not None:
+            raise ValueError("The 'count' and 'skip' parameters cannot be used together.")
         
         # Assign and validate parameters
         self.collection_name = collection_name
@@ -357,6 +614,21 @@ class CopernicusDataSearcher:
         if not (1 <= self.top <= 1000):
             raise ValueError("The 'top' parameter must be between 1 and 1000")
 
+    def _validate_skip(self):
+        """
+        Validate the 'skip' parameter to ensure it is a non-negative integer.
+
+        Raises:
+            TypeError: If the 'skip' parameter is not an integer.
+            ValueError: If the 'skip' parameter is negative.
+        """
+        if self.skip is None:
+            return
+        if isinstance(self.skip, bool) or not isinstance(self.skip, int):
+            raise TypeError("The 'skip' parameter must be an integer")
+        if self.skip < 0:
+            raise ValueError("The 'skip' parameter must be greater than or equal to 0")
+
     def _validate_cloud_cover_threshold(self):
         """
         Validate the 'cloud_cover_threshold' parameter to ensure it is between 0 and 100.
@@ -382,74 +654,26 @@ class CopernicusDataSearcher:
 
     def _validate_aoi_wkt(self) -> None:
         """
-        Validate and normalize the 'aoi_wkt' parameter to ensure it is a valid WKT polygon.
-        Automatically fixes common issues like extra whitespace and missing closing coordinates.
+        Validate and normalize the 'aoi_wkt' parameter as supported WKT geometry.
 
         Raises:
-            ValueError: If the 'aoi_wkt' parameter is not a valid WKT polygon.
+            ValueError: If the 'aoi_wkt' parameter is malformed WKT or uses an unsupported geometry type.
             TypeError: If the 'aoi_wkt' parameter is not a string.
         """
         if self.aoi_wkt is not None:
             if not isinstance(self.aoi_wkt, str):
                 raise TypeError("The 'aoi_wkt' parameter must be a string")
-            
-            original_wkt = self.aoi_wkt
-            
-            # First normalize all whitespace
+
             self.aoi_wkt = ' '.join(self.aoi_wkt.split())
-            
+
             if not self.aoi_wkt.strip():
                 raise ValueError("The 'aoi_wkt' parameter cannot be empty")
-            
-            # Check if it starts with POLYGON (case insensitive) and has proper structure
-            upper_wkt = self.aoi_wkt.upper()
-            if not upper_wkt.startswith('POLYGON'):
-                raise ValueError("The 'aoi_wkt' parameter must be a valid WKT POLYGON format")
-            
-            # Find the start of coordinates after POLYGON
-            polygon_prefix = 'POLYGON'
-            remaining_part = self.aoi_wkt[len(polygon_prefix):].strip()
-            
-            if not (remaining_part.startswith('((') and remaining_part.endswith('))')):
-                raise ValueError("The 'aoi_wkt' parameter must be a valid WKT POLYGON format: 'POLYGON((...))'")
-            
-            # Extract coordinate string
-            coord_string = remaining_part[2:-2]  # Remove "((" and "))"
-            coord_pairs = [pair.strip() for pair in coord_string.split(',') if pair.strip()]
-            
-            if len(coord_pairs) < 4:
-                raise ValueError('WKT polygon must have at least 4 coordinate pairs (including closing coordinate)')
-            
-            # Validate and normalize each coordinate pair
-            normalized_coords = []
-            for i, pair in enumerate(coord_pairs):
-                coords = pair.split()
-                if len(coords) != 2:
-                    raise ValueError(f"Invalid coordinate pair at position {i + 1}: '{pair}'. Must be 'longitude latitude'")
-                
-                try:
-                    lon, lat = float(coords[0]), float(coords[1])
-                    # Validate EPSG:4326 bounds
-                    if not (-180 <= lon <= 180):
-                        raise ValueError(f'Longitude {lon} at position {i + 1} is out of valid range [-180, 180]')
-                    if not (-90 <= lat <= 90):
-                        raise ValueError(f'Latitude {lat} at position {i + 1} is out of valid range [-90, 90]')
-                    normalized_coords.append(f'{lon:g} {lat:g}')
-                except ValueError as e:
-                    if 'could not convert' in str(e):
-                        raise ValueError(f"Invalid coordinate values at position {i + 1}: '{pair}'. Must be numeric")
+            try:
+                _validate_supported_aoi_wkt(self.aoi_wkt)
+            except ValueError as exc:
+                if str(exc).startswith("Unsupported AOI WKT geometry type"):
                     raise
-            
-            # Check if polygon is closed (first and last coordinates must be the same)
-            if normalized_coords[0] != normalized_coords[-1]:
-                raise ValueError("WKT polygon must start and end with the same point")
-            
-            # Reconstruct the WKT string with proper formatting
-            self.aoi_wkt = f"POLYGON(({', '.join(normalized_coords)}))"
-            
-            # Notify user if corrections were made
-            # if self.aoi_wkt != original_wkt:
-            #     print('WKT polygon normalized: Whitespace and formatting corrected')
+                raise ValueError(f"The 'aoi_wkt' parameter must be valid WKT: {exc}") from exc
 
     def _validate_time(self):
         """
@@ -774,10 +998,14 @@ class CopernicusDataSearcher:
 
         self.filter_condition = " and ".join(filters)
 
-    def _build_query(self):
+    def _build_query(self, skip: typing.Optional[int] = None):
         """Build the full OData query URL"""
         self._build_filter()
         self.query = f"?$filter={self.filter_condition}&$orderby={self.order_by}&$top={self.top}"
+
+        effective_skip = self.skip if skip is None else skip
+        if effective_skip is not None:
+            self.query += f"&$skip={effective_skip}"
         
         # Add $expand=Attributes only for non-burst mode
         if not self.burst_mode:
@@ -851,13 +1079,7 @@ class CopernicusDataSearcher:
 
         urls = []
         for skip in skips:
-            paginated_query = f"?$filter={self.filter_condition}&$orderby={self.order_by}&$top={page_size}&$skip={skip}"
-            # Add $expand=Attributes only for non-burst mode (Bursts API doesn't support it)
-            if not self.burst_mode:
-                paginated_query += "&$expand=Attributes"
-            if self.count:
-                paginated_query += "&$count=true"
-            urls.append(f"{self.base_url}{paginated_query}")
+            urls.append(self._build_query(skip=skip))
             
         async def fetch_url(url):
             loop = asyncio.get_running_loop()
@@ -1187,8 +1409,18 @@ class CopernicusDataSearcher:
     def download_product(self, eo_product_name: str, 
                         output_dir: str, 
                         config_file = '.s5cfg',
+                        mode: str = 'fast',
                         verbose=True,
-                        show_progress=True):
+                        show_progress=True,
+                        retry_count: int = 1,
+                        connect_timeout: float = 30.0,
+                        read_timeout: typing.Optional[float] = None,
+                        state_file: typing.Optional[str] = None,
+                        s5cmd_retry_count: typing.Optional[int] = None,
+                        max_workers: typing.Optional[int] = None,
+                        backoff_base: float = 2.0,
+                        backoff_max: float = 60.0,
+                        reset_config: bool = False):
         """
         Download the EO product using the downloader module.
         
@@ -1196,17 +1428,29 @@ class CopernicusDataSearcher:
             eo_product_name: Name of the EO product to download
             output_dir: Local output directory for downloaded files
             config_file: Path to s5cmd configuration file
+            mode: Download mode ('fast' for s5cmd, 'safe' for resumable native downloads)
             verbose: Whether to print download information
             show_progress: Whether to show tqdm progress bar during download
+            retry_count: Number of command-level retry attempts
+            connect_timeout: Network connection timeout in seconds for native transfers
+            read_timeout: Network read timeout in seconds for native transfers
+            state_file: Optional JSON state file path for resumable runs
+            s5cmd_retry_count: Optional internal retry count for s5cmd
+            max_workers: Optional worker count for s5cmd
+            backoff_base: Base delay in seconds for retry backoff
+            backoff_max: Max delay in seconds for retry backoff
+            reset_config: Whether to reset configuration and prompt for credentials
         
         Returns:
             bool: True if download was successful, False otherwise
         """
+        if mode not in {'fast', 'safe'}:
+            raise ValueError("mode must be either 'fast' or 'safe'")
+            
         res = self.query_by_name(eo_product_name)
         if res.empty:
             print(f"No product found with name: {eo_product_name}")
             return False
-        
         
         # file size in bytes
         content_length = res['ContentLength'].iloc[0]
@@ -1217,16 +1461,77 @@ class CopernicusDataSearcher:
         if verbose:
             print(f"Downloading product: {eo_product_name}")
             print(f"Output directory: {abs_output_dir}")
+            print(f"Mode: {mode}")
         
         s3path = res['S3Path'].iloc[0]
-        # Call the downloader function with progress bar
-        pull_down(
-            s3_path=s3path,
-            output_dir=abs_output_dir,
-            config_file=config_file,
-            total_size=content_length,
-            show_progress=show_progress
+        
+        # Choose download method based on mode
+        if mode == 'safe':
+            # Use resumable native download with command-level retries.
+            attempts = max(1, int(retry_count))
+            should_reset_config = reset_config
+            last_error = None
+
+            for attempt in range(attempts):
+                try:
+                    if verbose and attempts > 1:
+                        print(f"\n🔄 Attempt {attempt + 1}/{attempts}")
+                    
+                    result = download_s3_resumable(
+                        s3_path=s3path,
+                        output_dir=abs_output_dir,
+                        config_file=config_file,
+                        download_all=True,
+                        state_file=state_file,
+                        state_item_id=f'name:{eo_product_name}',
+                        connect_timeout=connect_timeout,
+                        read_timeout=read_timeout,
+                        show_progress=show_progress,
+                        attempts=attempt + 1,
+                        persist_state=True,
+                        reset_config=should_reset_config,
+                    )
+                    if verbose and attempts > 1:
+                        print(f"✅ Download successful on attempt {attempt + 1}/{attempts}")
+                    return result.status in ('downloaded', 'skipped')
+                except Exception as exc:
+                    last_error = str(exc)
+                    should_reset_config = False
+                    if attempt < attempts - 1:
+                        delay = _compute_backoff_delay(
+                            attempt,
+                            backoff_base=backoff_base,
+                            backoff_max=backoff_max,
+                        )
+                        # Always print retry messages (important for user feedback)
+                        print(
+                            f"\n⚠️  Attempt {attempt + 1}/{attempts} failed: {type(exc).__name__}\n"
+                            f"    Retrying in {delay:.1f}s...\n"
+                        )
+                        time.sleep(delay)
+                    else:
+                        # Last attempt failed
+                        print(f"\n❌ All {attempts} attempts failed")
+
+            if last_error is not None:
+                print(f"Final error: {last_error}")
+            return False
+        else:
+            # Use fast s5cmd download
+            success = pull_down(
+                s3_path=s3path,
+                output_dir=abs_output_dir,
+                config_file=config_file,
+                total_size=content_length,
+                show_progress=show_progress,
+                retry_count=retry_count,
+                s5cmd_retry_count=s5cmd_retry_count,
+                max_workers=max_workers,
+                backoff_base=backoff_base,
+                backoff_max=backoff_max,
+                reset=reset_config,
             )
+            return success
     # -------------------------------------------------------------------------
     # Orbit Optimization Methods
     # -------------------------------------------------------------------------
@@ -1242,7 +1547,8 @@ class CopernicusDataSearcher:
         """Calculate the centroid of the AOI.
         
         Args:
-            aoi_wkt: WKT polygon string. Uses self.aoi_wkt if None.
+            aoi_wkt: Supported AOI WKT geometry used for centroid-based orbit heuristics.
+                Uses self.aoi_wkt if None.
         
         Returns:
             Tuple[float, float]: (longitude, latitude) of the centroid.
@@ -1253,32 +1559,20 @@ class CopernicusDataSearcher:
         wkt = aoi_wkt or self.aoi_wkt
         if wkt is None:
             raise ValueError("AOI WKT is not set")
-        
-        # Parse WKT polygon to extract coordinates
-        wkt_upper = wkt.upper()
-        if not wkt_upper.startswith('POLYGON'):
-            raise ValueError("AOI must be a WKT POLYGON")
-        
-        # Extract coordinate string
+
         try:
-            coord_str = wkt.split('((')[1].split('))')[0]
-            coords = []
-            for pair in coord_str.split(','):
-                parts = pair.strip().split()
-                if len(parts) >= 2:
-                    lon, lat = float(parts[0]), float(parts[1])
-                    coords.append((lon, lat))
-            
+            normalized_wkt = " ".join(wkt.split())
+            _validate_supported_aoi_wkt(normalized_wkt)
+            geometry_type, body = _parse_wkt_geometry(normalized_wkt)
+            coords = _centroid_coordinates_from_body(geometry_type, body)
+
             if not coords:
                 raise ValueError("Could not parse AOI coordinates")
-            
-            # Calculate centroid (simple average, excluding closing point)
-            coords = coords[:-1] if coords[0] == coords[-1] else coords
+
             lon_avg = sum(c[0] for c in coords) / len(coords)
             lat_avg = sum(c[1] for c in coords) / len(coords)
-            
             return lon_avg, lat_avg
-        except (IndexError, ValueError) as e:
+        except ValueError as e:
             raise ValueError(f"Could not parse AOI WKT: {e}")
     
     def _get_recommended_orbit_direction(self, aoi_wkt: typing.Optional[str] = None) -> str:
@@ -1288,7 +1582,8 @@ class CopernicusDataSearcher:
         For Asia/Australia (longitude 60 to 180): Ascending preferred
         
         Args:
-            aoi_wkt: WKT polygon string. Uses self.aoi_wkt if None.
+            aoi_wkt: Supported AOI WKT geometry used for centroid-based orbit heuristics.
+                Uses self.aoi_wkt if None.
         
         Returns:
             str: Recommended orbit direction ('ASCENDING' or 'DESCENDING').
@@ -1808,7 +2103,13 @@ class CopernicusDataSearcher:
         username: typing.Optional[str] = None,
         password: typing.Optional[str] = None,
         retry_count: int = 3,
-        verbose: bool = True
+        verbose: bool = True,
+        connect_timeout: float = REQUEST_TIMEOUT_SECONDS,
+        read_timeout: typing.Optional[float] = None,
+        state_file: typing.Optional[str] = None,
+        resume_mode: str = 'off',
+        backoff_base: float = 2.0,
+        backoff_max: float = 60.0,
     ) -> typing.Dict[str, typing.Any]:
         """Download burst products from a DataFrame.
         
@@ -1822,6 +2123,12 @@ class CopernicusDataSearcher:
             password: CDSE password. Required for burst downloads.
             retry_count: Number of retry attempts for failed downloads.
             verbose: Whether to print progress information.
+            connect_timeout: HTTP connection timeout in seconds.
+            read_timeout: HTTP read timeout in seconds (None => same as connect timeout).
+            state_file: Optional JSON state file path for resumable runs.
+            resume_mode: Resume mode ('off' or 'product').
+            backoff_base: Base delay in seconds for retry backoff.
+            backoff_max: Max delay in seconds for retry backoff.
             
         Returns:
             Dict containing:
@@ -1844,15 +2151,22 @@ class CopernicusDataSearcher:
         
         if data is None or data.empty:
             logger.warning("No burst products to download")
-            return {'downloaded': 0, 'failed': 0, 'details': []}
+            return {'downloaded': 0, 'failed': 0, 'skipped': 0, 'details': []}
         
         if username is None or password is None:
             raise ValueError("CDSE username and password are required for burst downloads. "
                            "Register at https://dataspace.copernicus.eu/")
+        if resume_mode not in {'off', 'product'}:
+            raise ValueError("resume_mode must be either 'off' or 'product'")
         
         # Ensure output directory exists
         output_path = Path(output_dir).absolute()
         output_path.mkdir(parents=True, exist_ok=True)
+
+        state_store: typing.Optional[DownloadStateStore] = None
+        if resume_mode != 'off':
+            resolved_state_file = state_file or default_state_file(str(output_path))
+            state_store = DownloadStateStore(resolved_state_file)
         
         # Create token manager for automatic token refresh
         if verbose:
@@ -1869,6 +2183,7 @@ class CopernicusDataSearcher:
         summary = {
             'downloaded': 0,
             'failed': 0,
+            'skipped': 0,
             'details': []
         }
         
@@ -1888,6 +2203,21 @@ class CopernicusDataSearcher:
             
             if verbose:
                 print(f"📥 Downloading burst {idx + 1}/{total} (BurstId: {burst_num})...")
+
+            if state_store is not None:
+                existing = state_store.get(str(burst_id))
+                existing_output = existing.get('output_path') if isinstance(existing, dict) else None
+                if existing and existing.get('status') == 'success' and existing_output and is_non_empty_file(existing_output):
+                    summary['skipped'] += 1
+                    summary['details'].append({
+                        'burst_id': burst_id,
+                        'burst_num': burst_num,
+                        'status': 'skipped',
+                        'reason': 'already_downloaded'
+                    })
+                    if verbose:
+                        print("   ⏭️  Skipped (already downloaded)")
+                    continue
             
             success = False
             last_error = None
@@ -1897,7 +2227,14 @@ class CopernicusDataSearcher:
                     download_burst_on_demand(
                         burst_id=burst_id,
                         token=token_manager,
-                        output_dir=output_path
+                        output_dir=output_path,
+                        connect_timeout=connect_timeout,
+                        read_timeout=read_timeout,
+                        retry_count=1,
+                        state_file=state_file,
+                        resume_mode=resume_mode,
+                        backoff_base=backoff_base,
+                        backoff_max=backoff_max,
                     )
                     success = True
                     break
@@ -1905,6 +2242,9 @@ class CopernicusDataSearcher:
                     last_error = str(e)
                     if verbose and attempt < retry_count - 1:
                         print(f"   ⚠️  Attempt {attempt + 1} failed, retrying...")
+                    if attempt < retry_count - 1:
+                        delay = _compute_backoff_delay(attempt, backoff_base=backoff_base, backoff_max=backoff_max)
+                        time.sleep(delay)
             
             if success:
                 summary['downloaded'] += 1
@@ -1927,7 +2267,10 @@ class CopernicusDataSearcher:
                     print(f"   ❌ Failed: {last_error}")
         
         if verbose:
-            print(f"\n📊 Download complete: {summary['downloaded']} succeeded, {summary['failed']} failed")
+            print(
+                f"\n📊 Download complete: {summary['downloaded']} succeeded, "
+                f"{summary['failed']} failed, {summary['skipped']} skipped"
+            )
         
         return summary
     
@@ -1936,10 +2279,17 @@ class CopernicusDataSearcher:
         df: typing.Optional[pd.DataFrame] = None,
         output_dir: str = '.',
         config_file: str = '.s5cfg',
+        mode: str = 'fast',
         retry_count: int = 3,
         validate: bool = True,
         verbose: bool = True,
-        show_progress: bool = True
+        show_progress: bool = True,
+        state_file: typing.Optional[str] = None,
+        resume_mode: typing.Optional[str] = None,
+        s5cmd_retry_count: typing.Optional[int] = None,
+        max_workers: typing.Optional[int] = None,
+        backoff_base: float = 2.0,
+        backoff_max: float = 60.0,
     ) -> typing.Dict[str, typing.Any]:
         """Download multiple SLC/GRD products from a DataFrame.
         
@@ -1950,10 +2300,17 @@ class CopernicusDataSearcher:
             df: DataFrame with products to download. Uses self.df if None.
             output_dir: Directory to save downloaded products.
             config_file: Path to s5cmd configuration file.
+            mode: Download mode ('fast' for s5cmd, 'safe' for resumable native downloads).
             retry_count: Number of retry attempts for failed downloads.
             validate: Whether to validate downloaded files (check manifest.safe exists).
             verbose: Whether to print progress information.
             show_progress: Whether to show tqdm progress bar.
+            state_file: Optional JSON state file path for resumable runs.
+            resume_mode: Deprecated legacy resume selector. Prefer ``mode``.
+            s5cmd_retry_count: Optional internal retry count for s5cmd.
+            max_workers: Optional worker count for s5cmd.
+            backoff_base: Base delay in seconds for retry backoff.
+            backoff_max: Max delay in seconds for retry backoff.
             
         Returns:
             Dict containing:
@@ -1971,15 +2328,23 @@ class CopernicusDataSearcher:
         
         if data is None or data.empty:
             logger.warning("No products to download")
-            return {'downloaded': 0, 'failed': 0, 'details': []}
+            return {'downloaded': 0, 'failed': 0, 'skipped': 0, 'details': []}
+        effective_mode = _resolve_product_download_mode(mode, resume_mode=resume_mode)
         
         # Ensure output directory exists
         abs_output_dir = os.path.abspath(output_dir)
         os.makedirs(abs_output_dir, exist_ok=True)
+
+        use_native = effective_mode == 'safe'
+        state_store: typing.Optional[DownloadStateStore] = None
+        if not use_native and resume_mode not in (None, 'off'):
+            resolved_state_file = state_file or default_state_file(abs_output_dir)
+            state_store = DownloadStateStore(resolved_state_file)
         
         summary = {
             'downloaded': 0,
             'failed': 0,
+            'skipped': 0,
             'details': []
         }
         
@@ -2000,35 +2365,129 @@ class CopernicusDataSearcher:
             
             if verbose:
                 print(f"📥 Downloading {idx + 1}/{total}: {product_name}...")
+
+            product_dir = os.path.join(abs_output_dir, product_name)
+            manifest_path = os.path.join(product_dir, 'manifest.safe')
+
+            if not use_native and is_product_complete(product_dir):
+                if state_store is not None:
+                    state_store.mark(
+                        product_name,
+                        'success',
+                        output_path=product_dir,
+                        extra={'s3_path': s3_path},
+                    )
+                summary['skipped'] += 1
+                summary['details'].append({
+                    'name': product_name,
+                    'status': 'skipped',
+                    'reason': 'already_downloaded'
+                })
+                if verbose:
+                    print("   ⏭️  Skipped (already downloaded)")
+                continue
+
+            if state_store is not None:
+                existing = state_store.get(product_name)
+                existing_output = existing.get('output_path') if isinstance(existing, dict) else None
+                if existing and existing.get('status') == 'success' and existing_output and is_product_complete(existing_output):
+                    summary['skipped'] += 1
+                    summary['details'].append({
+                        'name': product_name,
+                        'status': 'skipped',
+                        'reason': 'already_downloaded'
+                    })
+                    if verbose:
+                        print("   ⏭️  Skipped (already downloaded)")
+                    continue
             
             success = False
             last_error = None
             
             for attempt in range(retry_count):
                 try:
-                    pull_down(
-                        s3_path=s3_path,
-                        output_dir=abs_output_dir,
-                        config_file=config_file,
-                        total_size=content_length,
-                        show_progress=show_progress
-                    )
-                    
-                    # Validate if enabled
-                    if validate:
-                        product_dir = os.path.join(abs_output_dir, product_name)
-                        manifest_path = os.path.join(product_dir, 'manifest.safe')
-                        if os.path.isdir(product_dir) and not os.path.exists(manifest_path):
+                    if use_native:
+                        result = download_s3_resumable(
+                            s3_path=s3_path,
+                            output_dir=abs_output_dir,
+                            config_file=config_file,
+                            download_all=True,
+                            state_file=state_file,
+                            state_item_id=product_name,
+                            show_progress=show_progress,
+                            attempts=attempt + 1,
+                            persist_state=True,
+                        )
+                        if result.status == 'skipped':
+                            summary['skipped'] += 1
+                            summary['details'].append({
+                                'name': product_name,
+                                'status': 'skipped',
+                                'reason': 'already_downloaded'
+                            })
+                            if verbose:
+                                print("   ⏭️  Skipped (already downloaded)")
+                            success = None
+                            break
+                        if validate and not is_product_complete(result.output_path):
                             raise ValueError("manifest.safe not found - download may be incomplete")
+                    else:
+                        if state_store is not None:
+                            state_store.mark(
+                                product_name,
+                                'in_progress',
+                                attempts=attempt + 1,
+                                output_path=product_dir,
+                                extra={'s3_path': s3_path},
+                            )
+                        pull_down(
+                            s3_path=s3_path,
+                            output_dir=abs_output_dir,
+                            config_file=config_file,
+                            total_size=content_length,
+                            show_progress=show_progress,
+                            retry_count=1,
+                            s5cmd_retry_count=s5cmd_retry_count,
+                            max_workers=max_workers,
+                            backoff_base=backoff_base,
+                            backoff_max=backoff_max,
+                        )
+                        
+                        # Validate if enabled
+                        if validate:
+                            if os.path.isdir(product_dir) and not os.path.exists(manifest_path):
+                                raise ValueError("manifest.safe not found - download may be incomplete")
                     
                     success = True
+                    if state_store is not None:
+                        state_store.mark(
+                            product_name,
+                            'success',
+                            attempts=attempt + 1,
+                            output_path=product_dir,
+                            extra={'s3_path': s3_path},
+                        )
                     break
                     
                 except Exception as e:
                     last_error = str(e)
+                    if state_store is not None:
+                        state_store.mark(
+                            product_name,
+                            'failed',
+                            attempts=attempt + 1,
+                            error=last_error,
+                            output_path=product_dir,
+                            extra={'s3_path': s3_path},
+                        )
                     if verbose and attempt < retry_count - 1:
                         print(f"   ⚠️  Attempt {attempt + 1} failed, retrying...")
+                    if attempt < retry_count - 1:
+                        delay = _compute_backoff_delay(attempt, backoff_base=backoff_base, backoff_max=backoff_max)
+                        time.sleep(delay)
             
+            if success is None:
+                continue
             if success:
                 summary['downloaded'] += 1
                 summary['details'].append({
@@ -2048,6 +2507,9 @@ class CopernicusDataSearcher:
                     print(f"   ❌ Failed: {last_error}")
         
         if verbose:
-            print(f"\n📊 Download complete: {summary['downloaded']} succeeded, {summary['failed']} failed")
+            print(
+                f"\n📊 Download complete: {summary['downloaded']} succeeded, "
+                f"{summary['failed']} failed, {summary['skipped']} skipped"
+            )
         
         return summary

@@ -1,499 +1,182 @@
 Examples
 ========
 
-This section provides practical examples of using Φ-Down for common Earth Observation tasks.
+This page collects short, current examples that match the package's public API.
 
-Example 1: Basic Sentinel-2 Search
+Example 1: Sentinel-2 Search
+----------------------------
+
+.. code-block:: python
+
+   from phidown import CopernicusDataSearcher
+
+   searcher = CopernicusDataSearcher()
+   searcher.query_by_filter(
+       collection_name="SENTINEL-2",
+       product_type="S2MSI2A",
+       aoi_wkt="POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))",
+       start_date="2024-05-01T00:00:00",
+       end_date="2024-05-31T23:59:59",
+       cloud_cover_threshold=20,
+       top=20,
+   )
+   results = searcher.execute_query()
+
+   print(f"Found {len(results)} products")
+   print(searcher.display_results(top_n=5))
+
+Example 2: Query by Product Name
+--------------------------------
+
+.. code-block:: python
+
+   from phidown import CopernicusDataSearcher
+
+   searcher = CopernicusDataSearcher()
+   result = searcher.query_by_name(
+       "S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003"
+   )
+
+   print(result[["Name", "S3Path", "ContentLength"]].head(1))
+
+Example 3: Batch Download
+-------------------------
+
+.. code-block:: python
+
+   from phidown import CopernicusDataSearcher
+
+   searcher = CopernicusDataSearcher()
+   searcher.query_by_filter(
+       collection_name="SENTINEL-1",
+       product_type="GRD",
+       aoi_wkt="POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))",
+       start_date="2024-01-01T00:00:00",
+       end_date="2024-01-07T23:59:59",
+       top=5,
+   )
+   results = searcher.execute_query()
+
+   summary = searcher.download_products(
+       df=results,
+       output_dir="./downloads",
+       config_file=".s5cfg",
+       retry_count=3,
+       mode="safe",
+   )
+   print(summary)
+
+Example 4: CLI Listing
+----------------------
+
+.. code-block:: bash
+
+   phidown list \
+     --collection SENTINEL-2 \
+     --product-type S2MSI2A \
+     --bbox 10 45 12 46 \
+     --start-date 2024-05-01T00:00:00 \
+     --end-date 2024-05-31T23:59:59 \
+     --columns Name,S3Path,ContentDate \
+     --format table
+
+Example 5: Burst Coverage Analysis
 ----------------------------------
 
-Search for Sentinel-2 data over a specific area:
+.. code-block:: bash
 
-.. code-block:: python
+   phidown --burst-coverage \
+     --bbox 10 45 12 46 \
+     --start-date 2024-08-02T00:00:00 \
+     --end-date 2024-08-20T23:59:59 \
+     --polarisation VV \
+     --preferred-subswath IW1,IW2,IW3 \
+     --format json
 
-   from phidown import CopernicusDataSearcher
-
-   # Initialize searcher
-   searcher = CopernicusDataSearcher()
-   
-   # Define area of interest (Rome, Italy)
-   rome_wkt = 'POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))'
-   
-   # Search for data
-   results = searcher.search(
-       collection_name='SENTINEL-2',
-       aoi_wkt=rome_wkt,
-       start_date='2023-06-01',
-       end_date='2023-06-30',
-       cloud_cover_threshold=20
-   )
-   
-   # Display results
-   print(f"Found {len(results)} products")
-   searcher.display_results(results, columns=['Name', 'ContentDate', 'CloudCover'])
-
-Example 2: Sentinel-1 SAR Data Search
+Example 6: Interactive Polygon Search
 -------------------------------------
-
-Search for Sentinel-1 SAR data with specific parameters:
-
-.. code-block:: python
-
-   from phidown import CopernicusDataSearcher
-
-   searcher = CopernicusDataSearcher()
-   
-   # Define area of interest (Netherlands)
-   netherlands_wkt = 'POLYGON((3.4 50.8, 7.2 50.8, 7.2 53.6, 3.4 53.6, 3.4 50.8))'
-   
-   # Search for Sentinel-1 GRD products
-   results = searcher.search(
-       collection_name='SENTINEL-1',
-       product_type='GRD',
-       aoi_wkt=netherlands_wkt,
-       start_date='2023-05-01',
-       end_date='2023-05-31',
-       orbit_direction='DESCENDING',
-       attributes={'sensorMode': 'IW'}
-   )
-   
-   print(f"Found {len(results)} SAR products")
-   for idx, row in results.iterrows():
-       print(f"Product: {row['Name']}")
-       print(f"Date: {row['ContentDate']}")
-       print(f"Orbit: {row['OrbitDirection']}")
-       print("---")
-
-For detailed Sentinel-1 parameters, see the :doc:`sentinel1_reference` guide.
-
-Example 2b: Sentinel-1 SLC Burst Mode Search
----------------------------------------------
-
-Search for individual Sentinel-1 SLC bursts (available from August 2, 2024):
-
-.. code-block:: python
-
-   from phidown import CopernicusDataSearcher
-
-   searcher = CopernicusDataSearcher()
-   
-   # Search for bursts with temporal filter
-   results = searcher.query_by_filter(
-       burst_mode=True,
-       start_date='2024-08-01T00:00:00',
-       end_date='2024-08-03T00:00:00',
-       swath_identifier='IW2',
-       polarisation_channels='VV',
-       orbit_direction='DESCENDING',
-       top=10,
-       count=True
-   )
-   
-   df = searcher.execute_query()
-   print(f"Found {len(df)} bursts")
-   print(f"Total available: {searcher.num_results}")
-   
-   # Display burst-specific information
-   searcher.display_results(top_n=5)
-
-For detailed burst mode documentation, see the :doc:`sentinel1_burst_mode` guide.
-
-Example 3: Sentinel-3 Ocean Color Search
------------------------------------------
-
-Search for Sentinel-3 OLCI ocean color data:
-
-.. code-block:: python
-
-   from phidown import CopernicusDataSearcher
-
-   searcher = CopernicusDataSearcher()
-   
-   # Define area of interest (Mediterranean Sea)
-   mediterranean_wkt = 'POLYGON((0 35, 10 35, 10 45, 0 45, 0 35))'
-   
-   # Search for OLCI ocean color products
-   results = searcher.search(
-       collection_name='SENTINEL-3',
-       product_type='OL_2_WFR___',
-       aoi_wkt=mediterranean_wkt,
-       start_date='2023-06-01',
-       end_date='2023-06-30',
-       attributes={
-           'instrument': 'OLCI',
-           'cloudCover': '[0,20]'
-       }
-   )
-   
-   print(f"Found {len(results)} ocean color products")
-   for idx, row in results.iterrows():
-       print(f"Product: {row['Name']}")
-       print(f"Date: {row['ContentDate']}")
-       print(f"Instrument: {row.get('Instrument', 'N/A')}")
-       print("---")
-
-For detailed Sentinel-3 parameters, see the :doc:`sentinel3_reference` guide.
-
-Example 4: Multi-Mission Search
--------------------------------
-
-Search across multiple missions for comprehensive coverage:
-
-.. code-block:: python
-
-   from phidown import CopernicusDataSearcher
-   import pandas as pd
-
-   searcher = CopernicusDataSearcher()
-   
-   # Define area of interest (Mediterranean Sea)
-   mediterranean_wkt = 'POLYGON((0 30, 30 30, 30 45, 0 45, 0 30))'
-   
-   # Search multiple missions
-   missions = ['SENTINEL-1', 'SENTINEL-2', 'SENTINEL-3']
-   all_results = []
-   
-   for mission in missions:
-       print(f"Searching {mission}...")
-       results = searcher.search(
-           collection_name=mission,
-           aoi_wkt=mediterranean_wkt,
-           start_date='2023-07-01',
-           end_date='2023-07-07'
-       )
-       results['Mission'] = mission
-       all_results.append(results)
-   
-   # Combine results
-   combined_results = pd.concat(all_results, ignore_index=True)
-   print(f"Total products found: {len(combined_results)}")
-   
-   # Group by mission
-   mission_counts = combined_results.groupby('Mission').size()
-   print("Products per mission:")
-   for mission, count in mission_counts.items():
-       print(f"  {mission}: {count}")
-
-Example 5: Download with Progress Tracking
-------------------------------------------
-
-Download products with progress monitoring:
-
-.. code-block:: python
-
-   from phidown import CopernicusDataSearcher
-   from phidown.downloader import pull_down
-   import os
-   from tqdm import tqdm
-
-   # Search for products
-   searcher = CopernicusDataSearcher()
-   results = searcher.search(
-       collection_name='SENTINEL-2',
-       aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
-       start_date='2023-06-01',
-       end_date='2023-06-30',
-       cloud_cover_threshold=10
-   )
-   
-   # Create download directory
-   download_dir = './sentinel2_data'
-   os.makedirs(download_dir, exist_ok=True)
-   
-   # Download products with progress bar
-   for idx, row in tqdm(results.iterrows(), total=len(results), desc="Downloading"):
-       product_id = row['Id']
-       product_name = row['Name']
-       
-       print(f"Downloading: {product_name}")
-       try:
-           pull_down(product_id, download_dir=download_dir)
-           print(f"✓ Downloaded: {product_name}")
-       except Exception as e:
-           print(f"✗ Failed: {product_name} - {e}")
-
-Example 6: Interactive Polygon Selection
-----------------------------------------
-
-Use interactive tools to select area of interest:
 
 .. code-block:: python
 
    from phidown import create_polygon_tool, search_with_polygon
-   
-   # Create interactive polygon tool
-   tool = create_polygon_tool(
-       center=[45.0, 9.0],  # Milan, Italy
-       zoom=8
-   )
-   
-   # Display the tool (in Jupyter notebook)
+
+   tool = create_polygon_tool(center=(45.0, 9.0), zoom=8, basemap_type="satellite")
    tool.display()
-   
-   # After drawing polygon, get WKT
-   # wkt = tool.get_wkt()
-   # print(f"Selected area: {wkt}")
-   
-   # Or use the integrated search function
-   # results = search_with_polygon(
-   #     collection_name='SENTINEL-2',
-   #     start_date='2023-06-01',
-   #     end_date='2023-06-30'
-   # )
 
-Example 7: Time Series Analysis
------------------------------------
-
-Analyze temporal patterns in search results:
-
-.. code-block:: python
-
-   from phidown import CopernicusDataSearcher
-   import pandas as pd
-   import matplotlib.pyplot as plt
-
-   searcher = CopernicusDataSearcher()
-   
-   # Search for one year of data
-   results = searcher.search(
-       collection_name='SENTINEL-2',
-       aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
-       start_date='2023-01-01',
-       end_date='2023-12-31',
-       cloud_cover_threshold=30
+   # After drawing a polygon in the notebook UI:
+   results = search_with_polygon(
+       tool,
+       collection_name="SENTINEL-2",
+       product_type="S2MSI1C",
+       start_date="2024-06-01T00:00:00",
+       end_date="2024-06-30T23:59:59",
    )
-   
-   # Convert ContentDate to datetime
-   results['Date'] = pd.to_datetime(results['ContentDate'])
-   
-   # Group by month
-   monthly_counts = results.groupby(results['Date'].dt.to_period('M')).size()
-   monthly_cloud_cover = results.groupby(results['Date'].dt.to_period('M'))['CloudCover'].mean()
-   
-   # Plot results
-   fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8))
-   
-   # Product count per month
-   monthly_counts.plot(kind='bar', ax=ax1)
-   ax1.set_title('Sentinel-2 Products per Month')
-   ax1.set_ylabel('Number of Products')
-   
-   # Average cloud cover per month
-   monthly_cloud_cover.plot(kind='line', ax=ax2, marker='o')
-   ax2.set_title('Average Cloud Cover per Month')
-   ax2.set_ylabel('Cloud Cover (%)')
-   
-   plt.tight_layout()
-   plt.show()
 
-Example 8: Batch Processing with Error Handling
------------------------------------------------
-
-Process multiple areas with robust error handling:
+Example 7: Plot Product Footprints
+----------------------------------
 
 .. code-block:: python
 
-   from phidown import CopernicusDataSearcher
-   from phidown.downloader import pull_down
-   import time
-   import logging
+   from phidown import CopernicusDataSearcher, plot_product_footprints
 
-   # Set up logging
-   logging.basicConfig(level=logging.INFO)
-   logger = logging.getLogger(__name__)
+   aoi_wkt = "POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))"
 
-   # Define multiple areas of interest
-   areas = {
-       'Rome': 'POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
-       'Milan': 'POLYGON((9.1 45.4, 9.2 45.4, 9.2 45.5, 9.1 45.5, 9.1 45.4))',
-       'Naples': 'POLYGON((14.2 40.8, 14.3 40.8, 14.3 40.9, 14.2 40.9, 14.2 40.8))'
-   }
-   
    searcher = CopernicusDataSearcher()
-   
-   for area_name, wkt in areas.items():
-       logger.info(f"Processing {area_name}...")
-       
-       try:
-           # Search for data
-           results = searcher.search(
-               collection_name='SENTINEL-2',
-               aoi_wkt=wkt,
-               start_date='2023-06-01',
-               end_date='2023-06-30',
-               cloud_cover_threshold=15
-           )
-           
-           logger.info(f"Found {len(results)} products for {area_name}")
-           
-           # Download first product if available
-           if len(results) > 0:
-               best_product = results.loc[results['CloudCover'].idxmin()]
-               product_id = best_product['Id']
-               
-               logger.info(f"Downloading best product: {best_product['Name']}")
-               pull_down(product_id, download_dir=f'./data/{area_name}')
-               logger.info(f"✓ Downloaded product for {area_name}")
-           else:
-               logger.warning(f"No products found for {area_name}")
-               
-       except Exception as e:
-           logger.error(f"Error processing {area_name}: {e}")
-           continue
-           
-       # Be respectful to the API
-       time.sleep(2)
+   searcher.query_by_filter(
+       collection_name="SENTINEL-1",
+       product_type="SLC",
+       aoi_wkt=aoi_wkt,
+       start_date="2024-08-01T00:00:00",
+       end_date="2024-08-05T23:59:59",
+       top=20,
+   )
+   results = searcher.execute_query()
 
-Example 9: Advanced Filtering and Analysis
+   footprint_map = plot_product_footprints(results, aoi_wkt=aoi_wkt, top_n=10)
+   footprint_map.save("footprints.html")
+
+Example 8: AIS Filtering
+------------------------
+
+.. code-block:: python
+
+   from phidown import download_ais_data
+
+   df = download_ais_data(
+       start_date="2025-08-25",
+       end_date="2025-08-26",
+       start_time="09:00:00",
+       end_time="15:00:00",
+       aoi_wkt="POLYGON((4.0 51.0,5.0 51.0,5.0 52.0,4.0 52.0,4.0 51.0))",
+   )
+
+   print(df.head())
+
+Example 9: Manual Pagination With ``skip``
 ------------------------------------------
 
-Apply complex filters and analyze results:
-
 .. code-block:: python
 
    from phidown import CopernicusDataSearcher
-   import pandas as pd
-   import numpy as np
+
+   filters = dict(
+       collection_name="SENTINEL-2",
+       product_type="S2MSI2A",
+       start_date="2024-05-01T00:00:00",
+       end_date="2024-05-31T23:59:59",
+       top=10,
+   )
 
    searcher = CopernicusDataSearcher()
-   
-   # Search for data
-   results = searcher.search(
-       collection_name='SENTINEL-2',
-       aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
-       start_date='2023-01-01',
-       end_date='2023-12-31'
-   )
-   
-   # Advanced filtering
-   # Filter for high-quality images
-   high_quality = results[
-       (results['CloudCover'] < 10) & 
-       (results['ProductType'] == 'L2A')
-   ]
-   
-   # Group by season
-   results['Date'] = pd.to_datetime(results['ContentDate'])
-   results['Season'] = results['Date'].dt.month.map({
-       12: 'Winter', 1: 'Winter', 2: 'Winter',
-       3: 'Spring', 4: 'Spring', 5: 'Spring',
-       6: 'Summer', 7: 'Summer', 8: 'Summer',
-       9: 'Autumn', 10: 'Autumn', 11: 'Autumn'
-   })
-   
-   # Analyze by season
-   seasonal_analysis = results.groupby('Season').agg({
-       'CloudCover': ['mean', 'std', 'count'],
-       'Size': 'mean'
-   }).round(2)
-   
-   print("Seasonal Analysis:")
-   print(seasonal_analysis)
-   
-   # Find the best acquisition per month
-   best_monthly = results.loc[results.groupby(results['Date'].dt.to_period('M'))['CloudCover'].idxmin()]
-   
-   print("\nBest acquisition per month:")
-   for idx, row in best_monthly.iterrows():
-       print(f"{row['Date'].strftime('%Y-%m')}: {row['Name']} (Cloud Cover: {row['CloudCover']}%)")
+   searcher.query_by_filter(**filters, skip=0)
+   first_page = searcher.execute_query()
 
-Example 10: Visualization and Mapping
-------------------------------------
+   searcher.query_by_filter(**filters, skip=10)
+   second_page = searcher.execute_query()
 
-Create visualizations of search results:
+   print(len(first_page), len(second_page))
 
-.. code-block:: python
+.. note::
 
-   from phidown import CopernicusDataSearcher, plot_kml_coordinates
-   import folium
-   from shapely.geometry import Point
-   from shapely.wkt import loads
-
-   searcher = CopernicusDataSearcher()
-   
-   # Search for data
-   results = searcher.search(
-       collection_name='SENTINEL-2',
-       aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
-       start_date='2023-06-01',
-       end_date='2023-06-30',
-       cloud_cover_threshold=20
-   )
-   
-   # Use built-in plotting function
-   plot_kml_coordinates(results)
-   
-   # Create custom map
-   center_lat, center_lon = 41.95, 12.45
-   m = folium.Map(location=[center_lat, center_lon], zoom_start=10)
-   
-   # Add search area
-   search_area = loads('POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))')
-   folium.GeoJson(
-       search_area.__geo_interface__,
-       style_function=lambda x: {'color': 'red', 'weight': 2, 'fillOpacity': 0.1}
-   ).add_to(m)
-   
-   # Add product footprints (if available in results)
-   for idx, row in results.iterrows():
-       if 'Footprint' in row and row['Footprint']:
-           folium.GeoJson(
-               loads(row['Footprint']).__geo_interface__,
-               popup=f"Product: {row['Name']}<br>Date: {row['ContentDate']}<br>Cloud Cover: {row['CloudCover']}%",
-               style_function=lambda x: {'color': 'blue', 'weight': 1, 'fillOpacity': 0.3}
-           ).add_to(m)
-   
-   # Save map
-   m.save('search_results_map.html')
-   print("Map saved as 'search_results_map.html'")
-
-Example 11: Configuration and Customization
--------------------------------------------
-
-Customize search parameters and configuration:
-
-.. code-block:: python
-
-   from phidown import CopernicusDataSearcher
-   import json
-
-   # Load custom configuration
-   custom_config = {
-       "SENTINEL-2": {
-           "product_types": ["L1C", "L2A"],
-           "attributes": {
-               "processingLevel": "L2A",
-               "cloudCover": "[0 TO 20]"
-           }
-       }
-   }
-   
-   searcher = CopernicusDataSearcher()
-   searcher.config = custom_config
-   
-   # Search with custom attributes
-   results = searcher.search(
-       collection_name='SENTINEL-2',
-       aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
-       start_date='2023-06-01',
-       end_date='2023-06-30',
-       attributes={'processingLevel': 'L2A'}
-   )
-   
-   # Save configuration
-   with open('custom_config.json', 'w') as f:
-       json.dump(custom_config, f, indent=2)
-   
-   print(f"Found {len(results)} products with custom configuration")
-
-Tips for Using Examples
------------------------
-
-1. **Modify coordinates**: Replace the example coordinates with your area of interest
-2. **Adjust date ranges**: Use appropriate date ranges for your analysis
-3. **Handle credentials**: Ensure your `.s5cfg` file is properly configured with S3 credentials
-4. **Monitor API limits**: Be respectful of API rate limits when processing large datasets
-5. **Error handling**: Always include proper error handling in production code
-6. **Data storage**: Organize downloaded data in a structured manner
-7. **Sentinel-1 parameters**: For detailed Sentinel-1 search parameters, see the :doc:`sentinel1_reference` guide
-
-For more examples and use cases, check the `notebooks/` directory in the repository.
+   ``count=True`` still retrieves every page eagerly and cannot be combined
+   with ``skip``.

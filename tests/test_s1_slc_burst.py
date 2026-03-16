@@ -44,6 +44,55 @@ class TestAOICoverage:
         
         assert abs(lon - 11.0) < 0.1
         assert abs(lat - 46.0) < 0.1
+
+    def test_centroid_calculation_point(self):
+        """Test centroid calculation for a point AOI."""
+        searcher = CopernicusDataSearcher()
+
+        lon, lat = searcher._get_aoi_centroid('POINT(12.5 41.9)')
+
+        assert lon == 12.5
+        assert lat == 41.9
+
+    def test_centroid_calculation_multipoint(self):
+        """Test centroid calculation for a multipoint AOI."""
+        searcher = CopernicusDataSearcher()
+
+        lon, lat = searcher._get_aoi_centroid('MULTIPOINT((10 40), (14 44))')
+
+        assert abs(lon - 12.0) < 0.1
+        assert abs(lat - 42.0) < 0.1
+
+    def test_centroid_calculation_linestring(self):
+        """Test centroid calculation for a linestring AOI."""
+        searcher = CopernicusDataSearcher()
+
+        lon, lat = searcher._get_aoi_centroid('LINESTRING(10 40, 14 44)')
+
+        assert abs(lon - 12.0) < 0.1
+        assert abs(lat - 42.0) < 0.1
+
+    def test_centroid_calculation_multilinestring(self):
+        """Test centroid calculation for a multilinestring AOI."""
+        searcher = CopernicusDataSearcher()
+
+        lon, lat = searcher._get_aoi_centroid(
+            'MULTILINESTRING((10 40, 12 42), (14 44, 16 46))'
+        )
+
+        assert abs(lon - 13.0) < 0.1
+        assert abs(lat - 43.0) < 0.1
+
+    def test_centroid_calculation_multipolygon(self):
+        """Test centroid calculation for a multipolygon AOI."""
+        searcher = CopernicusDataSearcher()
+
+        lon, lat = searcher._get_aoi_centroid(
+            'MULTIPOLYGON(((10 40, 12 40, 12 42, 10 42, 10 40)), ((14 44, 16 44, 16 46, 14 46, 14 44)))'
+        )
+
+        assert abs(lon - 13.0) < 0.1
+        assert abs(lat - 43.0) < 0.1
     
     def test_centroid_missing_aoi_raises_error(self):
         """Test that missing AOI raises ValueError."""
@@ -102,6 +151,14 @@ class TestOrbitDirectionRecommendation:
         direction = searcher._get_recommended_orbit_direction(aoi)
         
         assert direction == 'ASCENDING'
+
+    def test_point_aoi_recommends_descending_for_europe(self):
+        """Test that point AOIs work with orbit direction heuristics."""
+        searcher = CopernicusDataSearcher()
+
+        direction = searcher._get_recommended_orbit_direction('POINT(12.5 41.9)')
+
+        assert direction == 'DESCENDING'
 
 
 class TestSubswathPriority:

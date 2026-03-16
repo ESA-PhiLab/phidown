@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from phidown.s5cmd_utils import _split_command_args, pull_down, run_s5cmd_with_config
+from phidown.s5cmd_utils import _split_command_args, get_directory_size, pull_down, run_s5cmd_with_config
 
 
 def _write_s5cfg(path):
@@ -48,7 +48,7 @@ def test_run_s5cmd_with_config_accepts_command_list(mock_popen, tmp_path):
 
     proc = Mock()
     stdout = Mock()
-    stdout.readline.side_effect = ["copy done\n", ""]
+    stdout.read1.side_effect = [b"copy done\n", b""]
     proc.stdout = stdout
     proc.wait.return_value = 0
     mock_popen.return_value = proc
@@ -70,11 +70,51 @@ def test_run_s5cmd_with_config_accepts_command_list(mock_popen, tmp_path):
     assert env["AWS_DEFAULT_REGION"] == "eu-central-1"
 
 
+@patch("phidown.s5cmd_utils.subprocess.Popen")
+def test_run_s5cmd_with_config_sets_global_flags(mock_popen, tmp_path):
+    cfg = tmp_path / ".s5cfg"
+    _write_s5cfg(cfg)
+
+    proc = Mock()
+    stdout = Mock()
+    stdout.read1.side_effect = [b"ok\n", b""]
+    proc.stdout = stdout
+    proc.wait.return_value = 0
+    mock_popen.return_value = proc
+
+    run_s5cmd_with_config(
+        ["cp", "s3:/bucket/file", f"{tmp_path}/"],
+        config_file=str(cfg),
+        s5cmd_retry_count=12,
+        max_workers=48,
+    )
+
+    called_cmd = mock_popen.call_args.args[0]
+    assert "--retry-count" in called_cmd
+    assert "12" in called_cmd
+    assert "--numworkers" in called_cmd
+    assert "48" in called_cmd
+
+
 def test_run_s5cmd_with_config_rejects_empty_command_sequence(tmp_path):
     cfg = tmp_path / ".s5cfg"
     _write_s5cfg(cfg)
     with pytest.raises(ValueError, match="Command cannot be empty"):
         run_s5cmd_with_config([], config_file=str(cfg))
+
+
+def test_get_directory_size_counts_nested_files(tmp_path):
+    root = tmp_path / "data"
+    child = root / "nested"
+    child.mkdir(parents=True)
+    (root / "a.bin").write_bytes(b"1234")
+    (child / "b.bin").write_bytes(b"12")
+
+    assert get_directory_size(str(root)) == 6
+
+
+def test_get_directory_size_missing_directory_returns_zero(tmp_path):
+    assert get_directory_size(str(tmp_path / "missing")) == 0
 
 
 @patch("phidown.s5cmd_utils.run_s5cmd_with_config")
@@ -105,3 +145,27 @@ def test_pull_down_passes_list_command_and_preserves_spaces(mock_run, tmp_path):
         f"s3:/{s3_path}/*",
         expected_target,
     ]
+
+
+@patch("phidown.s5cmd_utils.run_s5cmd_with_config")
+def test_pull_down_passes_s5cmd_retry_and_workers(mock_run, tmp_path):
+    cfg = tmp_path / ".s5cfg"
+    _write_s5cfg(cfg)
+
+    output_dir = tmp_path / "out"
+    s3_path = "/eodata/Sentinel-1/SAR/path/product.SAFE"
+
+    ok = pull_down(
+        s3_path=s3_path,
+        output_dir=str(output_dir),
+        config_file=str(cfg),
+        show_progress=False,
+        retry_count=1,
+        s5cmd_retry_count=7,
+        max_workers=32,
+    )
+
+    assert ok is True
+    kwargs = mock_run.call_args.kwargs
+    assert kwargs["s5cmd_retry_count"] == 7
+    assert kwargs["max_workers"] == 32

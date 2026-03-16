@@ -6,6 +6,7 @@ import logging
 import shlex
 import time
 import threading
+import random
 from tqdm import tqdm
 
 # Configure logging
@@ -37,6 +38,9 @@ def run_s5cmd_with_config(
     config_file: str = '.s5cfg',
     endpoint_url: Optional[str] = None,
     verbose: bool = False,
+    s5cmd_retry_count: Optional[int] = None,
+    max_workers: Optional[int] = None,
+    log_tail_lines: int = 40,
 ) -> str:
     """Run s5cmd command with configuration file.
 
@@ -51,6 +55,9 @@ def run_s5cmd_with_config(
         config_file: Path to s5cmd configuration file (default: '.s5cfg')
         endpoint_url: Optional endpoint URL override
         verbose: Whether to print command being executed
+        s5cmd_retry_count: Optional s5cmd internal retry count (global flag).
+        max_workers: Optional s5cmd worker count (global flag).
+        log_tail_lines: Number of trailing output lines to keep in error context.
 
     Returns:
         str: Command output as string
@@ -89,6 +96,11 @@ def run_s5cmd_with_config(
     # Build command
     cmd_parts = ['s5cmd']
 
+    if s5cmd_retry_count is not None:
+        cmd_parts.extend(['--retry-count', str(int(s5cmd_retry_count))])
+    if max_workers is not None:
+        cmd_parts.extend(['--numworkers', str(int(max_workers))])
+
     # Add endpoint URL
     if endpoint_url:
         cmd_parts.extend(['--endpoint-url', endpoint_url])
@@ -109,7 +121,7 @@ def run_s5cmd_with_config(
         cmd_parts,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True,
+        text=False,
         env=env
     )
 
@@ -117,22 +129,42 @@ def run_s5cmd_with_config(
     try:
         if process.stdout is None:
             raise RuntimeError('Failed to capture process stdout')
-        for line in iter(process.stdout.readline, ''):
-            # strip trailing newlines but preserve message
-            text_line = line.rstrip('\n')
-            if text_line:
-                if verbose:
-                    logger.info(text_line)
-                stdout_lines.append(text_line)
+
+        pending_text = ''
+        stream = process.stdout
+        while True:
+            if hasattr(stream, 'read1'):
+                chunk = stream.read1(4096)
+            else:
+                chunk = stream.read(4096)
+            if not chunk:
+                break
+
+            text_chunk = chunk.decode('utf-8', errors='replace')
+            pending_text += text_chunk.replace('\r', '\n')
+            split_lines = pending_text.split('\n')
+            pending_text = split_lines.pop()
+            for line in split_lines:
+                text_line = line.strip()
+                if text_line:
+                    if verbose:
+                        logger.info(text_line)
+                    stdout_lines.append(text_line)
+
+        if pending_text.strip():
+            final_line = pending_text.strip()
+            if verbose:
+                logger.info(final_line)
+            stdout_lines.append(final_line)
 
         returncode = process.wait()
         if returncode != 0:
             # Join collected output for better error context
-            combined = "\n".join(stdout_lines)
+            combined = "\n".join(stdout_lines[-log_tail_lines:])
             if verbose:
                 logger.error(f'Command exited with non-zero status {returncode}. '
                              f'Output:\n{combined}')
-            raise subprocess.CalledProcessError(returncode, cmd_parts, output=combined)
+            raise subprocess.CalledProcessError(returncode, cmd_parts, output=combined, stderr=combined)
 
         return "\n".join(stdout_lines)
     except Exception:
@@ -142,6 +174,36 @@ def run_s5cmd_with_config(
         except Exception:
             pass
         raise
+
+
+def _compute_backoff_delay(attempt_index: int, backoff_base: float, backoff_max: float) -> float:
+    """Compute retry delay with exponential backoff and jitter."""
+    exponential = backoff_base * (2 ** attempt_index)
+    return min(backoff_max, exponential) + random.uniform(0.0, 0.5)
+
+
+def ensure_s5cmd_config(config_file: str, reset: bool = False) -> None:
+    """Ensure the s5cmd credential file exists, optionally recreating it."""
+    if os.path.exists(config_file) and not reset:
+        return
+
+    access_key = input('Enter Access Key ID: ').strip()
+    secret_key = input('Enter Secret Access Key: ').strip()
+
+    config_content = f"""[default]
+                    aws_access_key_id = {access_key}
+                    aws_secret_access_key = {secret_key}
+                    aws_region = eu-central-1
+                    host_base = eodata.dataspace.copernicus.eu
+                    host_bucket = eodata.dataspace.copernicus.eu
+                    use_https = true
+                    check_ssl_certificate = true
+                    """
+
+    with open(config_file, 'w') as f:
+        f.write(config_content)
+
+    logger.info(f'Created configuration file: {config_file}')
 
 
 def get_directory_size(directory: str) -> int:
@@ -173,7 +235,12 @@ def pull_down(
     download_all: bool = True,
     reset: bool = False,
     total_size: Optional[int] = None,
-    show_progress: bool = True
+    show_progress: bool = True,
+    retry_count: int = 1,
+    s5cmd_retry_count: Optional[int] = None,
+    max_workers: Optional[int] = None,
+    backoff_base: float = 2.0,
+    backoff_max: float = 60.0,
 ) -> bool:
     """Download Sentinel-1 SAFE directory from Copernicus Data Space.
 
@@ -190,6 +257,11 @@ def pull_down(
         reset: If True, prompts for new AWS credentials and resets config file
         total_size: Expected total size in bytes (for progress bar)
         show_progress: If True and total_size provided, shows tqdm progress bar
+        retry_count: Number of command-level retries on failure.
+        s5cmd_retry_count: Optional s5cmd internal retry count.
+        max_workers: Optional s5cmd worker count.
+        backoff_base: Base delay in seconds for exponential backoff.
+        backoff_max: Max delay in seconds for exponential backoff.
 
     Returns:
         bool: True if download was successful
@@ -223,26 +295,7 @@ def pull_down(
         raise ValueError('Output directory arg cannot be empty')
     if not os.path.isabs(output_dir):
         raise ValueError('Output directory must be an absolute path')
-    # validate config file:
-    # try to create one config file if it does not exist
-    if not os.path.exists(config_file) or reset:
-        access_key = input('Enter Access Key ID: ').strip()
-        secret_key = input('Enter Secret Access Key: ').strip()
-
-        config_content = f"""[default]
-                        aws_access_key_id = {access_key}
-                        aws_secret_access_key = {secret_key}
-                        aws_region = eu-central-1
-                        host_base = eodata.dataspace.copernicus.eu
-                        host_bucket = eodata.dataspace.copernicus.eu
-                        use_https = true
-                        check_ssl_certificate = true
-                        """
-
-        with open(config_file, 'w') as f:
-            f.write(config_content)
-
-        logger.info(f'Created configuration file: {config_file}')
+    ensure_s5cmd_config(config_file, reset=reset)
 
     if not os.path.exists(config_file):
         raise FileNotFoundError(f'Configuration file {config_file} still not found.')
@@ -270,65 +323,97 @@ def pull_down(
     else:
         logger.info(f'Downloading from: {s3_url}')
         logger.info(f'Output directory: {full_output_dir}')
-    
-    # If progress bar is enabled and total_size is provided
-    if show_progress and total_size and total_size > 0:
-        # Get initial size
-        initial_size = get_directory_size(full_output_dir)
-        
-        # Create progress bar
-        pbar = tqdm(
-            total=total_size,
-            initial=initial_size,
-            unit='B',
-            unit_scale=True,
-            unit_divisor=1024,
-            desc='Downloading'
-        )
-        
-        # Flag to stop monitoring thread
-        stop_monitoring = threading.Event()
-        
-        def monitor_progress():
-            """Monitor download progress by checking disk usage."""
-            last_size = initial_size
-            while not stop_monitoring.is_set():
-                time.sleep(0.5)  # Update every 0.5 seconds
-                current_size = get_directory_size(full_output_dir)
-                delta = current_size - last_size
-                if delta > 0:
-                    pbar.update(delta)
-                    last_size = current_size
-        
-        # Start monitoring thread
-        monitor_thread = threading.Thread(target=monitor_progress, daemon=True)
-        monitor_thread.start()
-        
-        try:
+
+    def _run_single_download() -> None:
+        # If progress bar is enabled and total_size is provided
+        if show_progress and total_size and total_size > 0:
+            # Get initial size
+            initial_size = get_directory_size(full_output_dir)
+
+            # Create progress bar
+            pbar = tqdm(
+                total=total_size,
+                initial=initial_size,
+                unit='B',
+                unit_scale=True,
+                unit_divisor=1024,
+                desc='Downloading'
+            )
+
+            # Flag to stop monitoring thread
+            stop_monitoring = threading.Event()
+
+            def monitor_progress():
+                """Monitor download progress by checking disk usage."""
+                last_size = initial_size
+                while not stop_monitoring.is_set():
+                    time.sleep(0.5)  # Update every 0.5 seconds
+                    current_size = get_directory_size(full_output_dir)
+                    delta = current_size - last_size
+                    if delta > 0:
+                        pbar.update(delta)
+                        last_size = current_size
+
+            # Start monitoring thread
+            monitor_thread = threading.Thread(target=monitor_progress, daemon=True)
+            monitor_thread.start()
+
+            try:
+                run_s5cmd_with_config(
+                    command=command,
+                    config_file=config_file,
+                    endpoint_url=endpoint_url,
+                    verbose=False,  # Reduce logging noise when using progress bar
+                    s5cmd_retry_count=s5cmd_retry_count,
+                    max_workers=max_workers,
+                )
+            finally:
+                # Stop monitoring and ensure final update
+                stop_monitoring.set()
+                monitor_thread.join(timeout=2)
+
+                # Final size check
+                final_size = get_directory_size(full_output_dir)
+                remaining = final_size - pbar.n
+                if remaining > 0:
+                    pbar.update(remaining)
+
+                pbar.close()
+        else:
+            # No progress bar - use original implementation
             run_s5cmd_with_config(
                 command=command,
                 config_file=config_file,
                 endpoint_url=endpoint_url,
-                verbose=False  # Reduce logging noise when using progress bar
+                s5cmd_retry_count=s5cmd_retry_count,
+                max_workers=max_workers,
             )
-        finally:
-            # Stop monitoring and ensure final update
-            stop_monitoring.set()
-            monitor_thread.join(timeout=2)
-            
-            # Final size check
-            final_size = get_directory_size(full_output_dir)
-            remaining = final_size - pbar.n
-            if remaining > 0:
-                pbar.update(remaining)
-            
-            pbar.close()
-    else:
-        # No progress bar - use original implementation
-        run_s5cmd_with_config(
-            command=command,
-            config_file=config_file,
-            endpoint_url=endpoint_url
-        )
+
+    attempts = max(1, int(retry_count))
+    last_exception: Optional[Exception] = None
+    for attempt in range(attempts):
+        try:
+            _run_single_download()
+            return True
+        except Exception as exc:
+            last_exception = exc
+            if attempt < attempts - 1:
+                delay = _compute_backoff_delay(attempt, backoff_base=backoff_base, backoff_max=backoff_max)
+                logger.warning(
+                    f'Download attempt {attempt + 1}/{attempts} failed ({exc}). '
+                    f'Retrying in {delay:.1f}s...'
+                )
+                time.sleep(delay)
+
+    if isinstance(last_exception, subprocess.CalledProcessError):
+        tail = (last_exception.output or '').strip()
+        if tail:
+            raise RuntimeError(f's5cmd failed after {attempts} attempts. Last output:\n{tail}') from last_exception
+    if last_exception is not None:
+        raise last_exception
     
     return True
+
+
+# Backward-compatible alias used by older docs and notebooks.
+download = pull_down

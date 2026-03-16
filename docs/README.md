@@ -6,7 +6,7 @@ This directory contains the Sphinx documentation for Φ-Down.
 
 1. Install documentation dependencies:
    ```bash
-   pip install -r requirements.txt
+   python3 -m pip install -r requirements.txt
    ```
 
 2. Build the documentation:
@@ -26,13 +26,14 @@ This directory contains the Sphinx documentation for Φ-Down.
   - `getting_started.rst` - Getting started guide
   - `installation.rst` - Installation instructions
   - `user_guide.rst` - Comprehensive user guide
+  - `ais_guide.rst` - AIS data download and filtering guide
+  - `burst_mode.rst` - Sentinel-1 burst search and download guide
   - `api_reference.rst` - API reference
   - `examples.rst` - Code examples
   - `contributing.rst` - Contributing guidelines
   - `changelog.rst` - Version history
   - `conf.py` - Sphinx configuration
   - `_static/` - Static files (CSS, images)
-  - `_templates/` - Custom templates
 
 - `build/` - Generated documentation (HTML)
 
@@ -46,7 +47,7 @@ The documentation uses the Read the Docs theme with custom styling for PhiLab br
 
 ## API Documentation
 
-API documentation is automatically generated using Sphinx AutoAPI from the Python source code docstrings. The configuration is in `conf.py`.
+API documentation is generated with Sphinx AutoAPI from the Python source tree configured in `source/conf.py`.
 
 ## Contributing to Documentation
 

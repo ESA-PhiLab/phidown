@@ -134,7 +134,7 @@ The simplest burst search uses only temporal filters:
 Example 2: Burst Search with Spatial Filter (AOI)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Combine burst mode with spatial filtering using a WKT polygon:
+Combine burst mode with spatial filtering using a supported WKT geometry such as a polygon:
 
 .. code-block:: python
 
@@ -389,7 +389,7 @@ Use AOI with swath/polarization filters to get bursts covering your study area:
 
     searcher.query_by_filter(
         burst_mode=True,
-        aoi_wkt=your_polygon_wkt,
+        aoi_wkt=your_aoi_wkt,
         swath_identifier='IW2',
         polarisation_channels='VV',
         start_date='2024-08-01T00:00:00',

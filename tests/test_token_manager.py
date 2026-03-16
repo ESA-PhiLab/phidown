@@ -7,6 +7,7 @@ automatic token refresh for authenticated API requests to CDSE.
 
 import pytest
 import time
+import tempfile
 from unittest.mock import Mock, patch, MagicMock
 import sys
 import os
@@ -17,6 +18,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 # Import modules directly to avoid folium dependency in __init__.py
 import phidown.downloader as downloader_module
+from phidown.download_state import DownloadStateStore
 
 
 class TestTokenManager:
@@ -250,6 +252,73 @@ class TestDownloadBurstWithTokenManager:
 
             assert mock_post.call_args.kwargs['verify'] is False
             assert mock_post.call_args.kwargs['timeout'] == downloader_module.REQUEST_TIMEOUT_SECONDS
+
+    @patch('phidown.downloader.requests.post')
+    def test_download_burst_resumes_with_range_header(self, mock_post):
+        burst_response = Mock()
+        burst_response.status_code = 206
+        burst_response.headers = {'Content-Disposition': 'filename=burst_test.zip'}
+        burst_response.iter_content = Mock(return_value=[b'tail'])
+        mock_post.return_value = burst_response
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / 'state.json'
+            output_file = Path(tmpdir) / 'burst_test.zip'
+            temp_file = output_file.with_suffix('.zip.part')
+            temp_file.write_bytes(b'head')
+            DownloadStateStore(str(state_file)).mark(
+                '12345678-1234-1234-1234-123456789abc',
+                'failed',
+                output_path=str(output_file),
+            )
+
+            downloader_module.download_burst_on_demand(
+                burst_id='12345678-1234-1234-1234-123456789abc',
+                token='static_token_string',
+                output_dir=Path(tmpdir),
+                state_file=str(state_file),
+                resume_mode='product',
+            )
+
+            assert output_file.read_bytes() == b'headtail'
+            assert mock_post.call_args.kwargs['headers']['Range'] == 'bytes=4-'
+
+    @patch('phidown.downloader.requests.post')
+    def test_download_burst_restarts_if_range_not_honored(self, mock_post):
+        first_response = Mock()
+        first_response.status_code = 200
+        first_response.headers = {'Content-Disposition': 'filename=burst_test.zip'}
+        first_response.iter_content = Mock(return_value=[b'ignored'])
+
+        second_response = Mock()
+        second_response.status_code = 200
+        second_response.headers = {'Content-Disposition': 'filename=burst_test.zip'}
+        second_response.iter_content = Mock(return_value=[b'freshdata'])
+
+        mock_post.side_effect = [first_response, second_response]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / 'state.json'
+            output_file = Path(tmpdir) / 'burst_test.zip'
+            temp_file = output_file.with_suffix('.zip.part')
+            temp_file.write_bytes(b'old')
+            DownloadStateStore(str(state_file)).mark(
+                '12345678-1234-1234-1234-123456789abc',
+                'failed',
+                output_path=str(output_file),
+            )
+
+            downloader_module.download_burst_on_demand(
+                burst_id='12345678-1234-1234-1234-123456789abc',
+                token='static_token_string',
+                output_dir=Path(tmpdir),
+                state_file=str(state_file),
+                resume_mode='product',
+            )
+
+            assert output_file.read_bytes() == b'freshdata'
+            assert mock_post.call_args_list[0].kwargs['headers']['Range'] == 'bytes=3-'
+            assert 'Range' not in mock_post.call_args_list[1].kwargs['headers']
     
     @patch('phidown.downloader.requests.post')
     def test_download_burst_refreshes_token_on_redirect(self, mock_post):
