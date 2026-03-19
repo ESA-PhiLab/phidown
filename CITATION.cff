@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use phidown in research, please cite it using the metadata below."
+title: "phidown"
+type: software
+version: "0.1.26"
+doi: 10.5281/zenodo.15332053
+license: Apache-2.0
+repository-code: "https://github.com/ESA-PhiLab/phidown"
+url: "https://github.com/ESA-PhiLab/phidown"
+authors:
+  - family-names: Del Prete
+    given-names: Roberto
+    affiliation: European Space Agency Phi-lab
+preferred-citation:
+  type: software
+  authors:
+    - family-names: Del Prete
+      given-names: Roberto
+  title: "phidown: A Python Tool for Streamlined Data Downloading from CDSE"
+  year: 2025
+  publisher: Zenodo
+  doi: 10.5281/zenodo.15332053
+  url: "https://doi.org/10.5281/zenodo.15332053"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Phidown Downloader"
+  short_description: "Search and download Copernicus data with phidown"
+  default_prompt: "Use $phidown to search Copernicus products and download data via phidown CLI or Python."

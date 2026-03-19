@@ -1,72 +1,171 @@
 ---
-title: "phidown: A Python library for simplified access to Copernicus Earth Observation data"
+title: "phidown: Python tools for reproducible access to Copernicus Data Space Ecosystem data"
+tags:
+  - Python
+  - earth observation
+  - remote sensing
+  - Copernicus
+  - Sentinel-1
 authors:
   - name: Roberto Del Prete
     affiliation: 1
 affiliations:
   - index: 1
-    name: Φ-lab, European Space Agency, Frascati, Italy
-date: 18 October 2025
+    name: Phi-lab, European Space Agency, Frascati, Italy
+date: 19 March 2026
 bibliography: paper.bib
 ---
 
 # Summary
 
-*phidown* is an open-source Python package developed at the European Space Agency’s Φ-lab to simplify and accelerate access to the Copernicus Data Space Ecosystem (CDSE).  
-It provides a high-level interface for searching, filtering, and downloading Earth-observation (EO) products — including advanced functionality for Sentinel-1 burst-level access — while abstracting away the complexity of APIs, authentication, and data-transfer protocols.
+`phidown` is an open-source Python package and command-line interface for
+searching and downloading Earth observation data from the Copernicus Data Space
+Ecosystem (CDSE) [@cdse]. It targets researchers and engineers who need a
+lightweight interface to official Copernicus data services without building
+custom clients for authentication, catalogue queries, and object-store
+downloads.
 
-Modern EO missions such as Sentinel-1, Sentinel-2, and Sentinel-3 generate petabytes of data each year. Accessing this information typically requires familiarity with REST/OData queries, token-based authentication, and mission-specific metadata. *phidown* addresses these challenges through a lightweight, Pythonic interface that integrates natively with scientific workflows.  
-Search results are returned as `pandas.DataFrame` objects, enabling seamless data manipulation, visualization, and export within Jupyter environments.  
-
-By combining flexibility and performance, *phidown* empowers researchers and developers to focus on higher-level analysis — from land-cover mapping to interferometric SAR (InSAR) time-series generation — instead of manual data handling.  
-It is distributed under the GNU Lesser General Public License v3.0 and maintained by ESA Φ-lab with public documentation and community support.
+The package supports multi-mission catalogue search, product download, and
+Sentinel-1 burst-oriented workflows through a consistent Python API and terminal
+commands. Search results are returned as `pandas.DataFrame` objects, which
+makes the outputs easy to inspect, filter, and pass into downstream analysis
+notebooks or automated pipelines. The project is distributed under the Apache
+License 2.0, published on PyPI, and documented in a public documentation site
+[@phidown_docs].
 
 # Statement of need
 
-Efficient access to satellite data is a fundamental enabler for environmental monitoring, climate modeling, and AI-driven Earth-observation research.  
-While the Copernicus Data Space Ecosystem offers a unified platform for accessing Sentinel mission data, interacting with its APIs remains non-trivial for most users.  
-Developers must manage OAuth tokens, craft complex OData queries, and handle asynchronous downloads — a workflow prone to errors and reproducibility issues.
+Open access to Copernicus data enables research in environmental monitoring,
+remote sensing, climate analytics, and Earth observation machine learning.
+However, turning that access into a reproducible workflow is still operationally
+burdensome. CDSE exposes catalogue and download capabilities through web APIs
+and S3-compatible storage [@cdse], but day-to-day research usage still requires
+users to manage credentials, compose OData filters, handle pagination, switch
+between search and transfer endpoints, and adapt those steps to mission-specific
+metadata.
 
-Existing libraries such as `sentinelsat` or `sentinelhub-py` provide partial solutions but are often mission-specific or tied to proprietary infrastructures.  
-*phidown* fills this gap by providing a mission-agnostic, open-source Python interface that supports multiple Sentinel collections (S1, S2, S3, S5P) and directly interacts with CDSE endpoints.  
+`phidown` is designed for remote sensing researchers, research software
+engineers, and applied data scientists who need a smaller and more workflow-led
+interface than a full cloud processing platform. The package reduces the
+friction between "find the right product" and "get the data into analysis code"
+by exposing a unified set of Python and CLI entry points for search, direct
+download, and burst selection. This is especially useful when assembling
+reproducible data-ingestion pipelines for Sentinel-1, Sentinel-2, Sentinel-3,
+and Sentinel-5P products.
 
-Its most distinctive feature is the **Sentinel-1 burst-mode API**, which enables users to query and retrieve individual IW or EW bursts via their unique `burst_id`.  
-These burst products are generated on-demand by CDSE, allowing fine-grained spatial and temporal control over SAR datasets — a capability crucial for InSAR applications, interferogram synthesis, and machine-learning dataset generation.  
+The most distinctive need addressed by `phidown` is access to Sentinel-1 burst
+products generated on demand by CDSE. Burst-level access matters for InSAR time
+series preparation, local-area monitoring, and machine learning dataset curation
+because it avoids repeatedly downloading complete SLC scenes when only a subset
+of bursts is relevant. `phidown` exposes this capability through query
+parameters, workflow helpers, and diagnostics that fit directly into Python
+analysis environments.
 
-By democratizing access to raw and pre-processed data, *phidown* contributes to reproducible, scalable EO research.  
-The software has already been adopted within ESA Φ-lab projects related to onboard AI (e.g., Φ-Sat, Syrious EDGE) and Copernicus downstream innovation activities, enabling reproducible pipelines for large-scale SAR data ingestion and AI model training.
+# State of the field
 
-# Features
+Several Python tools already support parts of the Copernicus access workflow,
+but they do not occupy the same design space as `phidown`. `sentinelsat` became
+widely used for querying and downloading Sentinel products from the former
+Copernicus Open Access Hub, but the upstream project now documents that it is
+not functional for CDSE downloads and the repository was archived in October
+2025 [@sentinelsat_repo]. `sentinelhub-py` is the official Python interface for
+Sentinel Hub services, which makes it useful for a different access model based
+on Sentinel Hub infrastructure rather than a focused wrapper around the official
+CDSE catalogue and download endpoints [@sentinelhubpy].
 
-Written entirely in Python (≥ 3.9), *phidown* leverages the modern open-source data-science ecosystem.  
-Key features include:
+This context explains the "build vs. contribute" decision for `phidown`.
+Adapting `sentinelsat` to CDSE would have required reworking a project centered
+on the legacy DHuS ecosystem and now archived upstream. Extending
+`sentinelhub-py` would not have matched that project's primary focus on Sentinel
+Hub services and processing APIs. `phidown` instead focuses narrowly on the
+official CDSE search and transfer path: catalogue queries, CDSE-compatible
+download operations, and Sentinel-1 burst workflows. That narrower scope is the
+main scholarly contribution of the package because it turns an operational data
+access problem into a reusable research tool for reproducible ingestion and
+selection of Copernicus products.
 
-- **Unified API access** to the CDSE OData interface, supporting multi-mission filtering by area of interest, acquisition time, orbit direction, polarization, and cloud cover.  
-- **High-performance downloads** using the S5 protocol via `s5cmd`, with automatic fallbacks to S3.  
-- **Sentinel-1 burst-mode querying**, allowing selection and retrieval of single bursts by `burst_id`.  
-- **Automatic credential management**, supporting both environment variables and configuration files.  
-- **Pythonic data handling**, returning search results as `pandas.DataFrame` objects ready for further analysis.  
-- **Cross-platform compatibility**, with tested support for Linux, macOS, and Windows.  
-- **Comprehensive documentation and examples**, including Jupyter notebooks demonstrating typical use cases.
+# Software design
 
-The package design emphasizes modularity: each functional block (authentication, search, download) can be extended independently, facilitating integration with cloud pipelines, schedulers, or custom processing frameworks.
+The package is organized around a small number of composable layers. The core
+search layer is centered on `CopernicusDataSearcher`, which validates query
+parameters, translates high-level filters into CDSE-compatible requests, handles
+pagination and retry behavior, and returns normalized tabular results for
+inspection and downstream processing. This keeps the research-facing interface
+compact while isolating API-specific request construction and error handling in a
+single place.
+
+The download layer separates authentication and transfer concerns from the query
+logic. `phidown` supports a fast path that shells out to `s5cmd` for bulk S3
+transfers and a safe path that performs resumable native downloads for more
+fragile environments. That split is important in practice: high-throughput data
+staging and robust recovery from interrupted transfers are both common research
+requirements, but they trade off simplicity, speed, and failure recovery
+differently. The CLI and Python API expose the same conceptual download modes so
+users can move between exploratory and automated workflows without learning two
+different interfaces.
+
+Sentinel-1 burst workflows are implemented as a higher-level orchestration layer
+on top of the search interface. The burst workflow module builds configuration
+objects, recommends orbit settings, retrieves burst products for an area of
+interest, computes summary statistics, and exports validation artefacts such as
+CSV tables and JSON reports. Optional modules for visualization, AIS utilities,
+and interactive polygon tools are imported lazily so the base installation stays
+lightweight for users who only need search and download features. This structure
+keeps the default package install small while still allowing more advanced,
+domain-specific workflows in the same project.
+
+# Research impact statement
+
+`phidown` currently demonstrates credible near-term research significance with
+several concrete reuse signals. The project has a citable Zenodo release
+[@phidown_zenodo], a public PyPI distribution [@phidown_pypi], public
+documentation [@phidown_docs], and automated cross-platform tests in the public
+repository. Those features make the software directly installable, inspectable,
+and verifiable by external researchers rather than limiting it to an internal
+lab script.
+
+The package is also documented outside the repository itself. An ESA Phi-lab
+project page describes `phidown` as research software for simplifying access to
+Copernicus Data Space data [@phidown_cin], and external Earth-observation
+community outlets have highlighted the package as a practical way to access
+Copernicus data programmatically [@phidown_satellite_image_dl;
+@phidown_spectral_reflectance]. These are modest but concrete indicators that
+the software has moved beyond a private prototype and is already visible to the
+community that would reuse it.
+
+Within ESA Phi-lab, `phidown` has been used in workflows that require repeated
+access to CDSE products, including Sentinel-1 burst selection and broader Earth
+observation data ingestion for downstream analysis. The repository also contains
+notebooks, workflow helpers, and validation outputs that document how the burst
+search and diagnostics are applied in practice. Together, these materials show
+that the package already supports reproducible research operations and provides
+the ingredients needed for near-term reuse by other groups facing the same CDSE
+access bottlenecks.
+
+The package's strongest impact signal remains its support for Sentinel-1 burst
+access through a stable Python and CLI interface. Burst-level workflows are
+increasingly important for InSAR-oriented studies and targeted dataset creation
+because they reduce unnecessary transfers of full scenes and make area-specific
+time series assembly easier to automate. By packaging these capabilities behind
+a documented, tested interface, `phidown` lowers the cost of integrating
+official CDSE data access into research pipelines.
+
+# AI usage disclosure
+
+Generative AI tools were used to assist with drafting and editing portions of
+the JOSS submission materials, including this manuscript. Human authors reviewed
+and edited all AI-assisted text, verified the technical claims and citations,
+and retained responsibility for the software design decisions, code behavior,
+and final wording of the submission. This disclosure applies to the preparation
+of the submission materials; no AI-generated content was accepted without human
+validation.
 
 # Acknowledgements
 
-Development of *phidown* was supported by the European Space Agency (ESA) Φ-lab as part of its research in AI-ready cloud infrastructures and on-board intelligence for Earth observation.  
-The author thanks the Copernicus Data Space team for technical guidance and all contributors who provided feedback during testing and release cycles.
+Development of `phidown` was supported by the European Space Agency (ESA)
+Phi-lab as part of its work on AI-ready cloud infrastructures and on-board
+intelligence for Earth observation. The author thanks the Copernicus Data Space
+team for technical guidance and the project contributors who helped test and
+refine the package.
 
 # References
-
-Del Prete, R. (2025). *phidown: A Python library for simplified access to Copernicus Data Space Ecosystem data*. Zenodo. https://doi.org/10.5281/zenodo.15332053  
-
-European Space Agency Φ-lab. (2025). *phidown documentation*. https://esa-philab.github.io/phidown/  
-
-Del Prete, R. (2024). *Φ-Down: A Python library to simplify access to Copernicus Data Space Ecosystem EO data.* ESA Φ-lab CIN Visiting Researcher Project.  
-https://cin.philab.esa.int/databases/projects/down-a-python-library-to-simplify-access-eo-data-from-the-copernicus-data-space-ecosystem  
-
-Satellite Image Deep Learning (2025). *PhiDown: Fast, Simple Access to Copernicus Data.*  
-https://www.satellite-image-deep-learning.com/p/phidown-fast-simple-access-to-copernicus  
-
-Spectral Reflectance Newsletter #122
-https://www.spectralreflectance.space/p/spectral-reflectance-newsletter-122

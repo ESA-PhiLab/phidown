@@ -1,5 +1,11 @@
-# ALL Folders starting with S
+# ALL Folders starting with S (but not docs/source)
 S*/
+!docs/source/
+# Allow publishing Codex skill definitions
+!skills/
+!skills/phidown/
+!skills/phidown/**
+*.s5cfg
 
 *.DS_store
 
@@ -74,6 +80,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/build/
 
 # PyBuilder
 target/
@@ -140,4 +147,9 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
-phidown/secret.yml
+.s5cfg
+.pdm-python
+.pdm-build
+
+*output/
+*ouputs/

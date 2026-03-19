@@ -1,0 +1,58 @@
+# Makefile for Φ-Down project
+
+.PHONY: docs docs-build docs-clean docs-serve install install-dev install-docs test clean
+
+# Documentation commands
+docs: docs-build
+
+docs-build:
+	@echo "Building documentation..."
+	cd docs && make html
+
+docs-clean:
+	@echo "Cleaning documentation..."
+	cd docs && make clean
+
+docs-serve:
+	@echo "Serving documentation locally..."
+	cd docs/build/html && python -m http.server 8000
+
+# Installation commands
+install:
+	@echo "Installing phidown..."
+	pip install -e .
+
+install-dev:
+	@echo "Installing development dependencies..."
+	pip install -e .[dev,viz]
+
+install-docs:
+	@echo "Installing documentation dependencies..."
+	pip install -r docs/requirements.txt
+
+# Testing
+test:
+	@echo "Running tests..."
+	pytest
+
+# Clean up
+clean:
+	@echo "Cleaning up..."
+	find . -type f -name "*.pyc" -delete
+	find . -type d -name "__pycache__" -delete
+	find . -type d -name "*.egg-info" -exec rm -rf {} +
+	cd docs && make clean
+
+# Help
+help:
+	@echo "Available commands:"
+	@echo "  docs        - Build documentation"
+	@echo "  docs-build  - Build documentation"
+	@echo "  docs-clean  - Clean documentation"
+	@echo "  docs-serve  - Serve documentation locally"
+	@echo "  install     - Install phidown"
+	@echo "  install-dev - Install with development dependencies"
+	@echo "  install-docs- Install documentation dependencies"
+	@echo "  test        - Run tests"
+	@echo "  clean       - Clean up build artifacts"
+	@echo "  help        - Show this help message"
