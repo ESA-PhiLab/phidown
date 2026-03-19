@@ -3,7 +3,7 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
-from phidown.search import CopernicusDataSearcher
+from phidown.search import CopernicusDataSearcher, validate_wkt_integrity
 
 # Define the path to the config file relative to the test file
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'phidown', 'config.json')
@@ -119,6 +119,23 @@ def test_searcher_accepts_supported_aoi_wkt_geometries(aoi_wkt):
         aoi_wkt=aoi_wkt,
     )
     assert searcher.aoi_wkt == aoi_wkt
+
+
+def test_validate_wkt_integrity_normalizes_and_returns_wkt():
+    assert (
+        validate_wkt_integrity("  POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))  ")
+        == "POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))"
+    )
+
+
+def test_validate_wkt_integrity_rejects_non_string():
+    with pytest.raises(TypeError, match="must be a string"):
+        validate_wkt_integrity(123)  # type: ignore[arg-type]
+
+
+def test_validate_wkt_integrity_rejects_empty_value():
+    with pytest.raises(ValueError, match="cannot be empty"):
+        validate_wkt_integrity("   ")
 
 
 def test_searcher_rejects_unsupported_aoi_wkt_geometry():

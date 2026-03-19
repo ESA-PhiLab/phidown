@@ -206,6 +206,33 @@ def _validate_multipolygon_body(body: str) -> None:
         _validate_polygon_body(polygon)
 
 
+def validate_wkt_integrity(
+    wkt_value: str, *, field_name: str = "wkt"
+) -> str:
+    """
+    Validate and normalize an input WKT string.
+
+    Raises:
+        TypeError: If the value is not a string.
+        ValueError: If the WKT is malformed or uses an unsupported geometry type.
+    """
+    if not isinstance(wkt_value, str):
+        raise TypeError(f"The '{field_name}' parameter must be a string")
+
+    normalized = " ".join(wkt_value.split())
+    if not normalized.strip():
+        raise ValueError(f"The '{field_name}' parameter cannot be empty")
+
+    try:
+        _validate_supported_aoi_wkt(normalized)
+    except ValueError as exc:
+        if str(exc).startswith("Unsupported AOI WKT geometry type"):
+            raise
+        raise ValueError(f"The '{field_name}' parameter must be valid WKT: {exc}") from exc
+
+    return normalized
+
+
 def _validate_supported_aoi_wkt(aoi_wkt: str) -> None:
     """Validate AOI WKT syntax for the supported CDSE geometry allowlist."""
     geometry_type, body = _parse_wkt_geometry(aoi_wkt)
@@ -661,19 +688,7 @@ class CopernicusDataSearcher:
             TypeError: If the 'aoi_wkt' parameter is not a string.
         """
         if self.aoi_wkt is not None:
-            if not isinstance(self.aoi_wkt, str):
-                raise TypeError("The 'aoi_wkt' parameter must be a string")
-
-            self.aoi_wkt = ' '.join(self.aoi_wkt.split())
-
-            if not self.aoi_wkt.strip():
-                raise ValueError("The 'aoi_wkt' parameter cannot be empty")
-            try:
-                _validate_supported_aoi_wkt(self.aoi_wkt)
-            except ValueError as exc:
-                if str(exc).startswith("Unsupported AOI WKT geometry type"):
-                    raise
-                raise ValueError(f"The 'aoi_wkt' parameter must be valid WKT: {exc}") from exc
+            self.aoi_wkt = validate_wkt_integrity(self.aoi_wkt, field_name="aoi_wkt")
 
     def _validate_time(self):
         """
@@ -1478,8 +1493,7 @@ class CopernicusDataSearcher:
             raise ValueError("AOI WKT is not set")
 
         try:
-            normalized_wkt = " ".join(wkt.split())
-            _validate_supported_aoi_wkt(normalized_wkt)
+            normalized_wkt = validate_wkt_integrity(wkt, field_name="aoi_wkt")
             geometry_type, body = _parse_wkt_geometry(normalized_wkt)
             coords = _centroid_coordinates_from_body(geometry_type, body)
 
