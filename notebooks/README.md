@@ -59,6 +59,16 @@ This directory contains example notebooks demonstrating various capabilities of 
 - Visualize AOI and burst footprints interactively with Folium via `phidown` package utilities
 - Ideal for: InSAR workflow QA, spatial validation, reproducible preprocessing checks
 
+### 9. S1/S2/S3 THOR Workflow (`9_s1_s2_s3_thor_workflow.ipynb`)
+**Rendered quartet matching plus THOR-ready multi-resolution export**
+- Search Sentinel-1 GRD, Sentinel-2 Level-2A, Sentinel-3 OLCI EFR Level-1, and Sentinel-3 SLSTR RBT Level-1 over one AOI
+- Select the best available four-product match by minimum sensing-time span, anchored on Sentinel-1
+- Keep GitHub-visible outputs for search, quartet selection, footprint diagnostics, and grid planning before the live download boundary
+- Convert Sentinel-3 Level-1 radiances into OLCI reflectance, SLSTR reflectance, and SLSTR brightness temperature stacks
+- Export modality-specific GeoTIFFs for `S1GRD`, `S2L2A`, `S3OLCI`, `S3SLSTR_REFL`, and `S3SLSTR_BT`, with an optional fused 240 m Sentinel-3 stack
+- Provide a dict-style modality packaging example for future THOR or terratorch ingestion
+- Ideal for: THOR preprocessing, terratorch ingestion, Sentinel-1/2/3 ROI packaging, multimodal training data preparation
+
 
 ## Getting Started
 
@@ -77,6 +87,17 @@ pip install phidown[ais]
 pip install phidown[viz,ais]
 ```
 
+### Additional Notebook 9 Dependencies
+Notebook 9 also requires raster alignment and NetCDF swath resampling dependencies that are intentionally kept notebook-local:
+```bash
+pip install phidown rasterio xarray netCDF4 h5netcdf pyresample shapely matplotlib folium ipyleaflet
+```
+
+If you want to materialise PyTorch tensors directly from notebook 9, also install:
+```bash
+pip install torch
+```
+
 ### Running the Notebooks
 1. Start Jupyter Lab or Jupyter Notebook
 2. Navigate to the `notebooks/` directory
@@ -91,7 +112,7 @@ Some notebooks require authentication for downloading data:
 ## Use Cases by Domain
 
 ### Earth Observation Research
-- **Notebooks 1, 2, 3**: Basic data access, multi-sensor analysis
+- **Notebooks 1, 2, 3, 9**: Basic data access, multi-sensor analysis, pixel-aligned fusion setup
 - Focus on land monitoring, change detection, environmental studies
 
 ### SAR Processing & Analysis
@@ -106,10 +127,11 @@ Some notebooks require authentication for downloading data:
 - **Notebook 2**: Interactive map-based area selection
 - **Notebook 4**: Comprehensive visualization and analysis
 - **Notebook 6**: Burst search with visualization
+- **Notebook 9**: Multi-sensor footprint diagnostics, timing diagnostics, and modality-specific export planning
 
 ### Educational/Training
 - **Notebooks 1, 5**: Simple, focused examples
-- **Notebooks 2, 3, 4, 6**: Advanced concepts and workflows
+- **Notebooks 2, 3, 4, 6, 9**: Advanced concepts and workflows
 
 ## Data Sources
 
