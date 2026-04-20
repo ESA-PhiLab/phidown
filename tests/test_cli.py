@@ -586,3 +586,45 @@ def test_resolve_download_mode_resume_mode_compatibility():
         assert _resolve_download_mode('fast', resume_mode='product') == 'safe'
     with pytest.warns(DeprecationWarning, match='resume_mode="off" is deprecated'):
         assert _resolve_download_mode('safe', resume_mode='off') == 'safe'
+
+
+class TestPhiSat2CliIntegration:
+    @patch('phidown.cli.PhiSat2Searcher')
+    def test_download_by_name_phisat2_uses_provider_searcher(self, mock_searcher_class, tmp_path):
+        mock_searcher = MagicMock()
+        mock_searcher_class.return_value = mock_searcher
+        mock_searcher.download_by_name.return_value = str(tmp_path / 'PRODUCT_A.zip')
+
+        result = download_by_name(
+            product_name='SESSION123',
+            output_dir=str(tmp_path),
+            provider='phisat2',
+            show_progress=False,
+        )
+
+        assert result is True
+        mock_searcher.download_by_name.assert_called_once()
+
+    @patch('phidown.cli.PhiSat2Searcher')
+    def test_list_products_phisat2_save_json(self, mock_searcher_class, tmp_path):
+        mock_searcher = MagicMock()
+        mock_searcher_class.return_value = mock_searcher
+        mock_searcher.query.return_value = pd.DataFrame(
+            {
+                'Id': [42],
+                'Name': ['PRODUCT_A.zip'],
+                'DownloadUrl': ['https://phisat2.insula.earth/secure/api/v2.0/platformFiles/42/dl'],
+            }
+        )
+
+        target = tmp_path / 'phisat2_products.json'
+        result = list_products(
+            collection='SENTINEL-1',
+            provider='phisat2',
+            search_filter='SESSION123',
+            output_format='json',
+            save_path=str(target),
+        )
+
+        assert result is True
+        assert '"Name":"PRODUCT_A.zip"' in target.read_text(encoding='utf-8').replace(' ', '')

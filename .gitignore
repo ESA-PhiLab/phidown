@@ -152,4 +152,5 @@ cython_debug/
 .pdm-build
 
 *output/
-*ouputs/
+outputs/
+download_and_organize_insula.py

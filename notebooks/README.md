@@ -69,6 +69,14 @@ This directory contains example notebooks demonstrating various capabilities of 
 - Provide a dict-style modality packaging example for future THOR or terratorch ingestion
 - Ideal for: THOR preprocessing, terratorch ingestion, Sentinel-1/2/3 ROI packaging, multimodal training data preparation
 
+### 10. PhiSat-2 Search and Download (`10_phisat2_search_download.ipynb`)
+**Minimal INSULA provider workflow with guarded execution**
+- Resolve the local repository and shared `.s5cfg` credential file
+- Search PhiSat-2 platform files with `PhiSat2Searcher.query()`
+- Inspect normalized result columns before choosing a product
+- Optionally download one selected file after enabling the guarded download cell
+- Ideal for: validating the new PhiSat-2 integration, session-based searches, first-run INSULA workflows
+
 
 ## Getting Started
 
@@ -107,6 +115,7 @@ pip install torch
 ### Authentication
 Some notebooks require authentication for downloading data:
 - Set up Copernicus Data Space credentials
+- Add the `[phisat2]` section to `.s5cfg` for PhiSat-2 notebooks
 - Configure authentication as described in the main documentation
 
 ## Use Cases by Domain

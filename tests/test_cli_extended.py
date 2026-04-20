@@ -296,3 +296,15 @@ class TestMainCliExtended:
         with pytest.raises(SystemExit) as exc_info:
             main()
         assert exc_info.value.code == 130
+
+    @patch("sys.argv", ["phidown", "--list", "--provider", "phisat2"])
+    def test_phisat2_list_requires_filter(self):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code != 0
+
+    @patch("sys.argv", ["phidown", "--provider", "phisat2", "--s3path", "/eodata/test", "-o", "/tmp/test"])
+    def test_phisat2_rejects_s3path_mode(self):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code != 0

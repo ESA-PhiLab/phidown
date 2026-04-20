@@ -50,6 +50,7 @@ def test_package_getattr_lazy_loads_known_exports(monkeypatch):
 
     assert "download_state_file" not in phidown.__dict__
     assert phidown.download_state_file.__name__ == "default_state_file"
+    assert "PhiSat2Searcher" in phidown.__all__
 
 
 def test_package_getattr_rejects_unknown_exports():

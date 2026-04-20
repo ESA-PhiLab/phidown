@@ -4,8 +4,8 @@
 Command-Line Interface
 ========================
 
-Phi-Down ships with a CLI for downloads, product listing, and Sentinel-1 burst
-coverage analysis.
+Phi-Down ships with a CLI for CDSE downloads, PhiSat-2 INSULA downloads,
+product listing, and Sentinel-1 burst coverage analysis.
 
 Basic Usage
 -----------
@@ -24,6 +24,12 @@ Download by product name:
 
    phidown --name S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003 -o ./data
 
+Download a PhiSat-2 product by exact filename or unique search token:
+
+.. code-block:: bash
+
+   phidown --provider phisat2 --name SESSION_ID_12345 -o ./data
+
 Download by direct S3 path:
 
 .. code-block:: bash
@@ -34,6 +40,7 @@ Common download options:
 
 * ``-o, --output-dir``: Output directory for downloaded data
 * ``-c, --config-file``: Path to the ``.s5cfg`` credentials file
+* ``--provider {cdse,phisat2}``: Select the backend provider
 * ``--mode {fast,safe}``: ``fast`` uses ``s5cmd`` for throughput, ``safe`` uses resumable native downloads
 * ``--no-progress``: Disable the progress bar
 * ``--no-download-all``: Download a single object instead of an entire directory when using ``--s3path``
@@ -41,12 +48,12 @@ Common download options:
 
 ``.s5cfg`` notes:
 
-* Phi-Down reads credentials from the ``[default]`` section of the specified
-  file.
+* Phi-Down reads CDSE credentials from the ``[default]`` section and PhiSat-2
+  credentials from the ``[phisat2]`` section of the specified file.
 * If ``-c`` is omitted, Phi-Down uses ``.s5cfg`` in the current working
   directory.
 * ``--reset`` is useful when a credential pair has expired and you want the
-  tool to rewrite the file interactively.
+  tool to rewrite the active provider section interactively.
 * For automation, prefer an explicit config path instead of relying on the
   shell's current directory.
 
@@ -77,6 +84,12 @@ You can list products either with the subcommand form:
 
    phidown list --collection SENTINEL-2 --product-type S2MSI2A --bbox 10 45 12 46 --start-date 2024-05-01T00:00:00 --end-date 2024-05-31T23:59:59
 
+or search PhiSat-2 products with a free-text filter:
+
+.. code-block:: bash
+
+   phidown list --provider phisat2 --filter SESSION_ID_12345
+
 or with the main command:
 
 .. code-block:: bash
@@ -99,6 +112,7 @@ Useful listing options:
 * ``--format {table,json,csv}``: Output format
 * ``--columns``: Comma-separated column selection
 * ``--save``: Save output to a file
+* ``--filter``: Required free-text filter when ``--provider phisat2`` is selected
 
 Burst Coverage Analysis
 -----------------------

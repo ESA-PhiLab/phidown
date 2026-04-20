@@ -2,7 +2,8 @@ Getting Started
 ===============
 
 Phi-Down provides a Python API and CLI for searching Copernicus Data Space
-products and downloading them through S3.
+products and PhiSat-2 INSULA files, and for downloading them through S3 or the
+INSULA HTTP API.
 
 Prerequisites
 -------------
@@ -12,7 +13,8 @@ Before you begin, make sure you have:
 1. Python 3.9 or newer
 2. A Copernicus Data Space account: `<https://dataspace.copernicus.eu/>`_
 3. S3 credentials from the `S3 Key Manager <https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials>`_
-4. ``s5cmd`` installed if you plan to download products
+4. A PhiSat-2 INSULA account if you plan to use ``--provider phisat2``
+5. ``s5cmd`` installed if you plan to download CDSE products
 
 Install Phi-Down
 ----------------
@@ -21,15 +23,16 @@ Install Phi-Down
 
    pip install phidown
 
-Configure S3 Credentials
-------------------------
+Configure Shared Credentials
+----------------------------
 
-Phi-Down reads CDSE S3 credentials from an ``.s5cfg`` file. By default it
+Phi-Down reads provider credentials from an ``.s5cfg`` file. By default it
 looks for ``.s5cfg`` in your current working directory, but you can also pass a
 custom path with the CLI ``-c/--config-file`` option or the Python
 ``config_file=...`` argument.
 
-Create a minimal ``.s5cfg`` file:
+Create a minimal shared ``.s5cfg`` file. Keep the CDSE ``[default]`` block,
+then insert the ``[phisat2]`` block directly below it:
 
 .. code-block:: ini
 
@@ -42,21 +45,32 @@ Create a minimal ``.s5cfg`` file:
    use_https = true
    check_ssl_certificate = true
 
+   [phisat2]
+   username = your_email@example.com
+   password = your_password
+   base_url = https://phisat2.insula.earth
+   api_base = https://phisat2.insula.earth/secure/api/v2.0
+   authorization_endpoint = https://identity.insula.earth/realms/phisat2/protocol/openid-connect/auth
+   token_endpoint = https://identity.insula.earth/realms/phisat2/protocol/openid-connect/token
+   redirect_uri = http://localhost:9207/auth
+   client_id = api-client
+
 Guidelines:
 
-* Keep the section name as ``[default]``. Phi-Down currently reads credentials
-  from that section.
+* Keep the section names exactly as shown: ``[default]`` for CDSE and
+  ``[phisat2]`` for INSULA.
 * ``aws_access_key_id`` and ``aws_secret_access_key`` are the critical values.
   The rest should normally stay as shown above for CDSE.
+* ``username`` and ``password`` are the critical PhiSat-2 fields; the endpoint
+  values should usually stay at their defaults.
 * ``host_base`` and ``host_bucket`` should both remain
   ``eodata.dataspace.copernicus.eu``.
 * ``aws_region`` should remain ``eu-central-1`` unless CDSE changes its S3
   endpoint requirements.
 * Values may be quoted or unquoted; Phi-Down strips wrapping quotes when
   loading the file.
-* Phi-Down reads this file and forwards the values to ``s5cmd`` at runtime.
-  Treat it as the Phi-Down download credential file, not as a generic
-  replacement for every standalone ``s5cmd`` workflow.
+* Phi-Down reads this file and uses the appropriate section at runtime. CDSE
+  downloads use ``[default]``; PhiSat-2 operations use ``[phisat2]``.
 * Do not commit ``.s5cfg`` to version control. On shared systems, restrict file
   permissions if possible, for example with ``chmod 600 .s5cfg``.
 
@@ -145,6 +159,32 @@ Or use the CLI directly:
    # Safe mode with retries
    phidown --name S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003 -o ./data --mode safe --retry-count 5
 
+PhiSat-2 Search and Download
+----------------------------
+
+Use ``PhiSat2Searcher`` for INSULA searches:
+
+.. code-block:: python
+
+   from phidown import PhiSat2Searcher
+
+   searcher = PhiSat2Searcher(config_file=".s5cfg")
+   results = searcher.query("SESSION_ID_12345", results_per_page=10)
+   print(results[["Id", "Name", "DownloadUrl"]].head())
+
+Download one PhiSat-2 product by exact filename or a unique token such as a
+session ID:
+
+.. code-block:: bash
+
+   phidown --provider phisat2 --name SESSION_ID_12345 -o ./data
+
+List matching PhiSat-2 products before downloading:
+
+.. code-block:: bash
+
+   phidown list --provider phisat2 --filter SESSION_ID_12345
+
 Useful Next Steps
 -----------------
 
@@ -157,9 +197,9 @@ Common Issues
 -------------
 
 Authentication errors
-   Regenerate your S3 credentials, update ``.s5cfg``, and make sure you are
-   using the intended file path if you keep credentials outside the working
-   directory.
+   Regenerate your CDSE S3 credentials or update your ``[phisat2]`` username
+   and password in ``.s5cfg``, then make sure you are using the intended file
+   path if you keep credentials outside the working directory.
 
 Empty search results
    Tight filters, unavailable dates, or invalid AOI geometries are the most

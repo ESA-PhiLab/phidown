@@ -1,7 +1,7 @@
 [project]
 name = "phidown"
-version = "0.1.26"
-description = "Get access to Copernicus data with a pythonic easy interface. Get your products in seconds not in months."
+version = "0.1.27"
+description = "Search and download Copernicus Data Space and PhiSat-2 data with a pythonic interface."
 authors = [
   { name = "Roberto Del Prete", email = "roberto.delprete@esa.int; robertodelprete88@gmail.com" }
 ]
@@ -9,6 +9,7 @@ authors = [
 dependencies = [
   "pandas>=1.5.2",
   "boto3>=1.34.0",
+  "InsulaWorkflowClient>=0.8.3",
   "s5cmd",
   "tqdm>=4.65.0",
   "pyyaml>=6.0.0",
