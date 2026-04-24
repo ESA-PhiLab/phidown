@@ -51,6 +51,31 @@ Requirements:
 - Python 3.9+
 - `s5cmd` available on your `PATH` for S3 downloads
 
+### As a Codex plugin
+
+This repository now ships a repo-local Codex plugin and marketplace:
+
+- `plugins/phidown/`
+- `.agents/plugins/marketplace.json`
+
+To install it from this repository:
+
+1. Clone the repository and open the repo root in Codex.
+2. Restart Codex if the plugin directory was already open before these files existed, so Codex reloads the repo marketplace.
+3. Open the Codex plugin directory and select the `Phidown Plugins` marketplace.
+4. Install the `Phidown Downloader` plugin.
+5. Start a prompt such as:
+
+```text
+Use $phidown to search Copernicus products and download data via phidown CLI or Python.
+```
+
+If you manage marketplaces from the Codex CLI, you can also add this repository as a local marketplace root:
+
+```bash
+codex plugin marketplace add /absolute/path/to/phidown
+```
+
 ## Credentials
 
 Create a shared `.s5cfg` file for both CDSE and PhiSat-2. Keep the existing
