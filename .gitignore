@@ -156,3 +156,5 @@ cython_debug/
 *output/
 outputs/
 download_and_organize_insula.py
+
+.vscode/
