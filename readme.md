@@ -1,4 +1,4 @@
-![Phi-Down Logo](./assets/banner_phidown.svg)
+![Phi-Down Logo](./assets/banner.png)
 
 [![PyPI](https://img.shields.io/pypi/v/phidown.svg)](https://pypi.org/project/phidown/)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
