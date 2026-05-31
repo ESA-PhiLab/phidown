@@ -39,12 +39,12 @@ pip install "phidown[jupyter_env]"
 pip install "phidown[dev,docs]"
 ```
 
-### From source (PDM)
+### From source (uv)
 
 ```bash
 git clone https://github.com/ESA-PhiLab/phidown.git
 cd phidown
-pdm install
+uv sync
 ```
 
 Requirements:
