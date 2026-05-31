@@ -35,6 +35,8 @@ DEFAULT_TOKEN_ENDPOINT = (
 DEFAULT_REDIRECT_URI = "http://localhost:9207/auth"
 DEFAULT_CLIENT_ID = "api-client"
 DEFAULT_RESULTS_PER_PAGE = 50
+DEFAULT_CATALOGUE = "REF_DATA"
+PHISAT2_L1_REF_DATA_COLLECTION = "phisat24e55ba83dd304ea9b018b65e9b17a7de"
 _CONTENT_DISPOSITION_FILENAME_RE = re.compile(r'filename="?([^";]+)"?')
 
 
@@ -192,6 +194,71 @@ def _normalize_platform_files(payload: typing.Dict[str, typing.Any], api_base: s
     return df
 
 
+def _nested_href(value: typing.Any) -> typing.Optional[str]:
+    if isinstance(value, dict):
+        href = value.get("href")
+        if isinstance(href, str):
+            return href
+    return None
+
+
+def _name_or_basename_matches(series: pd.Series, product_name: str) -> pd.Series:
+    names = series.astype(str)
+    basenames = names.map(lambda value: os.path.basename(value.rstrip("/")))
+    return (names == product_name) | (basenames == product_name)
+
+
+def _normalize_catalogue_features(payload: typing.Dict[str, typing.Any]) -> pd.DataFrame:
+    features = payload.get("features", [])
+    records: typing.List[typing.Dict[str, typing.Any]] = []
+
+    for feature in features:
+        if not isinstance(feature, dict):
+            continue
+        properties = feature.get("properties", {})
+        if not isinstance(properties, dict):
+            properties = {}
+
+        links = properties.get("_links", {})
+        if not isinstance(links, dict):
+            links = {}
+
+        services = properties.get("services", {})
+        if not isinstance(services, dict):
+            services = {}
+        download_service = services.get("download", {})
+        if not isinstance(download_service, dict):
+            download_service = {}
+
+        name = (
+            properties.get("filename")
+            or properties.get("productIdentifier")
+            or properties.get("title")
+            or feature.get("id")
+        )
+        download_url = _nested_href(links.get("download")) or download_service.get("url")
+
+        record = {
+            "Id": feature.get("id"),
+            "Name": name,
+            "ContentLength": properties.get("filesize") or download_service.get("size"),
+            "ContentDate": {
+                "Start": properties.get("startDate"),
+                "End": properties.get("completionDate"),
+            },
+            "GeoFootprint": feature.get("geometry"),
+            "DownloadUrl": download_url,
+            "Provider": "phisat2",
+            "Collection": properties.get("collection"),
+            "ProductType": properties.get("productType") or properties.get("processingLevel"),
+            "OriginDate": properties.get("published") or properties.get("updated"),
+            "PlatformUrl": properties.get("platformUrl"),
+        }
+        records.append(record)
+
+    return pd.DataFrame.from_records(records)
+
+
 def _resolve_download_name(
     response: requests.Response,
     *,
@@ -287,6 +354,57 @@ class PhiSat2Searcher:
         self.df = _normalize_platform_files(self.json_data, config.api_base)
         return self.df
 
+    def query_catalogue(
+        self,
+        product_type: str = "L1",
+        *,
+        aoi_wkt: typing.Optional[str] = None,
+        start_date: typing.Optional[str] = None,
+        end_date: typing.Optional[str] = None,
+        results_per_page: int = DEFAULT_RESULTS_PER_PAGE,
+        page: int = 0,
+        ref_data_collection: str = PHISAT2_L1_REF_DATA_COLLECTION,
+        reset_config: bool = False,
+    ) -> pd.DataFrame:
+        """Search PhiSat-2 catalogue products with date and AOI filters."""
+        if not isinstance(product_type, str) or not product_type.strip():
+            raise ValueError("product_type must be a non-empty string")
+        if not isinstance(results_per_page, int) or results_per_page <= 0:
+            raise ValueError("results_per_page must be a positive integer")
+        if not isinstance(page, int) or page < 0:
+            raise ValueError("page must be a non-negative integer")
+
+        ensure_phisat2_config(self.config_file, reset=reset_config)
+        config = _read_phisat2_config(self.config_file)
+
+        params: typing.Dict[str, typing.Any] = {
+            "catalogue": DEFAULT_CATALOGUE,
+            "refDataCollection": ref_data_collection,
+            "identifier": product_type.strip(),
+            "resultsPerPage": results_per_page,
+            "page": page,
+        }
+        if aoi_wkt:
+            params["aoi"] = aoi_wkt
+        if start_date:
+            params["productDateStart"] = start_date
+        if end_date:
+            params["productDateEnd"] = end_date
+
+        self.last_filter = product_type.strip()
+        self.last_results_per_page = results_per_page
+        self.response = requests.get(
+            f"{config.api_base}/search",
+            params=params,
+            headers=_build_headers(config),
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+        self.response.raise_for_status()
+
+        self.json_data = self.response.json()
+        self.df = _normalize_catalogue_features(self.json_data)
+        return self.df
+
     def query_by_name(
         self,
         product_name: str,
@@ -304,7 +422,7 @@ class PhiSat2Searcher:
             return results
         if "Name" not in results.columns:
             return results
-        exact_matches = results[results["Name"] == product_name].copy()
+        exact_matches = results[_name_or_basename_matches(results["Name"], product_name)].copy()
         if not exact_matches.empty:
             return exact_matches.reset_index(drop=True)
         if len(results) == 1:
@@ -331,7 +449,7 @@ class PhiSat2Searcher:
             raise FileNotFoundError(f"PhiSat-2 product not found: {product_name}")
 
         if "Name" in results.columns:
-            exact_matches = results[results["Name"] == product_name]
+            exact_matches = results[_name_or_basename_matches(results["Name"], product_name)]
             if len(exact_matches) == 1:
                 return exact_matches.iloc[0]
             if len(exact_matches) > 1:
@@ -389,6 +507,79 @@ class PhiSat2Searcher:
                     response,
                     fallback_name=file_name,
                     product_id=product_id,
+                )
+                target_path = os.path.join(abs_output_dir, target_name)
+                if os.path.exists(target_path) and not overwrite and os.path.getsize(target_path) > 0:
+                    logger.info("PhiSat-2 target already exists, skipping: %s", target_path)
+                    return target_path
+                _download_stream_to_path(response, target_path, show_progress=show_progress)
+                if unzip and zipfile.is_zipfile(target_path):
+                    extract_dir = os.path.join(abs_output_dir, Path(target_name).stem)
+                    os.makedirs(extract_dir, exist_ok=True)
+                    with zipfile.ZipFile(target_path, "r") as archive:
+                        archive.extractall(extract_dir)
+                    return extract_dir
+                return target_path
+            except Exception as exc:  # pragma: no cover - retried path covered by tests
+                last_error = exc
+                if attempt < attempts - 1:
+                    delay = _compute_backoff_delay(attempt, backoff_base=backoff_base, backoff_max=backoff_max)
+                    logger.warning(
+                        "PhiSat-2 download attempt %s/%s failed (%s). Retrying in %.1fs...",
+                        attempt + 1,
+                        attempts,
+                        exc,
+                        delay,
+                    )
+                    time.sleep(delay)
+
+        if last_error is None:
+            raise RuntimeError("PhiSat-2 download failed without an explicit exception")
+        raise last_error
+
+    def download_url(
+        self,
+        download_url: str,
+        output_dir: str,
+        *,
+        file_name: typing.Optional[str] = None,
+        reset_config: bool = False,
+        show_progress: bool = True,
+        retry_count: int = 1,
+        connect_timeout: float = DEFAULT_CONNECT_TIMEOUT_SECONDS,
+        read_timeout: float = DEFAULT_READ_TIMEOUT_SECONDS,
+        backoff_base: float = 2.0,
+        backoff_max: float = 60.0,
+        overwrite: bool = False,
+        unzip: bool = False,
+    ) -> str:
+        """Download one PhiSat-2 product from a normalized download URL."""
+        if not isinstance(download_url, str) or not download_url.strip():
+            raise ValueError("download_url cannot be empty")
+
+        abs_output_dir = os.path.abspath(output_dir)
+        os.makedirs(abs_output_dir, exist_ok=True)
+
+        attempts = max(1, int(retry_count))
+        should_reset_config = reset_config
+        last_error: typing.Optional[Exception] = None
+
+        for attempt in range(attempts):
+            try:
+                ensure_phisat2_config(self.config_file, reset=should_reset_config)
+                should_reset_config = False
+                config = _read_phisat2_config(self.config_file)
+                response = requests.get(
+                    download_url,
+                    headers=_build_headers(config),
+                    stream=True,
+                    timeout=(float(connect_timeout), float(read_timeout)),
+                )
+                response.raise_for_status()
+                target_name = _resolve_download_name(
+                    response,
+                    fallback_name=file_name,
+                    product_id=os.path.basename(download_url.rstrip("/")),
                 )
                 target_path = os.path.join(abs_output_dir, target_name)
                 if os.path.exists(target_path) and not overwrite and os.path.getsize(target_path) > 0:

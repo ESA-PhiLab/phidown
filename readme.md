@@ -152,11 +152,21 @@ print(f"Bursts found: {len(df)}")
 ### PhiSat-2 search
 
 ```python
-from phidown import PhiSat2Searcher
+from phidown.search import CopernicusDataSearcher
 
-searcher = PhiSat2Searcher(config_file=".s5cfg")
-results = searcher.query("SESSION_ID_12345", results_per_page=10)
-print(results[["Id", "Name", "DownloadUrl"]].head())
+searcher = CopernicusDataSearcher()
+searcher.query_by_filter(
+    collection_name="PHISAT-2",
+    product_type="L1",
+    aoi_wkt="POLYGON((-3.90 40.30, -3.50 40.30, -3.50 40.70, -3.90 40.70, -3.90 40.30))",
+    start_date="2026-05-01T00:00:00Z",
+    end_date="2026-05-30T23:59:59Z",
+    top=10,
+    config_file=".s5cfg",
+)
+
+df = searcher.execute_query()
+print(df[["Id", "coverage", "Name", "ContentDate", "DownloadUrl"]].head())
 ```
 
 ## Command Line Interface

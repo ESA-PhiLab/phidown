@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pandas as pd
 import requests
 
+from phidown.search import CopernicusDataSearcher
 from phidown.phisat2 import (
     DEFAULT_API_BASE,
     PHISAT2_SECTION,
@@ -38,6 +39,168 @@ class FakeResponse:
 
 def _phisat2_config() -> PhiSat2Config:
     return PhiSat2Config(username="user@example.com", password="secret")
+
+
+@patch("phidown.phisat2.requests.get")
+@patch("phidown.phisat2._build_headers", return_value={"Authorization": "Bearer test"})
+@patch("phidown.phisat2._read_phisat2_config")
+@patch("phidown.phisat2.ensure_phisat2_config")
+def test_common_search_api_routes_phisat2_collection(
+    mock_ensure,
+    mock_read_config,
+    mock_headers,
+    mock_get,
+):
+    del mock_ensure, mock_headers
+    mock_read_config.return_value = _phisat2_config()
+    mock_get.return_value = FakeResponse(
+        payload={
+            "page": {"totalElements": 1},
+            "features": [
+                {
+                    "id": "feature-1",
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[[-3.8, 40.4], [-3.6, 40.4], [-3.6, 40.6], [-3.8, 40.6], [-3.8, 40.4]]],
+                    },
+                    "properties": {
+                        "filename": "PHISAT-2_L1_PRODUCT.zip",
+                        "filesize": 1234,
+                        "startDate": "2026-05-14T11:21:45Z",
+                        "completionDate": "2026-05-14T11:21:48Z",
+                        "published": "2026-05-14T17:12:13Z",
+                        "_links": {
+                            "download": {
+                                "href": "https://phisat2.insula.earth/secure/api/v2.0/search/dl/platform/42"
+                            }
+                        },
+                    }
+                }
+            ],
+        }
+    )
+
+    searcher = CopernicusDataSearcher()
+    searcher.query_by_filter(
+        collection_name="PHISAT-2",
+        product_type="L1",
+        aoi_wkt="POLYGON((-3.9 40.3, -3.5 40.3, -3.5 40.7, -3.9 40.7, -3.9 40.3))",
+        start_date="2026-05-01T00:00:00Z",
+        end_date="2026-05-30T23:59:59Z",
+        top=5,
+        config_file="dummy.s5cfg",
+    )
+    df = searcher.execute_query()
+
+    assert searcher.collection_name == "PHISAT-2"
+    assert df.loc[0, "Provider"] == "phisat2"
+    assert df.loc[0, "Name"] == "PHISAT-2_L1_PRODUCT.zip"
+    assert df.loc[0, "ContentLength"] == 1234
+    assert df.loc[0, "ContentDate"] == {
+        "Start": "2026-05-14T11:21:45Z",
+        "End": "2026-05-14T11:21:48Z",
+    }
+    assert df.loc[0, "GeoFootprint"]["type"] == "Polygon"
+    assert df.loc[0, "DownloadUrl"].endswith("/search/dl/platform/42")
+    assert mock_get.call_args.kwargs["params"] == {
+        "catalogue": "REF_DATA",
+        "refDataCollection": "phisat24e55ba83dd304ea9b018b65e9b17a7de",
+        "identifier": "L1",
+        "resultsPerPage": 5,
+        "page": 0,
+        "aoi": "POLYGON((-3.9 40.3, -3.5 40.3, -3.5 40.7, -3.9 40.7, -3.9 40.3))",
+        "productDateStart": "2026-05-01T00:00:00Z",
+        "productDateEnd": "2026-05-30T23:59:59Z",
+    }
+
+
+@patch("phidown.phisat2.requests.get")
+@patch("phidown.phisat2._build_headers", return_value={"Authorization": "Bearer test"})
+@patch("phidown.phisat2._read_phisat2_config")
+@patch("phidown.phisat2.ensure_phisat2_config")
+def test_common_search_api_defaults_phisat2_product_type(
+    mock_ensure,
+    mock_read_config,
+    mock_headers,
+    mock_get,
+):
+    del mock_ensure, mock_headers
+    mock_read_config.return_value = _phisat2_config()
+    mock_get.return_value = FakeResponse(payload={"features": []})
+
+    searcher = CopernicusDataSearcher()
+    searcher.query_by_filter(collection_name="PHISAT-2", top=5, config_file="dummy.s5cfg")
+    searcher.execute_query()
+
+    assert searcher.product_type == "L1"
+    assert mock_get.call_args.kwargs["params"]["identifier"] == "L1"
+
+
+@patch("phidown.phisat2.requests.get")
+@patch("phidown.phisat2._build_headers", return_value={"Authorization": "Bearer test"})
+@patch("phidown.phisat2._read_phisat2_config")
+@patch("phidown.phisat2.ensure_phisat2_config")
+def test_common_search_api_keeps_phisat2_filter_text_compatibility(
+    mock_ensure,
+    mock_read_config,
+    mock_headers,
+    mock_get,
+):
+    del mock_ensure, mock_headers
+    mock_read_config.return_value = _phisat2_config()
+    mock_get.return_value = FakeResponse(
+        payload={
+            "_embedded": {
+                "platformFiles": [
+                    {
+                        "id": 42,
+                        "filename": "PRODUCT_A.zip",
+                        "contentLength": 1234,
+                        "createdAt": "2026-04-20T10:00:00Z",
+                    }
+                ]
+            }
+        }
+    )
+
+    searcher = CopernicusDataSearcher()
+    searcher.query_by_filter(collection_name="PHISAT-2", filter_text="SESSION_ID_12345", top=5)
+    df = searcher.execute_query()
+
+    assert df.loc[0, "Name"] == "PRODUCT_A.zip"
+    assert mock_get.call_args.kwargs["params"] == {
+        "filter": "SESSION_ID_12345",
+        "resultsPerPage": 5,
+    }
+
+
+@patch("phidown.search.PhiSat2Searcher")
+def test_common_download_api_routes_phisat2_collection(mock_searcher_class, tmp_path):
+    mock_searcher = mock_searcher_class.return_value
+    target = tmp_path / "PRODUCT_A.zip"
+    mock_searcher.download_url.return_value = str(target)
+
+    searcher = CopernicusDataSearcher()
+    searcher.query_by_filter(collection_name="PHISAT-2", product_type="L1", top=1)
+    searcher.df = pd.DataFrame(
+        {
+            "Name": ["PRODUCT_A.zip"],
+            "DownloadUrl": ["https://phisat2.insula.earth/secure/api/v2.0/search/dl/platform/42"],
+        }
+    )
+
+    result = searcher.download_product(
+        "PRODUCT_A.zip",
+        output_dir=str(tmp_path),
+        config_file="dummy.s5cfg",
+        show_progress=False,
+        verbose=False,
+    )
+
+    assert result is True
+    assert searcher.last_download_path == str(target)
+    mock_searcher.download_url.assert_called_once()
 
 
 def test_ensure_phisat2_config_preserves_default_section(tmp_path):
@@ -113,6 +276,23 @@ def test_resolve_product_prefers_exact_filename():
             {
                 "Id": [1, 2],
                 "Name": ["PRODUCT_A.zip", "PRODUCT_A"],
+            }
+        ),
+    ):
+        resolved = searcher.resolve_product("PRODUCT_A.zip")
+
+    assert resolved["Id"] == 1
+
+
+def test_resolve_product_accepts_platform_file_basename():
+    searcher = PhiSat2Searcher(config_file="dummy.s5cfg")
+    with patch.object(
+        searcher,
+        "query",
+        return_value=pd.DataFrame(
+            {
+                "Id": [1],
+                "Name": ["8/PRODUCT_A.zip"],
             }
         ),
     ):
