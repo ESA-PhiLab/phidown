@@ -1,7 +1,7 @@
 """Command-line interface for phidown download operations.
 
-This module provides a CLI for downloading Copernicus satellite data products
-from the Copernicus Data Space Ecosystem using product names or S3 paths.
+This module provides a CLI for downloading Copernicus Data Space products and
+PhiSat-2 INSULA platform files.
 """
 
 import argparse
@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Optional, List, Sequence, Union
 
 from .search import CopernicusDataSearcher
+from .phisat2 import PhiSat2Searcher
 from .s5cmd_utils import pull_down
 from .download_state import DownloadStateStore, default_state_file, is_product_complete
 from .native_download import download_s3_resumable
@@ -129,6 +130,45 @@ def _parse_columns(columns: Optional[str]) -> Optional[List[str]]:
     return parsed
 
 
+def _render_listing_output(
+    df,
+    *,
+    selected_columns: Optional[List[str]],
+    default_columns: List[str],
+    output_format: str,
+    save_path: Optional[str],
+    saved_message: str,
+    listed_message: str,
+) -> bool:
+    if selected_columns:
+        missing_columns = [col for col in selected_columns if col not in df.columns]
+        if missing_columns:
+            logger.error(f'Requested columns are not available: {", ".join(missing_columns)}')
+            return False
+        out_df = df[selected_columns]
+    else:
+        present_defaults = [col for col in default_columns if col in df.columns]
+        out_df = df[present_defaults] if present_defaults else df
+
+    if output_format == 'json':
+        rendered = out_df.to_json(orient='records', indent=2)
+    elif output_format == 'csv':
+        rendered = out_df.to_csv(index=False)
+    else:
+        rendered = out_df.to_string(index=False)
+
+    if save_path:
+        save_target = Path(save_path)
+        save_target.parent.mkdir(parents=True, exist_ok=True)
+        save_target.write_text(rendered, encoding='utf-8')
+        logger.info(saved_message.format(count=len(out_df), target=save_target))
+    else:
+        print(rendered)
+
+    logger.info(listed_message.format(count=len(out_df)))
+    return True
+
+
 def download_by_name(
     product_name: str,
     output_dir: str,
@@ -145,11 +185,12 @@ def download_by_name(
     max_workers: Optional[int] = None,
     backoff_base: float = 2.0,
     backoff_max: float = 60.0,
+    provider: str = 'cdse',
 ) -> bool:
-    """Download a product by its name from Copernicus Data Space.
+    """Download a product by name from the selected provider.
     
     Args:
-        product_name: Full name of the Copernicus product to download.
+        product_name: Product name or unique token to download.
         output_dir: Directory where the product will be downloaded.
         config_file: Path to s5cmd configuration file with credentials.
         mode: Download mode ('fast' for s5cmd, 'safe' for resumable native downloads).
@@ -164,6 +205,7 @@ def download_by_name(
         max_workers: Optional worker count for s5cmd.
         backoff_base: Base delay in seconds for retry backoff.
         backoff_max: Max delay in seconds for retry backoff.
+        provider: Download backend (`cdse` or `phisat2`).
         
     Returns:
         bool: True if download was successful, False otherwise.
@@ -175,6 +217,28 @@ def download_by_name(
         ... )
     """
     try:
+        if provider == 'phisat2':
+            logger.info(f'🔍 Resolving PhiSat-2 product: {product_name}')
+            searcher = PhiSat2Searcher(config_file=config_file)
+            try:
+                output_path = searcher.download_by_name(
+                    product_name=product_name,
+                    output_dir=output_dir,
+                    reset_config=reset_config,
+                    show_progress=show_progress,
+                    retry_count=retry_count,
+                    connect_timeout=connect_timeout,
+                    read_timeout=read_timeout if read_timeout is not None else 900.0,
+                    backoff_base=backoff_base,
+                    backoff_max=backoff_max,
+                )
+            except Exception as exc:
+                logger.error(f'❌ Error during PhiSat-2 download: {exc}')
+                return False
+
+            logger.info(f'✅ PhiSat-2 download completed successfully: {output_path}')
+            return True
+
         effective_mode = _resolve_download_mode(
             mode,
             resume_mode=resume_mode,
@@ -531,15 +595,45 @@ def list_products(
     order_by: str = "ContentDate/Start desc",
     output_format: str = "table",
     columns: Optional[str] = None,
-    save_path: Optional[str] = None
+    save_path: Optional[str] = None,
+    provider: str = 'cdse',
+    config_file: str = '.s5cfg',
+    reset_config: bool = False,
+    search_filter: Optional[str] = None,
 ) -> bool:
     """List products with AOI/date filters and optional output formats."""
     try:
+        selected_columns = _parse_columns(columns)
+
+        if provider == 'phisat2':
+            if search_filter is None or not search_filter.strip():
+                logger.error('PhiSat-2 list mode requires --filter.')
+                return False
+
+            searcher = PhiSat2Searcher(config_file=config_file)
+            df = searcher.query(
+                search_filter,
+                results_per_page=top,
+                reset_config=reset_config,
+            )
+
+            if df.empty:
+                logger.info('No PhiSat-2 products found for the selected filter.')
+                return True
+
+            return _render_listing_output(
+                df,
+                selected_columns=selected_columns,
+                default_columns=['Id', 'Name', 'DownloadUrl', 'ContentLength', 'CreatedAt', 'Provider'],
+                output_format=output_format,
+                save_path=save_path,
+                saved_message='Saved {count} PhiSat-2 products to: {target}',
+                listed_message='Listed {count} PhiSat-2 products.',
+            )
+
         effective_aoi = aoi_wkt
         if bbox:
             effective_aoi = _parse_bbox_to_wkt(bbox)
-
-        selected_columns = _parse_columns(columns)
 
         searcher = CopernicusDataSearcher()
         searcher.query_by_filter(
@@ -559,35 +653,15 @@ def list_products(
             logger.info('No products found for the selected filters.')
             return True
 
-        if selected_columns:
-            missing_columns = [col for col in selected_columns if col not in df.columns]
-            if missing_columns:
-                logger.error(f'Requested columns are not available: {", ".join(missing_columns)}')
-                return False
-            out_df = df[selected_columns]
-        else:
-            default_columns = [
-                c for c in ['Name', 'S3Path', 'ContentDate', 'Collection', 'OriginDate', 'coverage'] if c in df.columns
-            ]
-            out_df = df[default_columns] if default_columns else df
-
-        if output_format == 'json':
-            rendered = out_df.to_json(orient='records', indent=2)
-        elif output_format == 'csv':
-            rendered = out_df.to_csv(index=False)
-        else:
-            rendered = out_df.to_string(index=False)
-
-        if save_path:
-            save_target = Path(save_path)
-            save_target.parent.mkdir(parents=True, exist_ok=True)
-            save_target.write_text(rendered, encoding='utf-8')
-            logger.info(f'Saved {len(out_df)} products to: {save_target}')
-        else:
-            print(rendered)
-
-        logger.info(f'Listed {len(out_df)} products.')
-        return True
+        return _render_listing_output(
+            df,
+            selected_columns=selected_columns,
+            default_columns=['Name', 'S3Path', 'ContentDate', 'Collection', 'OriginDate', 'coverage'],
+            output_format=output_format,
+            save_path=save_path,
+            saved_message='Saved {count} products to: {target}',
+            listed_message='Listed {count} products.',
+        )
 
     except Exception as e:
         logger.error(f'❌ Error during listing: {e}')
@@ -716,12 +790,19 @@ def _validate_list_args(parser: argparse.ArgumentParser, args: argparse.Namespac
         parser.error(f'{mode_label} requires at least one temporal filter: --start-date or --end-date')
 
 
+def _validate_phisat2_list_args(parser: argparse.ArgumentParser, args: argparse.Namespace, mode_label: str) -> None:
+    """Validate required inputs for PhiSat-2 list operations."""
+    if args.filter is None or not args.filter.strip():
+        parser.error(f'{mode_label} with --provider phisat2 requires --filter')
+
+
 def _main_list_subcommand(argv: Optional[Sequence[str]] = None) -> None:
     """Handle `phidown list ...` subcommand."""
     parser = argparse.ArgumentParser(
         prog='phidown list',
-        description='List Copernicus products with AOI/date filters'
+        description='List CDSE or PhiSat-2 products'
     )
+    parser.add_argument('--provider', choices=['cdse', 'phisat2'], default='cdse')
     parser.add_argument('--collection', type=str, default='SENTINEL-1')
     parser.add_argument('--product-type', type=str)
     parser.add_argument('--orbit-direction', type=str, choices=['ASCENDING', 'DESCENDING'])
@@ -740,13 +821,19 @@ def _main_list_subcommand(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument('--format', dest='output_format', choices=['table', 'json', 'csv'], default='table')
     parser.add_argument('--columns', type=str)
     parser.add_argument('--save', type=str)
+    parser.add_argument('--filter', type=str, help='Free-text search filter for --provider phisat2')
+    parser.add_argument('-c', '--config-file', type=str, default='.s5cfg')
+    parser.add_argument('--reset', action='store_true', help='Reset stored credentials for the selected provider')
     parser.add_argument('-v', '--verbose', action='store_true')
 
     args = parser.parse_args(argv)
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    _validate_list_args(parser, args, mode_label='list')
+    if args.provider == 'phisat2':
+        _validate_phisat2_list_args(parser, args, mode_label='list')
+    else:
+        _validate_list_args(parser, args, mode_label='list')
 
     success = list_products(
         collection=args.collection,
@@ -761,7 +848,11 @@ def _main_list_subcommand(argv: Optional[Sequence[str]] = None) -> None:
         order_by=args.order_by,
         output_format=args.output_format,
         columns=args.columns,
-        save_path=args.save
+        save_path=args.save,
+        provider=args.provider,
+        config_file=args.config_file,
+        reset_config=args.reset,
+        search_filter=args.filter,
     )
     sys.exit(0 if success else 1)
 
@@ -781,15 +872,21 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(
         prog='phidown',
-        description='Download Copernicus satellite data from Data Space Ecosystem',
+        description='Download Copernicus Data Space and PhiSat-2 products',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # List products using subcommand style
   phidown list --collection SENTINEL-1 --product-type GRD --bbox -5 40 5 45 --start-date 2024-01-01T00:00:00 --end-date 2024-01-31T23:59:59
 
+  # Search PhiSat-2 products by session ID or filename fragment
+  phidown list --provider phisat2 --filter SESSION_ID_12345
+
   # Download by product name
   phidown --name S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003 -o ./data
+
+  # Download a PhiSat-2 product by exact filename or unique search token
+  phidown --provider phisat2 --name SESSION_ID_12345 -o ./data
   
   # Download by S3 path
   phidown --s3path /eodata/Sentinel-1/SAR/IW_GRDH_1S/2024/05/03/... -o ./data
@@ -813,12 +910,12 @@ Examples:
     input_group.add_argument(
         '--name',
         type=str,
-        help='Product name to download (e.g., S1A_IW_GRDH_1SDV_...)'
+        help='Product name to download; for --provider phisat2 this may also be a unique search token'
     )
     input_group.add_argument(
         '--s3path',
         type=str,
-        help='S3 path to download (must start with /eodata/)'
+        help='S3 path to download (must start with /eodata/, CDSE only)'
     )
     input_group.add_argument(
         '--list',
@@ -829,6 +926,12 @@ Examples:
         '--burst-coverage',
         action='store_true',
         help='Analyze Sentinel-1 burst coverage over AOI/date range'
+    )
+    parser.add_argument(
+        '--provider',
+        choices=['cdse', 'phisat2'],
+        default='cdse',
+        help='Data provider to use (default: cdse)'
     )
     
     # Output configuration
@@ -1000,6 +1103,11 @@ Examples:
         help='Save --list/--burst-coverage output to file instead of stdout'
     )
     parser.add_argument(
+        '--filter',
+        type=str,
+        help='Free-text search filter for --provider phisat2 list mode'
+    )
+    parser.add_argument(
         '--polarisation',
         type=str,
         choices=['VV', 'VH', 'HH', 'HV'],
@@ -1027,7 +1135,7 @@ Examples:
     parser.add_argument(
         '--version',
         action='version',
-        version='%(prog)s 0.1.25'
+        version='%(prog)s 0.1.27'
     )
     
     args = parser.parse_args()
@@ -1056,7 +1164,10 @@ Examples:
     # Execute download based on input type
     try:
         if args.list:
-            _validate_list_args(parser, args, mode_label='--list')
+            if args.provider == 'phisat2':
+                _validate_phisat2_list_args(parser, args, mode_label='--list')
+            else:
+                _validate_list_args(parser, args, mode_label='--list')
 
             success = list_products(
                 collection=args.collection,
@@ -1071,9 +1182,15 @@ Examples:
                 order_by=args.order_by,
                 output_format=args.output_format,
                 columns=args.columns,
-                save_path=args.save
+                save_path=args.save,
+                provider=args.provider,
+                config_file=args.config_file,
+                reset_config=args.reset,
+                search_filter=args.filter,
             )
         elif args.burst_coverage:
+            if args.provider != 'cdse':
+                parser.error('--burst-coverage currently supports only --provider cdse')
             if args.aoi_wkt and args.bbox:
                 parser.error('Use only one spatial filter: --aoi-wkt or --bbox')
             if not (args.aoi_wkt or args.bbox):
@@ -1114,8 +1231,11 @@ Examples:
                 max_workers=effective_max_workers,
                 backoff_base=effective_backoff_base,
                 backoff_max=effective_backoff_max,
+                provider=args.provider,
             )
         elif args.s3path:
+            if args.provider != 'cdse':
+                parser.error('--s3path is available only with --provider cdse')
             # Create output directory only for download workflows
             output_path = Path(args.output_dir)
             output_path.mkdir(parents=True, exist_ok=True)

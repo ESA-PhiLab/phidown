@@ -7,11 +7,12 @@
 
 # phidown
 
-`phidown` is a Python package and CLI for searching and downloading Copernicus Data Space products.
+`phidown` is a Python package and CLI for searching and downloading Copernicus Data Space products and PhiSat-2 INSULA platform files.
 
 It supports:
 - Product search with OData filters (collection, dates, AOI, orbit direction, cloud cover).
 - Product download through S3 (`s5cmd`).
+- PhiSat-2 search and download through the INSULA platform.
 - Sentinel-1 SLC burst search and burst coverage analysis workflows.
 
 ## Installation
@@ -38,21 +39,48 @@ pip install "phidown[jupyter_env]"
 pip install "phidown[dev,docs]"
 ```
 
-### From source (PDM)
+### From source (uv)
 
 ```bash
 git clone https://github.com/ESA-PhiLab/phidown.git
 cd phidown
-pdm install
+uv sync
 ```
 
 Requirements:
 - Python 3.9+
 - `s5cmd` available on your `PATH` for S3 downloads
 
+### As a Codex plugin
+
+This repository now ships a repo-local Codex plugin and marketplace:
+
+- `plugins/phidown/`
+- `.agents/plugins/marketplace.json`
+
+To install it from this repository:
+
+1. Clone the repository and open the repo root in Codex.
+2. Restart Codex if the plugin directory was already open before these files existed, so Codex reloads the repo marketplace.
+3. Open the Codex plugin directory and select the `Phidown Plugins` marketplace.
+4. Install the `Phidown Downloader` plugin.
+5. Start a prompt such as:
+
+```text
+Use $phidown to search Copernicus products and download data via phidown CLI or Python.
+```
+
+If you manage marketplaces from the Codex CLI, you can also add this repository as a local marketplace root:
+
+```bash
+codex plugin marketplace add /absolute/path/to/phidown
+```
+
 ## Credentials
 
-To download from CDSE S3, create a `.s5cfg` file:
+Create a shared `.s5cfg` file for both CDSE and PhiSat-2. Keep the existing
+`[default]` block for CDSE, then insert the `[phisat2]` block directly below
+it in the same file:
 
 ```ini
 [default]
@@ -63,10 +91,23 @@ host_base = eodata.dataspace.copernicus.eu
 host_bucket = eodata.dataspace.copernicus.eu
 use_https = true
 check_ssl_certificate = true
+
+[phisat2]
+username = your_email@example.com
+password = your_password
+base_url = https://phisat2.insula.earth
+api_base = https://phisat2.insula.earth/secure/api/v2.0
+authorization_endpoint = https://identity.insula.earth/realms/phisat2/protocol/openid-connect/auth
+token_endpoint = https://identity.insula.earth/realms/phisat2/protocol/openid-connect/token
+redirect_uri = http://localhost:9207/auth
+client_id = api-client
 ```
 
 If credentials are not removed automatically, revoke them in the CDSE S3 Credentials Manager:
 <https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials>
+
+`phidown --reset` updates only the active provider section, so CDSE and
+PhiSat-2 credentials can coexist safely in one file.
 
 ## Quick Start (Python API)
 
@@ -108,6 +149,26 @@ df = searcher.execute_query()
 print(f"Bursts found: {len(df)}")
 ```
 
+### PhiSat-2 search
+
+```python
+from phidown.search import CopernicusDataSearcher
+
+searcher = CopernicusDataSearcher()
+searcher.query_by_filter(
+    collection_name="PHISAT-2",
+    product_type="L1",
+    aoi_wkt="POLYGON((-3.90 40.30, -3.50 40.30, -3.50 40.70, -3.90 40.70, -3.90 40.30))",
+    start_date="2026-05-01T00:00:00Z",
+    end_date="2026-05-30T23:59:59Z",
+    top=10,
+    config_file=".s5cfg",
+)
+
+df = searcher.execute_query()
+print(df[["Id", "coverage", "Name", "ContentDate", "DownloadUrl"]].head())
+```
+
 ## Command Line Interface
 
 Show available options:
@@ -127,6 +188,12 @@ phidown --s3path /eodata/Sentinel-1/SAR/IW_GRDH_1S/2024/05/03/... -o ./data
 
 # List products for AOI/date filters
 phidown --list --collection SENTINEL-1 --product-type GRD --bbox -5 40 5 45 --start-date 2024-01-01T00:00:00 --end-date 2024-01-31T23:59:59
+
+# Search PhiSat-2 products
+phidown list --provider phisat2 --filter SESSION_ID_12345
+
+# Download one PhiSat-2 product by exact filename or unique search token
+phidown --provider phisat2 --name SESSION_ID_12345 -o ./data
 
 # Burst coverage analysis
 phidown --burst-coverage --bbox -5 40 5 45 --start-date 2024-08-02T00:00:00 --end-date 2024-08-15T23:59:59 --polarisation VV --format json

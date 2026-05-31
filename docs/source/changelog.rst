@@ -5,9 +5,8 @@ This document tracks all notable changes to Φ-Down.
 
 .. note::
 
-   The package metadata currently reports version ``0.1.25``. The changelog
-   entries below have not yet been backfilled for every patch release after
-   ``0.1.22``.
+   The changelog entries below have not yet been backfilled for every patch
+   release after ``0.1.22``.
 
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
@@ -19,6 +18,22 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 
 ### Added
 - *(reserved for future release notes)*
+
+[0.1.27] - 2026-04-20
+---------------------
+
+### Added
+- PhiSat-2 INSULA provider support through the new ``PhiSat2Searcher`` Python API
+- CLI provider selection with ``--provider phisat2`` for PhiSat-2 search and download flows
+- Shared ``.s5cfg`` support for both CDSE ``[default]`` credentials and PhiSat-2 ``[phisat2]`` credentials
+
+### Changed
+- ``--reset`` now rewrites only the active provider section inside ``.s5cfg`` instead of overwriting the whole file
+- README and Sphinx guides now document exactly how to insert the ``[phisat2]`` block below the existing ``[default]`` block
+- Package metadata and docs now report version ``0.1.27``
+
+### Fixed
+- Local pytest runs now prioritize the checked-out repository over unrelated editable installs elsewhere on the machine
 
 [0.1.26] - 2026-03-15
 ---------------------

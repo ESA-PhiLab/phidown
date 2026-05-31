@@ -9,6 +9,7 @@ Phi-Down requires:
 * Python 3.9 or newer
 * ``s5cmd`` on your ``PATH`` for S3 downloads
 * Copernicus Data Space credentials for authenticated downloads
+* PhiSat-2 INSULA credentials if you plan to use ``--provider phisat2``
 
 Install from PyPI
 -----------------
@@ -106,8 +107,9 @@ Then verify:
 Configure ``.s5cfg``
 --------------------
 
-Phi-Down uses an ``.s5cfg`` file to source CDSE S3 credentials for download
-operations.
+Phi-Down uses a shared ``.s5cfg`` file for both CDSE and PhiSat-2 credentials.
+Keep the existing ``[default]`` block for CDSE, then insert the
+``[phisat2]`` block directly below it.
 
 Recommended template:
 
@@ -122,17 +124,30 @@ Recommended template:
    use_https = true
    check_ssl_certificate = true
 
+   [phisat2]
+   username = your_email@example.com
+   password = your_password
+   base_url = https://phisat2.insula.earth
+   api_base = https://phisat2.insula.earth/secure/api/v2.0
+   authorization_endpoint = https://identity.insula.earth/realms/phisat2/protocol/openid-connect/auth
+   token_endpoint = https://identity.insula.earth/realms/phisat2/protocol/openid-connect/token
+   redirect_uri = http://localhost:9207/auth
+   client_id = api-client
+
 Guidelines:
 
-* Keep the section name as ``[default]``.
+* Keep the section names as shown: ``[default]`` for CDSE and ``[phisat2]``
+  for INSULA.
 * Store the file in the working directory as ``.s5cfg`` if you want to rely on
   Phi-Down defaults.
 * If you keep credentials elsewhere, pass the path explicitly with
   ``-c/--config-file`` in the CLI or ``config_file=...`` in Python.
 * Keep ``host_base`` and ``host_bucket`` aligned with the CDSE endpoint shown
   above.
-* Phi-Down parses this file itself and then sets the relevant environment
-  variables for ``s5cmd``.
+* The ``[phisat2]`` values can usually stay at their defaults except for
+  ``username`` and ``password``.
+* Phi-Down parses this file itself and then uses the provider-specific section
+  it needs at runtime.
 * Avoid committing the file to git. Add ``.s5cfg`` to your local ignore rules
   if needed.
 * Rotate credentials in the CDSE S3 key manager if a file is exposed or copied
@@ -183,5 +198,6 @@ Import errors in notebooks
    Install ``phidown[jupyter_env]`` for widget and notebook integrations.
 
 Authentication failures
-   Recreate your ``.s5cfg`` file with fresh Copernicus Data Space S3
-   credentials before retrying downloads.
+   Recreate the relevant provider section in ``.s5cfg``. Use fresh Copernicus
+   Data Space S3 credentials for ``[default]`` or update the PhiSat-2 INSULA
+   username/password in ``[phisat2]`` before retrying.

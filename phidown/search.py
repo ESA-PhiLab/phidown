@@ -18,6 +18,7 @@ import warnings
 from .downloader import pull_down, get_token, download_burst_on_demand, TokenManager
 from .download_state import DownloadStateStore, default_state_file, is_non_empty_file, is_product_complete
 from .native_download import download_s3_resumable
+from .phisat2 import PhiSat2Searcher
 
 # Optional shapely import for AOI coverage calculation
 try:
@@ -39,6 +40,8 @@ except ImportError:
 # Configure logging
 logger = logging.getLogger(__name__)
 REQUEST_TIMEOUT_SECONDS = 30
+PHISAT2_COLLECTION_NAME = "PHISAT-2"
+PHISAT2_COLLECTION_ALIASES = {"PHISAT", "PHISAT2", "PHISAT-2", "PHISAT_2"}
 _SUPPORTED_AOI_WKT_TYPES = (
     "POINT",
     "MULTIPOINT",
@@ -343,6 +346,10 @@ class CopernicusDataSearcher:
         self.aoi_wkt: typing.Optional[str] = None
         self.start_date: typing.Optional[str] = None
         self.end_date: typing.Optional[str] = None
+        self.filter_text: typing.Optional[str] = None
+        self.phisat2_config_file: str = ".s5cfg"
+        self._phisat2_searcher: typing.Optional[PhiSat2Searcher] = None
+        self.last_download_path: typing.Optional[str] = None
         
         # Burst mode parameters
         self.burst_mode: bool = False
@@ -398,7 +405,9 @@ class CopernicusDataSearcher:
         relative_orbit_number: typing.Optional[int] = None,
         operational_mode: typing.Optional[str] = None,
         polarisation_channels: typing.Optional[str] = None,
-        platform_serial_identifier: typing.Optional[str] = None
+        platform_serial_identifier: typing.Optional[str] = None,
+        filter_text: typing.Optional[str] = None,
+        config_file: str = ".s5cfg",
     ) -> None:
         """
         Set and validate search parameters for the Copernicus data query.
@@ -431,6 +440,8 @@ class CopernicusDataSearcher:
             operational_mode (str, optional): Operational mode (e.g., 'IW', 'EW') (burst mode only). Defaults to None.
             polarisation_channels (str, optional): Polarisation channels (e.g., 'VV', 'VH') (burst mode only). Defaults to None.
             platform_serial_identifier (str, optional): Platform serial identifier (e.g., 'A', 'B') (burst mode only). Defaults to None.
+            filter_text (str, optional): Free-text search filter for PhiSat-2 INSULA products.
+            config_file (str, optional): Shared credential file used for PhiSat-2 searches.
         """
         # Set burst mode first as it affects other validations
         self.burst_mode = burst_mode
@@ -446,9 +457,23 @@ class CopernicusDataSearcher:
         self._validate_skip()
         if self.count and self.skip is not None:
             raise ValueError("The 'count' and 'skip' parameters cannot be used together.")
+        self.top = top
         
         # Assign and validate parameters
-        self.collection_name = collection_name
+        self.collection_name = self._normalize_collection_name(collection_name)
+        if self._is_phisat2_collection():
+            self._configure_phisat2_query(
+                product_type=product_type,
+                attributes=attributes,
+                filter_text=filter_text,
+                config_file=config_file,
+                burst_mode=burst_mode,
+                aoi_wkt=aoi_wkt,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            return
+
         if not self.burst_mode:
             self._validate_collection(self.collection_name) # Validate collection name only in non-burst mode
 
@@ -470,7 +495,6 @@ class CopernicusDataSearcher:
         self.end_date = end_date
         self._validate_time() # Validate start and end dates
 
-        self.top = top
         self._validate_top()
 
         self.order_by = order_by
@@ -522,6 +546,63 @@ class CopernicusDataSearcher:
             raise ValueError(f"Configuration file at {config_path} is not a valid JSON file")
         except Exception as e:
             raise Exception(f"An error occurred while loading the configuration file: {e}")
+
+    def _normalize_collection_name(self, collection_name: typing.Optional[str]) -> typing.Optional[str]:
+        if isinstance(collection_name, str) and collection_name.upper() in PHISAT2_COLLECTION_ALIASES:
+            return PHISAT2_COLLECTION_NAME
+        return collection_name
+
+    def _is_phisat2_collection(self, collection_name: typing.Optional[str] = None) -> bool:
+        candidate = self.collection_name if collection_name is None else collection_name
+        return isinstance(candidate, str) and candidate.upper() in PHISAT2_COLLECTION_ALIASES
+
+    def _phisat2_filter_from_inputs(
+        self,
+        *,
+        product_type: typing.Optional[str],
+        attributes: typing.Optional[typing.Dict[str, typing.Union[str, int, float]]],
+        filter_text: typing.Optional[str],
+    ) -> typing.Optional[str]:
+        if filter_text is not None:
+            return filter_text
+        if attributes:
+            for key in ("filter_text", "filter", "name", "product_name"):
+                if key in attributes:
+                    return str(attributes[key])
+        return product_type
+
+    def _configure_phisat2_query(
+        self,
+        *,
+        product_type: typing.Optional[str],
+        attributes: typing.Optional[typing.Dict[str, typing.Union[str, int, float]]],
+        filter_text: typing.Optional[str],
+        config_file: str,
+        burst_mode: bool,
+        aoi_wkt: typing.Optional[str],
+        start_date: typing.Optional[str],
+        end_date: typing.Optional[str],
+    ) -> None:
+        if burst_mode:
+            raise ValueError("PhiSat-2 searches do not support burst_mode.")
+
+        resolved_product_type = product_type or "L1"
+
+        self.base_url = "https://phisat2.insula.earth/secure/api/v2.0/search"
+        self.product_type = resolved_product_type
+        self.attributes = attributes
+        self.filter_text = filter_text.strip() if isinstance(filter_text, str) and filter_text.strip() else None
+        self.phisat2_config_file = config_file
+        self.orbit_direction = None
+        self.cloud_cover_threshold = None
+        self.aoi_wkt = aoi_wkt
+        self._validate_aoi_wkt()
+        self.start_date = start_date
+        self.end_date = end_date
+        self._validate_time()
+        self.top = int(self.top)
+        self._validate_top()
+        self.order_by = ""
 
     def _validate_collection(self, collection_name):
         """
@@ -1032,6 +1113,30 @@ class CopernicusDataSearcher:
         Returns:
             pd.DataFrame: DataFrame containing all retrieved products with coverage column.
         """
+        if self._is_phisat2_collection():
+            self._phisat2_searcher = PhiSat2Searcher(config_file=self.phisat2_config_file)
+            if self.filter_text:
+                self.df = self._phisat2_searcher.query(
+                    self.filter_text,
+                    results_per_page=self.top,
+                )
+            else:
+                self.df = self._phisat2_searcher.query_catalogue(
+                    product_type=self.product_type or "L1",
+                    aoi_wkt=self.aoi_wkt,
+                    start_date=self.start_date,
+                    end_date=self.end_date,
+                    results_per_page=self.top,
+                )
+            self.response = self._phisat2_searcher.response
+            self.json_data = self._phisat2_searcher.json_data
+            if isinstance(self.json_data, dict):
+                self.num_results = self.json_data.get("page", {}).get("totalElements", len(self.df))
+            else:
+                self.num_results = len(self.df)
+            self._add_coverage_column()
+            return self.df
+
         url = self._build_query()
         self.response = copy.deepcopy(requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS))
         self.response.raise_for_status()  # Raise an error for bad status codes
@@ -1234,6 +1339,16 @@ class CopernicusDataSearcher:
         # Initialize placeholders to ensure a clean state for this specific query type
         self._initialize_placeholders()
 
+        if self._is_phisat2_collection():
+            self._phisat2_searcher = PhiSat2Searcher(config_file=self.phisat2_config_file)
+            self.df = self._phisat2_searcher.query_by_name(
+                product_name,
+                results_per_page=self.top,
+            )
+            self.response = self._phisat2_searcher.response
+            self.json_data = self._phisat2_searcher.json_data
+            return self.df
+
         # Construct the query URL, including $expand=Attributes for consistency
         self.url = f"{self.base_url}?$filter=Name eq '{product_name}'&$expand=Attributes"
         
@@ -1386,7 +1501,9 @@ class CopernicusDataSearcher:
 
         if columns is None:
             # Use different default columns for burst mode vs product mode
-            if self.burst_mode:
+            if self._is_phisat2_collection():
+                columns = ['Id', 'coverage', 'Name', 'ContentLength', 'ContentDate', 'GeoFootprint', 'DownloadUrl', 'Provider']
+            elif self.burst_mode:
                 columns = ['Id','coverage','BurstId', 'SwathIdentifier', 'ParentProductName', 
                           'PolarisationChannels', 'OrbitDirection', 'ContentDate']
             else:
@@ -1446,6 +1563,56 @@ class CopernicusDataSearcher:
         """
         if mode not in {'fast', 'safe'}:
             raise ValueError("mode must be either 'fast' or 'safe'")
+
+        self.last_download_path = None
+        if self._is_phisat2_collection():
+            if verbose:
+                print(f"Downloading PhiSat-2 product: {eo_product_name}")
+                print(f"Output directory: {os.path.abspath(output_dir)}")
+            try:
+                phisat2_searcher = PhiSat2Searcher(config_file=config_file)
+                phisat2_read_timeout = read_timeout if read_timeout is not None else 900.0
+                download_url = eo_product_name if str(eo_product_name).startswith(("http://", "https://")) else None
+                file_name = None
+                if download_url is None and self.df is not None and not self.df.empty and "Name" in self.df.columns:
+                    matches = self.df[self.df["Name"] == eo_product_name]
+                    if not matches.empty and "DownloadUrl" in matches.columns:
+                        download_url = matches.iloc[0].get("DownloadUrl")
+                        file_name = matches.iloc[0].get("Name")
+
+                if download_url:
+                    self.last_download_path = phisat2_searcher.download_url(
+                        str(download_url),
+                        output_dir=output_dir,
+                        file_name=file_name,
+                        reset_config=reset_config,
+                        show_progress=show_progress,
+                        retry_count=retry_count,
+                        connect_timeout=connect_timeout,
+                        read_timeout=phisat2_read_timeout,
+                        backoff_base=backoff_base,
+                        backoff_max=backoff_max,
+                    )
+                else:
+                    self.last_download_path = phisat2_searcher.download_by_name(
+                        eo_product_name,
+                        output_dir=output_dir,
+                        results_per_page=self.top,
+                        reset_config=reset_config,
+                        show_progress=show_progress,
+                        retry_count=retry_count,
+                        connect_timeout=connect_timeout,
+                        read_timeout=phisat2_read_timeout,
+                        backoff_base=backoff_base,
+                        backoff_max=backoff_max,
+                    )
+                if verbose:
+                    print(f"Downloaded PhiSat-2 product to: {self.last_download_path}")
+                return True
+            except Exception as exc:
+                if verbose:
+                    print(f"PhiSat-2 download failed for {eo_product_name}: {exc}")
+                return False
             
         res = self.query_by_name(eo_product_name)
         if res.empty:

@@ -91,12 +91,27 @@ If you already know the product identifier, use ``query_by_name()``:
 
    print(result[["Name", "S3Path"]].head(1))
 
+PhiSat-2 Search
+---------------
+
+Use ``PhiSat2Searcher`` when you need to search INSULA platform files by
+session ID, filename fragment, or another unique token:
+
+.. code-block:: python
+
+   from phidown import PhiSat2Searcher
+
+   searcher = PhiSat2Searcher(config_file=".s5cfg")
+   results = searcher.query("SESSION_ID_12345", results_per_page=10)
+
+   print(results[["Id", "Name", "DownloadUrl"]].head())
+
 ``.s5cfg`` Configuration
 ------------------------
 
-Download workflows use an ``.s5cfg`` credentials file. Phi-Down expects the
-credentials in the ``[default]`` section and uses that file to populate the
-environment for ``s5cmd``.
+Download workflows use a shared ``.s5cfg`` credentials file. Phi-Down expects
+the CDSE credentials in ``[default]`` and PhiSat-2 credentials in
+``[phisat2]``.
 
 Example:
 
@@ -111,16 +126,28 @@ Example:
    use_https = true
    check_ssl_certificate = true
 
+   [phisat2]
+   username = your_email@example.com
+   password = your_password
+   base_url = https://phisat2.insula.earth
+   api_base = https://phisat2.insula.earth/secure/api/v2.0
+   authorization_endpoint = https://identity.insula.earth/realms/phisat2/protocol/openid-connect/auth
+   token_endpoint = https://identity.insula.earth/realms/phisat2/protocol/openid-connect/token
+   redirect_uri = http://localhost:9207/auth
+   client_id = api-client
+
 Practical rules:
 
 * Default lookup is ``./.s5cfg`` unless you pass another file path.
 * Use ``-c/--config-file`` in the CLI or ``config_file=...`` in Python when
   the file lives elsewhere.
-* Keep the endpoint values exactly aligned with the CDSE S3 service unless you
-  know you need a different endpoint.
+* Keep ``[default]`` for CDSE and insert the full ``[phisat2]`` block directly
+  below it in the same file.
+* Keep the endpoint values exactly aligned with the CDSE S3 service and the
+  INSULA defaults unless you know you need different endpoints.
 * Treat the file as a secret and avoid checking it into git.
-* If you use ``--reset`` in the CLI, Phi-Down can recreate the file
-  interactively for download commands.
+* If you use ``--reset`` in the CLI, Phi-Down recreates only the active
+  provider section interactively.
 
 Downloads
 ---------
@@ -164,6 +191,19 @@ Download multiple products from a DataFrame:
    )
    print(summary)
 
+PhiSat-2 downloads use the INSULA provider:
+
+.. code-block:: python
+
+   from phidown import PhiSat2Searcher
+
+   searcher = PhiSat2Searcher(config_file=".s5cfg")
+   output_path = searcher.download_by_name(
+       product_name="SESSION_ID_12345",
+       output_dir="./data",
+   )
+   print(output_path)
+
 Command Line Usage
 ------------------
 
@@ -179,6 +219,12 @@ The CLI supports downloads, product listing, and burst coverage analysis.
 
    # List products
    phidown list --collection SENTINEL-2 --product-type S2MSI2A --bbox 10 45 12 46 --start-date 2024-05-01T00:00:00 --end-date 2024-05-31T23:59:59 --format csv
+
+   # List PhiSat-2 products
+   phidown list --provider phisat2 --filter SESSION_ID_12345
+
+   # Download a PhiSat-2 product by exact filename or unique token
+   phidown --provider phisat2 --name SESSION_ID_12345 -o ./data
 
    # Burst coverage analysis
    phidown --burst-coverage --bbox 10 45 12 46 --start-date 2024-08-02T00:00:00 --end-date 2024-08-20T23:59:59 --polarisation VV --format json

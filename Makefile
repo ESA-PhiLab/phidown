@@ -1,84 +1,89 @@
 # Makefile for phidown project
 
 # Configuration variables
-PYTHON_VERSION := 3.11
-PDM_EXE := $(shell which pdm || echo "pdm")
+PYTHON_VERSION ?= 3.11
+UV ?= uv
+PYTEST_ARGS ?= -q
 
 # Phony targets
-.PHONY: all venv install_deps dev test clean build help
+.PHONY: all check_uv venv install install_deps dev test clean build activate help
 
-# Default target shows help
-all: venv install_deps
+# Default target sets up the project environment
+all: install
 	@echo "✅ Installation complete."
-	@echo "🔄 Please activate the environment: pdm shell"
+	@echo "🔄 Run commands with: uv run <command>"
 
 # Display help information
 help:
 	@echo "📋 Phidown Makefile Targets:"
 	@echo "    all         - Set up environment and install dependencies"
-	@echo "    venv        - Create PDM virtual environment"
-	@echo "    install_deps- Install project dependencies using PDM"
-	@echo "    dev         - Install development dependencies"
-	@echo "    test        - Run tests"
-	@echo "    clean       - Remove PDM virtual environment"
+	@echo "    venv        - Create uv virtual environment"
+	@echo "    install     - Sync project dependencies using uv"
+	@echo "    install_deps- Alias for install"
+	@echo "    dev         - Sync development and test dependencies"
+	@echo "    test        - Run tests with uv"
+	@echo "    clean       - Remove uv virtual environment"
 	@echo "    activate    - Show instructions to activate environment"
-	@echo "    build       - Build source and universal wheel distributions"
+	@echo "    build       - Build source and wheel distributions"
 	@echo "    help        - Show this help message"
 
-# Check if PDM is available
-check_pdm:
-	@command -v pdm || { \
-		echo "❌ Error: PDM not found. Please install PDM first."; \
-		echo "   Visit: https://pdm.fming.dev/latest/#installation"; \
+# Check if uv is available
+check_uv:
+	@command -v $(UV) >/dev/null 2>&1 || { \
+		echo "❌ Error: uv not found. Please install uv first."; \
+		echo "   Visit: https://docs.astral.sh/uv/getting-started/installation/"; \
 		exit 1; \
 	}
-	@$(PDM_EXE) --version || { \
-		echo "❌ Error: PDM command not working."; \
+	@$(UV) --version >/dev/null || { \
+		echo "❌ Error: uv command not working."; \
 		exit 1; \
 	}
 
-# Create PDM virtual environment
-venv: check_pdm
-	@echo "🔧 Creating PDM virtual environment with Python $(PYTHON_VERSION)..."
-	@$(PDM_EXE) venv create --python $(PYTHON_VERSION) || \
-		(echo "❌ Failed to create PDM virtual environment"; exit 1)
-	@echo "✅ PDM virtual environment created successfully"
+# Create uv virtual environment
+venv: check_uv
+	@echo "🔧 Creating uv virtual environment with Python $(PYTHON_VERSION)..."
+	@$(UV) venv --allow-existing --python $(PYTHON_VERSION) || \
+		(echo "❌ Failed to create uv virtual environment"; exit 1)
+	@echo "✅ uv virtual environment created successfully"
 
 # Activation instructions
-activate: check_pdm
-	@echo "ℹ️ To activate the PDM environment, run: pdm shell"
-	@echo "  Alternatively, you can run commands with: pdm run <command>"
+activate: check_uv
+	@echo "ℹ️ To activate the uv environment, run: source .venv/bin/activate"
+	@echo "  Alternatively, run commands with: uv run <command>"
 
 # Install project dependencies
-install_deps: venv
-	@echo "📚 Installing project dependencies with PDM..."
-	@$(PDM_EXE) install || \
-		(echo "❌ Failed to install dependencies"; exit 1)
-	@echo "✅ Dependencies installed successfully"
+install: check_uv
+	@echo "📚 Syncing project dependencies with uv..."
+	@$(UV) sync --locked --python $(PYTHON_VERSION) || \
+		(echo "❌ Failed to sync dependencies"; exit 1)
+	@echo "✅ Dependencies synced successfully"
+
+# Backward-compatible alias for the previous target name
+install_deps: install
 
 # Install development dependencies
-dev: install_deps
-	@echo "🛠️ Installing development dependencies..."
-	@$(PDM_EXE) install -G dev || \
-		(echo "❌ Failed to install development dependencies"; exit 1)
-	@echo "✅ Development dependencies installed successfully"
+dev: check_uv
+	@echo "🛠️ Syncing development and test dependencies with uv..."
+	@$(UV) sync --locked --python $(PYTHON_VERSION) --extra dev --extra test || \
+		(echo "❌ Failed to sync development dependencies"; exit 1)
+	@echo "✅ Development dependencies synced successfully"
 
 # Run tests
-test:
-	@echo "🧪 Running tests..."
-	@$(PDM_EXE) run pytest || \
+test: check_uv
+	@echo "🧪 Running tests with uv..."
+	@$(UV) run --locked --python $(PYTHON_VERSION) --extra test pytest $(PYTEST_ARGS) || \
 		(echo "❌ Tests failed"; exit 1)
 
-# Clean the PDM virtual environment
-clean: check_pdm
-	@echo "🧹 Removing PDM virtual environment..."
+# Clean the uv virtual environment
+clean:
+	@echo "🧹 Removing uv virtual environment..."
 	@rm -rf .venv || \
-		(echo "❌ Failed to remove PDM virtual environment"; exit 1)
-	@echo "✅ PDM virtual environment has been removed."
+		(echo "❌ Failed to remove uv virtual environment"; exit 1)
+	@echo "✅ uv virtual environment has been removed."
 
-# Build source and universal wheel distributions
-build:
-	@echo "📦 Building sdist and universal wheel..."
-	@$(PDM_EXE) build || \
+# Build source and wheel distributions
+build: check_uv
+	@echo "📦 Building sdist and wheel..."
+	@$(UV) build --python $(PYTHON_VERSION) || \
 		(echo "❌ Build failed"; exit 1)
 	@echo "✅ Build complete. Distributions are in the dist/ directory."

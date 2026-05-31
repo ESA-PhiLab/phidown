@@ -184,24 +184,39 @@ def _compute_backoff_delay(attempt_index: int, backoff_base: float, backoff_max:
 
 def ensure_s5cmd_config(config_file: str, reset: bool = False) -> None:
     """Ensure the s5cmd credential file exists, optionally recreating it."""
-    if os.path.exists(config_file) and not reset:
-        return
+    config = configparser.ConfigParser()
+    if os.path.exists(config_file):
+        config.read(config_file)
+        has_default_credentials = (
+            "default" in config
+            and config["default"].get("aws_access_key_id", "").strip("'\"")
+            and config["default"].get("aws_secret_access_key", "").strip("'\"")
+        )
+        if has_default_credentials and not reset:
+            return
 
     access_key = input('Enter Access Key ID: ').strip()
     secret_key = input('Enter Secret Access Key: ').strip()
 
-    config_content = f"""[default]
-                    aws_access_key_id = {access_key}
-                    aws_secret_access_key = {secret_key}
-                    aws_region = eu-central-1
-                    host_base = eodata.dataspace.copernicus.eu
-                    host_bucket = eodata.dataspace.copernicus.eu
-                    use_https = true
-                    check_ssl_certificate = true
-                    """
+    if "default" not in config:
+        config["default"] = {}
 
-    with open(config_file, 'w') as f:
-        f.write(config_content)
+    default_section = config["default"]
+    default_section["aws_access_key_id"] = access_key
+    default_section["aws_secret_access_key"] = secret_key
+    default_section["aws_region"] = "eu-central-1"
+    default_section["host_base"] = "eodata.dataspace.copernicus.eu"
+    default_section["host_bucket"] = "eodata.dataspace.copernicus.eu"
+    default_section["use_https"] = "true"
+    default_section["check_ssl_certificate"] = "true"
+
+    config_path = os.path.abspath(config_file)
+    config_dir = os.path.dirname(config_path)
+    if config_dir:
+        os.makedirs(config_dir, exist_ok=True)
+
+    with open(config_path, 'w', encoding='utf-8') as f:
+        config.write(f)
 
     logger.info(f'Created configuration file: {config_file}')
 

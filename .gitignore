@@ -87,6 +87,7 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+notebooks/data/
 
 # IPython
 profile_default/
@@ -152,4 +153,5 @@ cython_debug/
 .pdm-build
 
 *output/
-*ouputs/
+outputs/
+download_and_organize_insula.py

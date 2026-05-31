@@ -7,11 +7,12 @@ from importlib.util import find_spec
 import sys
 from typing import Dict, Iterable, Tuple
 
-__version__ = "0.1.25"
+__version__ = "0.1.27"
 __author__ = "Roberto Del Prete"
 
 _LAZY_EXPORTS: Dict[str, Tuple[str, str]] = {
     "CopernicusDataSearcher": ("phidown.search", "CopernicusDataSearcher"),
+    "PhiSat2Searcher": ("phidown.phisat2", "PhiSat2Searcher"),
     "plot_kml_coordinates": ("phidown.viz", "plot_kml_coordinates"),
     "plot_product_footprints": ("phidown.viz", "plot_product_footprints"),
     "BurstSearchConfig": ("phidown.insar_workflow", "BurstSearchConfig"),
@@ -41,6 +42,7 @@ _OPTIONAL_DEPENDENCIES: Dict[str, Tuple[str, ...]] = {
 
 _BASE_EXPORTS = [
     "CopernicusDataSearcher",
+    "PhiSat2Searcher",
     "BurstSearchConfig",
     "BurstWorkflowConfig",
     "build_burst_workflow_config",

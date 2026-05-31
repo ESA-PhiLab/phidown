@@ -4,7 +4,13 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from phidown.s5cmd_utils import _split_command_args, get_directory_size, pull_down, run_s5cmd_with_config
+from phidown.s5cmd_utils import (
+    _split_command_args,
+    ensure_s5cmd_config,
+    get_directory_size,
+    pull_down,
+    run_s5cmd_with_config,
+)
 
 
 def _write_s5cfg(path):
@@ -115,6 +121,34 @@ def test_get_directory_size_counts_nested_files(tmp_path):
 
 def test_get_directory_size_missing_directory_returns_zero(tmp_path):
     assert get_directory_size(str(tmp_path / "missing")) == 0
+
+
+def test_ensure_s5cmd_config_preserves_other_sections(tmp_path):
+    cfg = tmp_path / ".s5cfg"
+    cfg.write_text(
+        "\n".join(
+            [
+                "[default]",
+                "aws_access_key_id = old-access",
+                "aws_secret_access_key = old-secret",
+                "",
+                "[phisat2]",
+                "username = user@example.com",
+                "password = keep-me",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with patch("builtins.input", side_effect=["fresh-access", "fresh-secret"]):
+        ensure_s5cmd_config(str(cfg), reset=True)
+
+    content = cfg.read_text(encoding="utf-8")
+    assert "aws_access_key_id = fresh-access" in content
+    assert "aws_secret_access_key = fresh-secret" in content
+    assert "[phisat2]" in content
+    assert "username = user@example.com" in content
+    assert "password = keep-me" in content
 
 
 @patch("phidown.s5cmd_utils.run_s5cmd_with_config")

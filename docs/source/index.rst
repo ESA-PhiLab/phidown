@@ -3,7 +3,7 @@
 Welcome to Φ-Down Documentation
 ===============================
 
-**Φ-Down** is your simple gateway to Copernicus data - effortlessly search and download Earth Observation data from the Copernicus Data Space Ecosystem.
+**Φ-Down** is your simple gateway to Copernicus and PhiSat-2 data - effortlessly search and download Earth Observation data from the Copernicus Data Space Ecosystem and the INSULA PhiSat-2 platform.
 
 .. image:: ../../assets/logo.png
    :alt: Φ-Down Logo
@@ -34,13 +34,14 @@ Welcome to Φ-Down Documentation
 Overview
 --------
 
-Φ-Down provides a Python interface to search and download Copernicus satellite data including:
+Φ-Down provides a Python interface to search and download Earth Observation data including:
 
 - **Sentinel-1**: SAR data for land and ocean monitoring
 - **Sentinel-2**: Multi-spectral imaging for land monitoring
 - **Sentinel-3**: Ocean and land monitoring
 - **Sentinel-5P**: Atmospheric monitoring
 - **CCM**: Copernicus Contributing Missions (commercial and public satellites)
+- **PhiSat-2**: INSULA platform files and session-based discovery workflows
 - **AIS Data**: Automatic Identification System data for maritime vessel tracking
 
 Key Features
@@ -48,7 +49,7 @@ Key Features
 
 * 🖥️ **Command-Line Interface**: Download products directly from terminal (NEW!)
 * 🔍 **Search**: Query Copernicus Data Space using intuitive filters
-* 📥 **Download**: Efficient data downloading with S3 integration
+* 📥 **Download**: Efficient data downloading with CDSE S3 and PhiSat-2 INSULA support
 * 🗺️ **Visualization**: Built-in tools for plotting and interactive maps
 * 🎯 **Interactive Tools**: Polygon selection tools for area of interest
 * 📊 **Data Management**: Pandas integration for result handling

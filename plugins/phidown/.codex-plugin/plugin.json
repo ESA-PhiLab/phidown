@@ -1,0 +1,42 @@
+{
+  "name": "phidown",
+  "version": "0.1.27",
+  "description": "Search and download Copernicus Data Space and PhiSat-2 data with the phidown CLI and Python API.",
+  "author": {
+    "name": "Roberto Del Prete",
+    "email": "roberto.delprete@esa.int",
+    "url": "https://github.com/ESA-PhiLab/phidown"
+  },
+  "homepage": "https://esa-philab.github.io/phidown",
+  "repository": "https://github.com/ESA-PhiLab/phidown",
+  "license": "Apache-2.0",
+  "keywords": [
+    "copernicus",
+    "phisat-2",
+    "sentinel",
+    "geospatial",
+    "download"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Phidown Downloader",
+    "shortDescription": "Search and download Copernicus and PhiSat-2 data",
+    "longDescription": "Use phidown to search Copernicus Data Space and PhiSat-2 products, run Sentinel-1 burst coverage analysis, and drive reproducible downloads through the local CLI or Python API.",
+    "developerName": "Roberto Del Prete",
+    "category": "Research",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://esa-philab.github.io/phidown",
+    "defaultPrompt": [
+      "Search Copernicus products and download them with phidown",
+      "Find Sentinel-1 burst coverage for an AOI and date range",
+      "Download a PhiSat-2 product by name or search token"
+    ],
+    "brandColor": "#2563EB",
+    "composerIcon": "./assets/logo.png",
+    "logo": "./assets/logo.png",
+    "screenshots": []
+  }
+}
