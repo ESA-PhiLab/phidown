@@ -5,6 +5,7 @@ S*/
 !skills/
 !skills/phidown/
 !skills/phidown/**
+.agents/
 *.s5cfg
 
 *.DS_store
