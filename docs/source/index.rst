@@ -28,6 +28,7 @@ Welcome to Φ-Down Documentation
    sentinel3_reference
    landsat8_reference
    ccm_reference
+   phisat2_reference
    contributing
    changelog
 

@@ -30,6 +30,15 @@ Downloader Module
    :show-inheritance:
    :no-index:
 
+PhiSat-2 Module
+^^^^^^^^^^^^^^^
+
+.. automodule:: phidown.phisat2
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :no-index:
+
 Visualization Module
 ^^^^^^^^^^^^^^^^^^^^
 

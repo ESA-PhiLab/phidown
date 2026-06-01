@@ -206,6 +206,7 @@ Full documentation: <https://esa-philab.github.io/phidown>
 Useful entry points:
 - Getting started: <https://esa-philab.github.io/phidown/getting_started.html>
 - User guide: <https://esa-philab.github.io/phidown/user_guide.html>
+- PhiSat-2 reference: <https://esa-philab.github.io/phidown/phisat2_reference.html>
 - API reference: <https://esa-philab.github.io/phidown/api_reference.html>
 - Burst mode guide: <https://esa-philab.github.io/phidown/sentinel1_burst_mode.html>
 

@@ -30,6 +30,8 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 ### Changed
 - ``--reset`` now rewrites only the active provider section inside ``.s5cfg`` instead of overwriting the whole file
 - README and Sphinx guides now document exactly how to insert the ``[phisat2]`` block below the existing ``[default]`` block
+- Added a dedicated PhiSat-2 reference guide and API reference coverage for ``phidown.phisat2``
+- Release notes now include the 0.1.27 code-change summary, file inventory, dependency update, and targeted verification command
 - Package metadata and docs now report version ``0.1.27``
 
 ### Fixed
