@@ -10,7 +10,7 @@ Prerequisites
 
 Before you begin, make sure you have:
 
-1. Python 3.9 or newer
+1. Python 3.10 or newer
 2. A Copernicus Data Space account: `<https://dataspace.copernicus.eu/>`_
 3. S3 credentials from the `S3 Key Manager <https://eodata-s3keysmanager.dataspace.copernicus.eu/panel/s3-credentials>`_
 4. A PhiSat-2 INSULA account if you plan to use ``--provider phisat2``

@@ -6,7 +6,7 @@ Requirements
 
 Phi-Down requires:
 
-* Python 3.9 or newer
+* Python 3.10 or newer
 * ``s5cmd`` on your ``PATH`` for S3 downloads
 * Copernicus Data Space credentials for authenticated downloads
 * PhiSat-2 INSULA credentials if you plan to use ``--provider phisat2``

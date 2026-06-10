@@ -580,7 +580,8 @@ Support Policy
 - **0.1.11**: End of life
 
 ### Python Support
-- **Python 3.9+**: Fully supported
+- **Python 3.10+**: Fully supported
+- **Python 3.9**: End of life
 - **Python 3.8**: End of life
 - **Python 3.7**: End of life
 
