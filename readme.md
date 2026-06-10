@@ -76,6 +76,23 @@ If you manage marketplaces from the Codex CLI, you can also add this repository 
 codex plugin marketplace add /absolute/path/to/phidown
 ```
 
+### Local agent skills
+
+Install the bundled phidown guidance for local agentic tools:
+
+```bash
+phidown skill add                 # Codex: $CODEX_HOME/skills/phidown
+phidown skill add --engine claude # Claude Code: ~/.claude/skills/phidown
+phidown skill add --engine cursor # Cursor project rule: .cursor/rules/phidown.mdc
+phidown skill add --engine all
+```
+
+Remove the local files with the matching command:
+
+```bash
+phidown skill remove --engine all
+```
+
 ## Credentials
 
 Create a shared `.s5cfg` file for both CDSE and PhiSat-2. Keep the existing

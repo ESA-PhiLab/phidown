@@ -1,0 +1,21 @@
+{
+  "created_utc": "2026-06-03T15:14:05.313125+00:00",
+  "source_client": "phidown.search.CopernicusDataSearcher",
+  "source_module": "/Users/roberto.delprete/Downloads/phidown/phidown/search.py",
+  "query_url": "https://catalogue.dataspace.copernicus.eu/odata/v1/Products?$filter=(Collection/Name eq 'SENTINEL-2') and Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'platformSerialIdentifier' and att/OData.CSC.StringAttribute/Value eq 'A') and Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'operationalMode' and att/OData.CSC.StringAttribute/Value eq 'INS-RAW')&$orderby=ContentDate/Start asc&$top=1000&$expand=Attributes&$count=true",
+  "record_count": 129,
+  "catalog_count": 129,
+  "content_start_min": "2025-12-03T18:22:01.024000Z",
+  "content_start_max": "2025-12-22T22:17:31.024000Z",
+  "product_type_counts": {
+    "S2MSI1C": 129
+  },
+  "operational_mode_counts": {
+    "INS-RAW": 129
+  },
+  "platform_serial_identifier_counts": {
+    "A": 129
+  },
+  "output_gpkg": "/Users/roberto.delprete/Downloads/phidown/notebooks/sentinel2a_night_imaging_products.gpkg",
+  "output_csv": "/Users/roberto.delprete/Downloads/phidown/notebooks/sentinel2a_night_imaging_products.csv"
+}
