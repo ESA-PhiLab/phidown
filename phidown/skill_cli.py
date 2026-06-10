@@ -79,12 +79,18 @@ def _remove_path(target: Path) -> str:
     return "not installed"
 
 
+def _home_dir() -> Path:
+    home = os.environ.get("HOME")
+    return Path(home) if home else Path.home()
+
+
 def _codex_target() -> Path:
-    return Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "skills" / SKILL_NAME
+    codex_home = os.environ.get("CODEX_HOME")
+    return (Path(codex_home) if codex_home else _home_dir() / ".codex") / "skills" / SKILL_NAME
 
 
 def _claude_target() -> Path:
-    return Path.home() / ".claude" / "skills" / SKILL_NAME
+    return _home_dir() / ".claude" / "skills" / SKILL_NAME
 
 
 def _cursor_target(project_dir: Path) -> Path:

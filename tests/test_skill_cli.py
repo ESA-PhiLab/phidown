@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from phidown.cli import main
+from phidown import skill_cli
 from phidown.skill_cli import skill_main
 
 
@@ -38,6 +39,18 @@ def test_add_all_installs_codex_claude_and_cursor(monkeypatch, tmp_path):
     assert cursor_rule.is_file()
     assert "description:" in cursor_rule.read_text(encoding="utf-8")
     assert "Phidown" in cursor_rule.read_text(encoding="utf-8")
+
+
+def test_claude_install_uses_home_env_when_available(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    fallback_home = tmp_path / "fallback-home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(skill_cli.Path, "home", lambda: fallback_home)
+
+    assert skill_main(["add", "--engine", "claude"]) == 0
+
+    assert (home / ".claude" / "skills" / "phidown" / "SKILL.md").is_file()
+    assert not (fallback_home / ".claude" / "skills" / "phidown").exists()
 
 
 def test_remove_all_removes_installed_targets(monkeypatch, tmp_path):
