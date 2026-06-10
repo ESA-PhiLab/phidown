@@ -859,6 +859,11 @@ def _main_list_subcommand(argv: Optional[Sequence[str]] = None) -> None:
 
 def main() -> None:
     """Main entry point for phidown CLI."""
+    # Support local agent-skill management: `phidown skill add|remove ...`
+    if len(sys.argv) > 1 and sys.argv[1] == 'skill':
+        from .skill_cli import skill_main
+        sys.exit(skill_main(sys.argv[2:]))
+
     # Support subcommand-style UX: `phidown list ...`
     if len(sys.argv) > 1 and sys.argv[1] == 'list':
         try:
@@ -876,6 +881,9 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Install phidown guidance for Codex, Claude Code, and Cursor
+  phidown skill add --engine all
+
   # List products using subcommand style
   phidown list --collection SENTINEL-1 --product-type GRD --bbox -5 40 5 45 --start-date 2024-01-01T00:00:00 --end-date 2024-01-31T23:59:59
 

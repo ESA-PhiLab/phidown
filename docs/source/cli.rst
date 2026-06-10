@@ -14,6 +14,32 @@ Basic Usage
 
    phidown [OPTIONS]
    phidown list [OPTIONS]
+   phidown skill add|remove [OPTIONS]
+
+Local Agent Skills
+------------------
+
+Install the bundled phidown guidance into local agent tooling:
+
+.. code-block:: bash
+
+   phidown skill add                 # Codex, default
+   phidown skill add --engine claude # Claude Code personal skill
+   phidown skill add --engine cursor # Cursor project rule
+   phidown skill add --engine all
+
+Remove the matching local files:
+
+.. code-block:: bash
+
+   phidown skill remove --engine all
+
+Targets:
+
+* Codex: ``$CODEX_HOME/skills/phidown`` or ``~/.codex/skills/phidown``
+* Claude Code: ``~/.claude/skills/phidown``
+* Cursor: ``.cursor/rules/phidown.mdc`` in the current project, or in
+  ``--cursor-project-dir``
 
 Download Commands
 -----------------

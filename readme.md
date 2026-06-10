@@ -1,7 +1,7 @@
 ![Phi-Down Logo](./assets/banner.png)
 
 [![PyPI](https://img.shields.io/pypi/v/phidown.svg)](https://pypi.org/project/phidown/)
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://esa-philab.github.io/phidown)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15332053.svg)](https://doi.org/10.5281/zenodo.15332053)
 
@@ -48,7 +48,7 @@ uv sync
 ```
 
 Requirements:
-- Python 3.9+
+- Python 3.10+
 - `s5cmd` available on your `PATH` for S3 downloads
 
 ### As a Codex plugin
@@ -74,6 +74,23 @@ If you manage marketplaces from the Codex CLI, you can also add this repository 
 
 ```bash
 codex plugin marketplace add /absolute/path/to/phidown
+```
+
+### Local agent skills
+
+Install the bundled phidown guidance for local agentic tools:
+
+```bash
+phidown skill add                 # Codex: $CODEX_HOME/skills/phidown
+phidown skill add --engine claude # Claude Code: ~/.claude/skills/phidown
+phidown skill add --engine cursor # Cursor project rule: .cursor/rules/phidown.mdc
+phidown skill add --engine all
+```
+
+Remove the local files with the matching command:
+
+```bash
+phidown skill remove --engine all
 ```
 
 ## Credentials
