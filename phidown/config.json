@@ -82,7 +82,7 @@
             "productGroupId": null,
             "lastOrbitNumber": null,
             "operationalMode": null,
-            "processingLevel": ["L1C", "L2A"],
+            "processingLevel": ["S2MSI1C", "S2MSI2A", "S2MSI2B"],
             "processingCenter": null,
             "processorVersion": null,
             "granuleIdentifier": null,
