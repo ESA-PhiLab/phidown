@@ -42,6 +42,21 @@ logger = logging.getLogger(__name__)
 REQUEST_TIMEOUT_SECONDS = 30
 PHISAT2_COLLECTION_NAME = "PHISAT-2"
 PHISAT2_COLLECTION_ALIASES = {"PHISAT", "PHISAT2", "PHISAT-2", "PHISAT_2"}
+SENTINEL2_COLLECTION_NAME = "SENTINEL-2"
+_SENTINEL2_LEVEL_ALIASES = {
+    "S2MSI1C": "S2MSI1C",
+    "L1C": "S2MSI1C",
+    "1C": "S2MSI1C",
+    "LEVEL1C": "S2MSI1C",
+    "S2MSI2A": "S2MSI2A",
+    "L2A": "S2MSI2A",
+    "2A": "S2MSI2A",
+    "LEVEL2A": "S2MSI2A",
+    "S2MSI2B": "S2MSI2B",
+    "L2B": "S2MSI2B",
+    "2B": "S2MSI2B",
+    "LEVEL2B": "S2MSI2B",
+}
 _SUPPORTED_AOI_WKT_TYPES = (
     "POINT",
     "MULTIPOINT",
@@ -323,6 +338,11 @@ def _extract_date_start(value: typing.Any) -> typing.Any:
     return value
 
 
+def _normalize_sentinel2_level_alias(value: str) -> str:
+    normalized = re.sub(r"[\s_-]+", "", value).upper()
+    return _SENTINEL2_LEVEL_ALIASES.get(normalized, value)
+
+
 class CopernicusDataSearcher:
     def __init__(
         self,
@@ -477,7 +497,7 @@ class CopernicusDataSearcher:
         if not self.burst_mode:
             self._validate_collection(self.collection_name) # Validate collection name only in non-burst mode
 
-        self.product_type = product_type
+        self.product_type = self._normalize_product_type(product_type)
         if not self.burst_mode:
             self._validate_product_type() # Validate product type (depends on collection_name and config)
 
@@ -500,7 +520,7 @@ class CopernicusDataSearcher:
         self.order_by = order_by
         self._validate_order_by()
 
-        self.attributes = attributes
+        self.attributes = self._normalize_attributes(attributes)
         if self.attributes is not None and not self.burst_mode:
             self._validate_attributes()
             
@@ -555,6 +575,28 @@ class CopernicusDataSearcher:
     def _is_phisat2_collection(self, collection_name: typing.Optional[str] = None) -> bool:
         candidate = self.collection_name if collection_name is None else collection_name
         return isinstance(candidate, str) and candidate.upper() in PHISAT2_COLLECTION_ALIASES
+
+    def _is_sentinel2_collection(self) -> bool:
+        return self.collection_name == SENTINEL2_COLLECTION_NAME
+
+    def _normalize_product_type(self, product_type: typing.Optional[str]) -> typing.Optional[str]:
+        if self._is_sentinel2_collection() and isinstance(product_type, str):
+            return _normalize_sentinel2_level_alias(product_type)
+        return product_type
+
+    def _normalize_attributes(
+        self,
+        attributes: typing.Optional[typing.Dict[str, typing.Union[str, int, float]]],
+    ) -> typing.Optional[typing.Dict[str, typing.Union[str, int, float]]]:
+        if not self._is_sentinel2_collection() or attributes is None:
+            return attributes
+
+        normalized_attributes = dict(attributes)
+        for key in ("productType", "processingLevel"):
+            value = normalized_attributes.get(key)
+            if isinstance(value, str):
+                normalized_attributes[key] = _normalize_sentinel2_level_alias(value)
+        return normalized_attributes
 
     def _phisat2_filter_from_inputs(
         self,

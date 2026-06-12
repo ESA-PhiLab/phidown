@@ -1,6 +1,6 @@
 [project]
 name = "phidown"
-version = "0.1.27"
+version = "0.1.29"
 description = "Search and download Copernicus Data Space and PhiSat-2 data with a pythonic interface."
 authors = [
   { name = "Roberto Del Prete", email = "roberto.delprete@esa.int; robertodelprete88@gmail.com" }

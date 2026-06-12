@@ -22,7 +22,7 @@ Search Parameters
 
 When searching for Sentinel-2 data, parameters are passed in two ways:
 
-1. **Direct Parameters:** Passed directly to the ``search()`` method
+1. **Direct Parameters:** Passed directly to the ``query_by_filter()`` method
    - ``collection_name`` - Mission/collection identifier
    - ``product_type`` - Product type (S2MSI1C, S2MSI2A, etc.)
    - ``orbit_direction`` - Orbit direction (ASCENDING/DESCENDING)
@@ -55,12 +55,16 @@ When searching for Sentinel-2 data, parameters are passed in two ways:
    .. note::
       **Processing Level Filtering**
       
-      ``processingLevel`` as an attribute does not filter correctly. Instead, use ``product_type``
-      parameter to specify:
+      Use ``product_type`` for processing-level selection. phidown accepts common aliases
+      such as ``'L1C'``/``'Level-1C'`` and ``'L2A'``/``'Level-2A'``, then sends the
+      canonical CDSE identifiers:
       
       - ``'S2MSI1C'`` for Level-1C (Top-of-Atmosphere reflectance)
       - ``'S2MSI2A'`` for Level-2A (Bottom-of-Atmosphere reflectance)
       - ``'S2MSI2B'`` for Level-2B (archived format)
+
+      If ``processingLevel`` or ``productType`` is supplied in ``attributes``,
+      the same Sentinel-2 aliases are normalized, but ``product_type`` is clearer.
 
 3. **Method Parameters**
 
@@ -79,7 +83,8 @@ Use ``'SENTINEL-2'`` as the collection name.
 
 .. code-block:: python
 
-   results = searcher.search(collection_name='SENTINEL-2')
+   searcher.query_by_filter(collection_name='SENTINEL-2')
+   results = searcher.execute_query()
 
 Geographic Parameters
 ^^^^^^^^^^^^^^^^^^^^^
@@ -92,10 +97,11 @@ Region of Interest defined in Well Known Text (WKT) format with coordinates in d
 
    # Polygon example
    aoi_wkt = 'POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))'
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        aoi_wkt=aoi_wkt
    )
+   results = searcher.execute_query()
 
 Tile Identifier
 """""""""""""""
@@ -104,10 +110,11 @@ Sentinel-2 data is organized in tiles following the Military Grid Reference Syst
 .. code-block:: python
 
    # Search for specific tile
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        attributes={'tileId': '32TQM'}
    )
+   results = searcher.execute_query()
 
 Product Parameters
 ^^^^^^^^^^^^^^^^^^
@@ -139,25 +146,28 @@ Sentinel-2 offers various product types:
 .. code-block:: python
 
    # Search for Level-1C products
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        product_type='S2MSI1C'
    )
+   results = searcher.execute_query()
 
 Processing Level
 """"""""""""""""
-Available processing levels:
+Available processing-level product types:
 
 * ``S2MSI1C`` - Level-1C (Top-of-Atmosphere reflectance)
 * ``S2MSI2A`` - Level-2A (Bottom-of-Atmosphere reflectance)
+* ``S2MSI2B`` - Level-2B (archived format)
 
 .. code-block:: python
 
    # Search for Level-2A products
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
-       attributes={'processingLevel': 'S2MSI2A'}
+       product_type='S2MSI2A'
    )
+   results = searcher.execute_query()
 
 Platform Serial Identifier
 """"""""""""""""""""""""""
@@ -169,10 +179,11 @@ Sentinel-2 constellation satellites:
 .. code-block:: python
 
    # Search for Sentinel-2A data only
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        attributes={'platformSerialIdentifier': 'A'}
    )
+   results = searcher.execute_query()
 
 Instrument Short Name
 """""""""""""""""""""
@@ -181,10 +192,11 @@ Instrument Short Name
 .. code-block:: python
 
    # Search for MSI instrument data
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        attributes={'instrumentShortName': 'MSI'}
    )
+   results = searcher.execute_query()
 
 Sensor Mode
 """""""""""
@@ -197,10 +209,11 @@ Sentinel-2 sensor modes:
 .. code-block:: python
 
    # Search for normal observation mode
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
-       attributes={'sensorMode': 'INS-NOBS'}
+       attributes={'operationalMode': 'INS-NOBS'}
    )
+   results = searcher.execute_query()
 
 Cloud Cover
 ^^^^^^^^^^^
@@ -236,10 +249,11 @@ Orbit Direction
 
 .. code-block:: python
 
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        orbit_direction='DESCENDING'
    )
+   results = searcher.execute_query()
 
 Orbit Number
 """"""""""""
@@ -248,16 +262,18 @@ Absolute orbit number (integer value or range).
 .. code-block:: python
 
    # Single orbit
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        attributes={'orbitNumber': '12345'}
    )
+   results = searcher.execute_query()
 
    # Orbit range
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        attributes={'orbitNumber': '[12345,12350]'}
    )
+   results = searcher.execute_query()
 
 Relative Orbit Number
 """""""""""""""""""""
@@ -266,10 +282,11 @@ Relative orbit number (1-143 for Sentinel-2), representing the orbit within a re
 .. code-block:: python
 
    # Search for relative orbit 51
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        attributes={'relativeOrbitNumber': '51'}
    )
+   results = searcher.execute_query()
 
 Quality and Processing
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -281,16 +298,18 @@ Processing baseline version (affects product quality and algorithms used).
 .. code-block:: python
 
    # Search for specific processing baseline
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        attributes={'processingBaseline': '04.00'}
    )
+   results = searcher.execute_query()
 
    # Search for baseline range
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        attributes={'processingBaseline': '[04.00,05.00]'}
    )
+   results = searcher.execute_query()
 
 Status
 """"""
@@ -303,10 +322,11 @@ Product availability status:
 .. code-block:: python
 
    # Search for immediately available products
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        attributes={'status': 'ONLINE'}
    )
+   results = searcher.execute_query()
 
 Mission Take ID
 """""""""""""""
@@ -315,10 +335,11 @@ Mission take identifier for specific acquisition sessions.
 .. code-block:: python
 
    # Search for specific mission take
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        attributes={'missionTakeId': 'GS2A_20230601T101030_000123_N04.00'}
    )
+   results = searcher.execute_query()
 
 Practical Examples
 ------------------
@@ -330,8 +351,6 @@ Example 1: Basic Level-1C Search
 
    from phidown import CopernicusDataSearcher
 
-   searcher = CopernicusDataSearcher()
-   
    # Search for Level-1C products with low cloud cover
    searcher = CopernicusDataSearcher()
    searcher.query_by_filter(
@@ -357,17 +376,16 @@ Example 2: Level-2A Surface Reflectance
    searcher = CopernicusDataSearcher()
    
    # Search for atmospherically corrected Level-2A products
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        product_type='S2MSI2A',
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
        start_date='2023-06-01',
        end_date='2023-06-30',
-       attributes={
-           'cloudCover': '[0,10]',
-           'processingLevel': 'S2MSI2A'
-       }
+       cloud_cover_threshold=10,
+       top=10
    )
+   results = searcher.execute_query()
    
    print(f"Found {len(results)} Level-2A products")
 
@@ -381,16 +399,15 @@ Example 3: Specific Tile Search
    searcher = CopernicusDataSearcher()
    
    # Search for specific tile over time
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        product_type='S2MSI1C',
        start_date='2023-01-01',
        end_date='2023-12-31',
-       attributes={
-           'tileId': '32TQM',
-           'cloudCover': '[0,30]'
-       }
+       cloud_cover_threshold=30,
+       attributes={'tileId': '32TQM'}
    )
+   results = searcher.execute_query()
    
    print(f"Found {len(results)} products for tile 32TQM")
 
@@ -405,17 +422,18 @@ Example 4: Time Series Analysis
    searcher = CopernicusDataSearcher()
    
    # Search for consistent time series data
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        product_type='S2MSI1C',
        start_date='2023-01-01',
        end_date='2023-12-31',
+       cloud_cover_threshold=20,
        attributes={
            'tileId': '32TQM',
-           'cloudCover': '[0,20]',
            'relativeOrbitNumber': '51'
        }
    )
+   results = searcher.execute_query()
    
    # Group by date to analyze temporal coverage
    results['Date'] = pd.to_datetime(results['ContentDate']).dt.date
@@ -433,29 +451,27 @@ Example 5: Multi-Platform Comparison
    searcher = CopernicusDataSearcher()
    
    # Compare data from both Sentinel-2A and Sentinel-2B
-   s2a_results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        product_type='S2MSI1C',
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
        start_date='2023-06-01',
        end_date='2023-06-30',
-       attributes={
-           'platform': 'S2A',
-           'cloudCover': '[0,15]'
-       }
+       cloud_cover_threshold=15,
+       attributes={'platformSerialIdentifier': 'A'}
    )
+   s2a_results = searcher.execute_query()
    
-   s2b_results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        product_type='S2MSI1C',
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
        start_date='2023-06-01',
        end_date='2023-06-30',
-       attributes={
-           'platform': 'S2B',
-           'cloudCover': '[0,15]'
-       }
+       cloud_cover_threshold=15,
+       attributes={'platformSerialIdentifier': 'B'}
    )
+   s2b_results = searcher.execute_query()
    
    print(f"Sentinel-2A: {len(s2a_results)} products")
    print(f"Sentinel-2B: {len(s2b_results)} products")
@@ -470,17 +486,16 @@ Example 6: Processing Baseline Filtering
    searcher = CopernicusDataSearcher()
    
    # Search for products with latest processing baseline
-   results = searcher.search(
+   searcher.query_by_filter(
        collection_name='SENTINEL-2',
        product_type='S2MSI2A',
        aoi_wkt='POLYGON((12.4 41.9, 12.5 41.9, 12.5 42.0, 12.4 42.0, 12.4 41.9))',
        start_date='2023-06-01',
        end_date='2023-06-30',
-       attributes={
-           'processingBaseline': '[04.00,05.00]',
-           'cloudCover': '[0,25]'
-       }
+       cloud_cover_threshold=25,
+       attributes={'processingBaseline': '[04.00,05.00]'}
    )
+   results = searcher.execute_query()
    
    print(f"Found {len(results)} products with processing baseline 4.00-5.00")
 
