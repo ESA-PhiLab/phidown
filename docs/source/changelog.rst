@@ -11,8 +11,8 @@ This document tracks all notable changes to Φ-Down.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
-[1.30] - 2026-09-01
--------------------
+[0.1.30] - 2026-09-01
+---------------------
 
 ### Changed
 - Updated Sentinel-1 burst availability guidance to reflect the CDSE catalogue rather than an obsolete fixed start date.
