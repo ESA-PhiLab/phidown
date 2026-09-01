@@ -6,7 +6,7 @@ import json
 import ast
 import typing
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 import copy 
 import asyncio
@@ -840,19 +840,13 @@ class CopernicusDataSearcher:
             if start_dt > end_dt:
                 raise ValueError("start_date must not be later than end_date.")
         
-        # Burst mode data availability warning
+        # Burst mode data availability disclaimer
         if self.burst_mode and start_dt is not None:
-            burst_availability_date = datetime.fromisoformat('2024-08-02T00:00:00')
-            if start_dt.tzinfo is not None and start_dt.tzinfo.utcoffset(start_dt) is not None:
-                # Compare aware datetimes in UTC.
-                burst_availability_date = burst_availability_date.replace(tzinfo=timezone.utc)
-                start_for_compare = start_dt.astimezone(timezone.utc)
-            else:
-                start_for_compare = start_dt
-            if start_for_compare < burst_availability_date:
-                print(f"Warning: Burst mode data is only available from August 2, 2024 onwards. "
-                      f"Your start_date ({self.start_date}) is before this date. "
-                      f"Results before 2024-08-02 will not be available.")
+            print(
+                "Warning: Burst availability depends on the CDSE catalogue and may vary by "
+                "acquisition date, area, platform, and acquisition mode. Please verify "
+                "availability for the requested query."
+            )
 
     def _validate_attributes(self):
         """

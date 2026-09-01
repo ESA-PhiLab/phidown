@@ -19,7 +19,10 @@ Sentinel-1 is a constellation of two polar-orbiting satellites (Sentinel-1A and 
 - Dual polarization capability (HH+HV, VV+VH)
 - 12-day repeat cycle (6 days with both satellites)
 - Global coverage
-- **Individual burst access for SLC products** (available from August 2, 2024)
+- **Individual burst access for SLC products**
+
+.. note::
+   Burst availability depends on the CDSE catalogue and may vary by acquisition date, area, platform, and acquisition mode. Please verify availability for the requested query.
 
 Search Parameters
 -----------------

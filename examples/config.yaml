@@ -12,7 +12,7 @@ search:
     POLYGON((11.809016 57.629964, 12.087897 57.629964, 12.087897 57.768659, 11.809016 57.768659, 11.809016 57.629964))
   
   # Temporal range (ISO 8601 format)
-  # Note: Burst mode data available from August 2, 2024 onwards
+  # Burst availability depends on the CDSE catalogue and may vary by acquisition date, area, platform, and acquisition mode. Please verify availability for the requested query.
   start_date: '2025-11-01T00:00:00'
   end_date: '2026-01-29T00:00:00'
 

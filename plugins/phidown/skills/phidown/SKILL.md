@@ -80,12 +80,12 @@ print(df[["Name", "S3Path"]].head(5))
 - Validate AOI WKT is polygon and date strings are ISO 8601 when building search queries.
 - Prefer `phidown list ...` over `phidown --list ...` in new examples and user guidance.
 - For `--burst-coverage`, require both `--start-date` and `--end-date`.
-- Remember burst availability starts on 2024-08-02; earlier windows will return no bursts.
+- Burst availability depends on the CDSE catalogue and may vary by acquisition date, area, platform, and acquisition mode. Please verify availability for the requested query.
 - Prefer targeted tests over full suite when network-heavy tests are present.
 
 ## Troubleshooting
 - For empty search results, relax filters one at a time: AOI -> date range -> product type -> attributes.
-- For empty burst results, validate date window is on/after 2024-08-02 and relax orbit/subswath filters.
+- For empty burst results, verify the requested query against the CDSE catalogue, then relax orbit/subswath filters.
 - For auth failures, refresh `.s5cfg` using `--reset`.
 - For download instability, retry with reduced scope (`--no-download-all` for S3 path mode).
 

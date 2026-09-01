@@ -16,7 +16,7 @@ Sentinel-1 SLC Burst Mode allows you to search for and access individual radar b
 - Search by specific burst IDs for consistent time series
 - Filter by swath, polarization, and orbit parameters
 - Combine with spatial (AOI) and temporal filters
-- Available for data from August 2, 2024 onwards
+- Burst availability depends on the CDSE catalogue and may vary by acquisition date, area, platform, and acquisition mode. Please verify availability for the requested query.
 
 What are Sentinel-1 Bursts?
 ----------------------------
@@ -365,7 +365,7 @@ Best Practices
 
 1. **Temporal Coverage**
    
-   - Burst data is available from August 2, 2024 onwards
+   - Burst availability depends on the CDSE catalogue and may vary by acquisition date, area, platform, and acquisition mode. Please verify availability for the requested query.
    - Use ``count=True`` to check total available results before downloading
 
 2. **Burst ID Consistency**
@@ -449,7 +449,7 @@ Common Issues
 
 **Issue: No results returned**
 
-- Check date range is after August 2, 2024
+- Verify the requested query against the CDSE catalogue, including the date range and AOI
 - Verify AOI polygon format (WKT with EPSG:4326)
 - Confirm burst parameters are valid values
 

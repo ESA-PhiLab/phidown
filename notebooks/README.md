@@ -43,7 +43,7 @@ This directory contains example notebooks demonstrating various capabilities of 
 
 ### 6. Sentinel-1 SLC Burst Search (`6_burst_search_examples.ipynb`)
 **Individual burst-level SAR data access**
-- Search for Sentinel-1 SLC burst products (available from August 2024)
+- Search for Sentinel-1 SLC burst products
 - Filter by burst-specific parameters (Burst ID, Swath, Polarization)
 - Access individual bursts without downloading full SLC products
 - Combine temporal, spatial, and burst-specific filters
@@ -169,7 +169,7 @@ Most notebooks generate:
 ### Common Issues
 1. **Import errors**: Check dependency installation
 2. **Authentication**: Verify Copernicus credentials
-3. **Data availability**: Some dates/areas may have limited data
+3. **Data availability**: Burst availability depends on the CDSE catalogue and may vary by acquisition date, area, platform, and acquisition mode. Please verify availability for the requested query.
 4. **Memory usage**: Large datasets may require chunked processing
 
 ### Getting Help
