@@ -1,6 +1,6 @@
 {
   "name": "phidown",
-  "version": "0.1.27",
+  "version": "0.1.30",
   "description": "Search and download Copernicus Data Space and PhiSat-2 data with the phidown CLI and Python API.",
   "author": {
     "name": "Roberto Del Prete",

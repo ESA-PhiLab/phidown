@@ -247,7 +247,7 @@ search:
   end_date: "2024-09-01T00:00:00"
   
   # Acquisition mode: 'slc' for full SLC products, 'burst' for individual bursts
-  # Note: Burst mode data available from August 2, 2024 onwards
+  # Burst availability depends on the CDSE catalogue and may vary by acquisition date, area, platform, and acquisition mode. Please verify availability for the requested query.
   mode: slc
   
   # Polarisation channel: VV, VH, HH, or HV

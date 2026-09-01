@@ -16,7 +16,7 @@ A standard IW or EW SLC product combines data from many bursts. Each sub-swath i
 Key Characteristics
 ~~~~~~~~~~~~~~~~~~~
 
-- **Available from**: August 2, 2024 onwards
+- **Catalogue-dependent availability**: Burst availability depends on the CDSE catalogue and may vary by acquisition date, area, platform, and acquisition mode. Please verify availability for the requested query.
 - **IW Mode**: 3 sub-swaths (IW1, IW2, IW3)
 - **EW Mode**: 5 sub-swaths (EW1, EW2, EW3, EW4, EW5)
 - **Polarizations**: VV, VH, HH, HV
@@ -457,7 +457,7 @@ Important Notes
 ---------------
 
 .. note::
-   Burst data is only available from **August 2, 2024** onwards.
+   Burst availability depends on the CDSE catalogue and may vary by acquisition date, area, platform, and acquisition mode. Please verify availability for the requested query.
 
 .. warning::
    Bursts are generated **on-demand**, which means download times may be longer than for pre-stored products. The first request for a specific burst may take several minutes as the system processes it.

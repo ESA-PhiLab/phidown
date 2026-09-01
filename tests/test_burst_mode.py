@@ -44,6 +44,30 @@ class TestBurstModeInitialization:
         assert searcher.end_date == '2024-08-15T00:00:00.000Z'
         assert searcher.aoi_wkt is not None
 
+    def test_burst_mode_catalogue_disclaimer_preserves_requested_dates(self, capsys):
+        """Test that the burst disclaimer does not impose a fixed date cutoff."""
+        start_date = '2023-01-01T00:00:00.000Z'
+        end_date = '2023-01-31T23:59:59.999Z'
+        searcher = CopernicusDataSearcher()
+
+        searcher.query_by_filter(
+            burst_mode=True,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        output = capsys.readouterr().out
+        assert (
+            'Burst availability depends on the CDSE catalogue and may vary by '
+            'acquisition date, area, platform, and acquisition mode. Please verify '
+            'availability for the requested query.'
+        ) in output
+        assert '2024-08-02' not in output
+
+        searcher._build_filter()
+        assert f'ContentDate/Start ge {start_date}' in searcher.filter_condition
+        assert f'ContentDate/Start le {end_date}' in searcher.filter_condition
+
 
 class TestBurstModeParameters:
     """Test burst-specific parameter validation."""

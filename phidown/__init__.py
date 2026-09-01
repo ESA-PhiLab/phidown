@@ -7,7 +7,7 @@ from importlib.util import find_spec
 import sys
 from typing import Dict, Iterable, Tuple
 
-__version__ = "0.1.27"
+__version__ = "0.1.30"
 __author__ = "Roberto Del Prete"
 
 _LAZY_EXPORTS: Dict[str, Tuple[str, str]] = {

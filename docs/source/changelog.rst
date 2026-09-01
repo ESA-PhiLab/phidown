@@ -11,13 +11,12 @@ This document tracks all notable changes to Φ-Down.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
-[Unreleased]
-------------
+[0.1.30] - 2026-09-01
+---------------------
 
-*(None)*
-
-### Added
-- *(reserved for future release notes)*
+### Changed
+- Updated Sentinel-1 burst availability guidance to reflect the CDSE catalogue rather than an obsolete fixed start date.
+- Preserved user-requested burst date filters while adding catalogue-dependent availability guidance.
 
 [0.1.27] - 2026-04-20
 ---------------------
@@ -131,7 +130,7 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 - **Sentinel-1 SLC Burst Mode Support**: Full integration for searching individual Sentinel-1 SLC bursts
   
   - Access individual bursts from SLC products without downloading full scenes
-  - Available for data from August 2, 2024 onwards
+  - Burst availability depends on the CDSE catalogue and may vary by acquisition date, area, platform, and acquisition mode. Please verify availability for the requested query.
   - 12 new burst-specific search parameters:
     
     - ``burst_id``: Unique identifier for a specific burst
