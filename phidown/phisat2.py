@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import configparser
-from dataclasses import dataclass
 import getpass
 import logging
 import os
-from pathlib import Path
 import random
 import re
 import time
 import typing
 import zipfile
+from dataclasses import dataclass
+from html.parser import HTMLParser
+from pathlib import Path
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import pandas as pd
 import requests
@@ -147,23 +149,183 @@ def _read_phisat2_config(config_file: str) -> PhiSat2Config:
     )
 
 
-def _get_auth_header(config: PhiSat2Config) -> str:
-    try:
-        from InsulaWorkflowClient import InsulaOpenIDConnect
-    except ImportError as exc:
-        raise ImportError(
-            "PhiSat-2 support requires the InsulaWorkflowClient package. "
-            "Install phidown from the updated package metadata or add "
-            "'InsulaWorkflowClient' to your environment."
-        ) from exc
+class _AuthorizationFormParser(HTMLParser):
+    """Extract the login form action from an OIDC authorization page."""
 
-    auth_client = InsulaOpenIDConnect(
+    def __init__(self) -> None:
+        super().__init__()
+        self.action: str | None = None
+
+    def handle_starttag(
+        self, tag: str, attrs: list[tuple[str, str | None]]
+    ) -> None:
+        if tag.lower() != "form" or self.action is not None:
+            return
+        attributes = dict(attrs)
+        action = attributes.get("action")
+        if action:
+            self.action = action
+
+
+class _InsulaOpenIDConnect:
+    """Small requests-only OIDC client for the PhiSat-2 login flow.
+
+    The previous implementation pulled in ``InsulaWorkflowClient``, whose
+    dependency on ``python-jose`` unconditionally installed the unmaintained
+    ``ecdsa`` package.  PhiSat-2 only needs the authorization-code exchange,
+    so keeping that flow local removes the vulnerable dependency chain.
+    """
+
+    def __init__(
+        self,
+        authorization_endpoint: str,
+        token_endpoint: str,
+        client_id: str,
+        redirect_uri: str,
+    ) -> None:
+        self._authorization_endpoint = authorization_endpoint
+        self._token_endpoint = token_endpoint
+        self._client_id = client_id
+        self._redirect_uri = redirect_uri
+        self._username: str | None = None
+        self._password: str | None = None
+        self._token_type = "Bearer"
+        self._access_token: str | None = None
+        self._refresh_token: str | None = None
+        self._access_expires_at = 0.0
+        self._refresh_expires_at = 0.0
+        self._session = requests.Session()
+
+    def set_user_credentials(self, username: str, password: str) -> None:
+        self._username = username
+        self._password = password
+
+    def get_authorization_header(self) -> str:
+        if not self._is_valid_token():
+            self._create_token()
+        if not self._access_token:
+            raise RuntimeError(
+                "OIDC token response did not contain an access token"
+            )
+        return f"{self._token_type} {self._access_token}"
+
+    def _is_valid_token(self) -> bool:
+        now = time.time() + 5
+        if self._access_token and self._access_expires_at > now:
+            return True
+        if self._refresh_token and self._refresh_expires_at > now:
+            self._retrieve_refresh_token()
+            return bool(self._access_token)
+        return False
+
+    def _create_token(self) -> None:
+        code = self._retrieve_authorization_code()
+        self._retrieve_token({
+            "client_id": self._client_id,
+            "redirect_uri": self._redirect_uri,
+            "code": code,
+            "grant_type": "authorization_code",
+        })
+
+    def _retrieve_authorization_code(self) -> str:
+        response = self._session.get(
+            self._authorization_endpoint,
+            params={
+                "client_id": self._client_id,
+                "redirect_uri": self._redirect_uri,
+                "scope": "openid",
+                "response_type": "code",
+            },
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+        if response.status_code != 200:
+            response.raise_for_status()
+            raise RuntimeError("OIDC authorization endpoint failed")
+
+        parser = _AuthorizationFormParser()
+        encoding = getattr(response, "encoding", None) or "utf-8"
+        parser.feed(response.content.decode(encoding, errors="replace"))
+        if not parser.action:
+            raise RuntimeError(
+                "OIDC authorization page did not contain a login form"
+            )
+        login_url = urljoin(self._authorization_endpoint, parser.action)
+        authorization_origin = urlparse(self._authorization_endpoint)
+        login_origin = urlparse(login_url)
+        if (authorization_origin.scheme, authorization_origin.netloc) != (
+            login_origin.scheme,
+            login_origin.netloc,
+        ):
+            raise RuntimeError("OIDC login form points to another origin")
+
+        if self._username is None or self._password is None:
+            raise RuntimeError("OIDC credentials have not been configured")
+        login_response = self._session.post(
+            login_url,
+            data={"username": self._username, "password": self._password},
+            allow_redirects=False,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+        if login_response.status_code != 302:
+            raise RuntimeError("OIDC authorization failed")
+        location = login_response.headers.get("Location")
+        if not location:
+            raise RuntimeError(
+                "OIDC authorization response did not contain a redirect"
+            )
+        code = parse_qs(urlparse(location).query).get("code", [None])[0]
+        if not code:
+            raise RuntimeError(
+                "OIDC authorization redirect did not contain a code"
+            )
+        return code
+
+    def _retrieve_refresh_token(self) -> None:
+        if not self._refresh_token:
+            return
+        self._retrieve_token({
+            "client_id": self._client_id,
+            "redirect_uri": self._redirect_uri,
+            "refresh_token": self._refresh_token,
+            "grant_type": "refresh_token",
+        })
+
+    def _retrieve_token(self, data: dict[str, str]) -> None:
+        response = self._session.post(
+            self._token_endpoint,
+            data=data,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+        if response.status_code != 200:
+            response.raise_for_status()
+            raise RuntimeError("OIDC token endpoint failed")
+        token = response.json()
+        access_token = token.get("access_token")
+        if not access_token:
+            raise RuntimeError(
+                "OIDC token response did not contain an access token"
+            )
+        now = time.time()
+        self._access_token = str(access_token)
+        self._refresh_token = token.get("refresh_token", self._refresh_token)
+        self._token_type = str(token.get("token_type", "Bearer"))
+        self._access_expires_at = now + float(token.get("expires_in", 0))
+        self._refresh_expires_at = now + float(
+            token.get("refresh_expires_in", 0)
+        )
+
+
+def _get_auth_header(config: PhiSat2Config) -> str:
+    auth_client = _InsulaOpenIDConnect(
         authorization_endpoint=config.authorization_endpoint,
         token_endpoint=config.token_endpoint,
         redirect_uri=config.redirect_uri,
         client_id=config.client_id,
     )
-    auth_client.set_user_credentials(username=config.username, password=config.password)
+    auth_client.set_user_credentials(
+        username=config.username,
+        password=config.password,
+    )
     return auth_client.get_authorization_header()
 
 

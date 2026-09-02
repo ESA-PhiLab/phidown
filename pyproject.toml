@@ -9,11 +9,10 @@ authors = [
 dependencies = [
   "pandas>=1.5.2",
   "boto3>=1.34.0",
-  "InsulaWorkflowClient>=0.8.3",
   "s5cmd",
   "tqdm>=4.65.0",
   "pyyaml>=6.0.0",
-  "requests>=2.32.5",
+  "requests>=2.33.0",
 ]
 
 requires-python = ">=3.10"
@@ -39,7 +38,7 @@ ais = [
 viz = [
   "leafmap[maplibre]>=0.52.2",
   "localtileserver>=0.10.6",
-  "setuptools>=80.9.0",
+  "setuptools>=83.0.0",
   "ipyleaflet>=0.19.2", 
   "leafmap>=0.52.2",
   "xarray>=2024.7.0",
@@ -47,19 +46,25 @@ viz = [
   "rasterio>=1.4.3",
   "matplotlib>=3.9.4",
 ]
+sentinel1 = [
+  "numpy>=1.24",
+  "tifffile>=2023.7.0",
+]
 dev = [
-  "pytest>=7.0.0,<9.0.0",  # More conservative range
+  "pytest>=9.0.3,<10.0.0",  # More conservative range
   "pytest-mock>=3.10.0",
   "flake8>=6.0.0,<8.0.0",  # More conservative range
 ]
 test = [
-  "pytest>=7.0.0,<9.0.0",
+  "pytest>=9.0.3,<10.0.0",
   "pytest-mock>=3.10.0",
   "folium>=0.18.0",
   "huggingface-hub>=0.35.0",
   "ipyleaflet>=0.19.2",
   "ipywidgets>=8.1.6",
   "shapely>=2.0.0",
+  "numpy>=1.24",
+  "tifffile>=2023.7.0",
 ]
 docs = [
   "sphinx>=7.0.0,<8.0.0",  # Use 7.x for better compatibility
@@ -79,11 +84,11 @@ distribution = true
 
 [tool.pdm.build]
 # Package only source and required config files; avoid bundling local downloaded data (e.g. *.SAFE folders).
-includes = ["phidown/*.py", "phidown/**/*.py", "phidown/config.json", "skills/phidown/**"]
+includes = ["phidown/*.py", "phidown/**/*.py", "phidown/config.json", "phidown/data/sentinel1_support/**", "skills/phidown/**"]
 
 [tool.pdm.sdist]
 # Keep source distributions lean and reproducible.
-includes = ["phidown/*.py", "phidown/**/*.py", "phidown/config.json", "skills/phidown/**", "README.md", "LICENSE"]
+includes = ["phidown/*.py", "phidown/**/*.py", "phidown/config.json", "phidown/data/sentinel1_support/**", "skills/phidown/**", "README.md", "LICENSE"]
 
 [tool.pdm.wheel]
 # Universal wheel (pure Python, no platform-specific code)

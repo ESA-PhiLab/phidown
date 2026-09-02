@@ -5,9 +5,9 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
 import requests
 
-from phidown.search import CopernicusDataSearcher
 from phidown.phisat2 import (
     DEFAULT_API_BASE,
     PHISAT2_SECTION,
@@ -15,14 +15,24 @@ from phidown.phisat2 import (
     PhiSat2Searcher,
     ensure_phisat2_config,
 )
+from phidown.search import CopernicusDataSearcher
 
 
 class FakeResponse:
-    def __init__(self, *, payload=None, headers=None, chunks=None, status_code=200):
+    def __init__(
+        self,
+        *,
+        payload=None,
+        headers=None,
+        chunks=None,
+        status_code=200,
+        content=b"",
+    ):
         self._payload = payload or {}
         self.headers = headers or {}
         self._chunks = chunks or []
         self.status_code = status_code
+        self.content = content
 
     def json(self):
         return self._payload
@@ -39,6 +49,58 @@ class FakeResponse:
 
 def _phisat2_config() -> PhiSat2Config:
     return PhiSat2Config(username="user@example.com", password="secret")
+
+
+@patch("phidown.phisat2.requests.Session")
+def test_get_auth_header_uses_local_oidc_client(mock_session):
+    session = mock_session.return_value
+    auth_page = FakeResponse(
+        headers={},
+        status_code=200,
+        content=b'<html><form action="/login" method="post"></form></html>',
+    )
+    login_response = FakeResponse(
+        headers={"Location": "http://localhost:9207/auth?code=auth-code"},
+        status_code=302,
+    )
+    token_response = FakeResponse(
+        payload={
+            "access_token": "access-token",
+            "refresh_token": "refresh-token",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "refresh_expires_in": 7200,
+        },
+        status_code=200,
+    )
+    session.get.return_value = auth_page
+    session.post.side_effect = [login_response, token_response]
+
+    from phidown.phisat2 import _get_auth_header
+
+    assert _get_auth_header(_phisat2_config()) == "Bearer access-token"
+    session.get.assert_called_once()
+    assert session.post.call_count == 2
+    assert session.post.call_args_list[0].kwargs["data"] == {
+        "username": "user@example.com",
+        "password": "secret",
+    }
+    assert session.post.call_args_list[1].kwargs["data"]["code"] == "auth-code"
+
+
+@patch("phidown.phisat2.requests.Session")
+def test_oidc_rejects_cross_origin_login_form(mock_session):
+    session = mock_session.return_value
+    auth_page = FakeResponse(
+        status_code=200,
+        content=b'<form action="https://attacker.example/login"></form>',
+    )
+    session.get.return_value = auth_page
+
+    from phidown.phisat2 import _get_auth_header
+
+    with pytest.raises(RuntimeError, match="another origin"):
+        _get_auth_header(_phisat2_config())
 
 
 @patch("phidown.phisat2.requests.get")

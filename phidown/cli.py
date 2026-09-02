@@ -857,12 +857,71 @@ def _main_list_subcommand(argv: Optional[Sequence[str]] = None) -> None:
     sys.exit(0 if success else 1)
 
 
+def _main_merge_bursts_subcommand(argv: Optional[Sequence[str]] = None) -> None:
+    """Handle ``phidown merge-bursts ...``."""
+    parser = argparse.ArgumentParser(
+        prog='phidown merge-bursts',
+        description='Assemble downloaded Sentinel-1 burst SAFEs into one SAFE product',
+    )
+    parser.add_argument(
+        'inputs',
+        nargs='+',
+        help='Burst SAFE directories, downloaded ZIP archives, a collection directory, or an extractor JSON tree',
+    )
+    parser.add_argument(
+        '-o', '--output-dir',
+        default='.',
+        help='Directory in which to write the assembled SAFE (default: current directory)',
+    )
+    parser.add_argument(
+        '--output-name',
+        help='Optional output SAFE directory name; .SAFE is appended when omitted',
+    )
+    parser.add_argument(
+        '--overwrite',
+        action='store_true',
+        help='Replace an existing output SAFE',
+    )
+    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose logging')
+    args = parser.parse_args(argv)
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+    try:
+        from .s1_burst_merge import merge_burst_safes
+
+        output = merge_burst_safes(
+            args.inputs,
+            output_dir=args.output_dir,
+            output_name=args.output_name,
+            overwrite=args.overwrite,
+        )
+    except Exception as exc:
+        logger.error(f'❌ Burst assembly failed: {exc}')
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+    print(f'Created assembled SAFE: {output}')
+    sys.exit(0)
+
+
 def main() -> None:
     """Main entry point for phidown CLI."""
     # Support local agent-skill management: `phidown skill add|remove ...`
     if len(sys.argv) > 1 and sys.argv[1] == 'skill':
         from .skill_cli import skill_main
         sys.exit(skill_main(sys.argv[2:]))
+
+    # Support Sentinel-1 burst assembly: `phidown merge-bursts ...`
+    if len(sys.argv) > 1 and sys.argv[1] == 'merge-bursts':
+        try:
+            _main_merge_bursts_subcommand(sys.argv[2:])
+        except KeyboardInterrupt:
+            logger.warning('\n⚠️  Burst assembly interrupted by user')
+            sys.exit(130)
+        except Exception as e:
+            logger.error(f'❌ Fatal error: {e}')
+            sys.exit(1)
 
     # Support subcommand-style UX: `phidown list ...`
     if len(sys.argv) > 1 and sys.argv[1] == 'list':

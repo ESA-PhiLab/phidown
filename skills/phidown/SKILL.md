@@ -26,6 +26,7 @@ python -m pip show phidown
 - Use CLI download by S3 path when catalog lookup is unnecessary.
 - Use CLI list subcommand (`phidown list ...`) when the user needs quick AOI/date product discovery.
 - Use CLI burst coverage mode for Sentinel-1 burst optimization over AOI/date.
+- Use `phidown merge-bursts` after downloading burst SAFE/ZIP products or an extractor JSON tree.
 - Use Python `CopernicusDataSearcher` for advanced filtering, custom analysis, or notebook workflows.
 
 ### 3. Handle credentials safely
@@ -50,6 +51,10 @@ phidown list --collection "SENTINEL-1" --product-type "GRD" --bbox -5 40 5 45 --
 ```bash
 phidown --burst-coverage --bbox -5 40 5 45 --start-date "2024-08-02T00:00:00" --end-date "2024-08-15T23:59:59" --polarisation "VV" --format "json" --save "<OUTPUT_FILE>"
 ```
+- Assemble downloaded bursts into a SAFE:
+```bash
+phidown merge-bursts "<BURST_DIR_OR_ZIP_OR_JSON>" --output-dir "<OUTPUT_DIR>"
+```
 - Search first, then inspect top rows:
 ```python
 from phidown.search import CopernicusDataSearcher
@@ -71,6 +76,7 @@ print(df[["Name", "S3Path"]].head(5))
 ### 5. Verify outcome
 - Confirm command exit status.
 - For downloads, confirm expected files exist under output directory.
+- For `merge-bursts`, inspect `manifest.safe`, `measurement/*.tiff`, and the annotation XMLs; validate the product with the bundled `support/s1-level-1-product.xsd` when an XML validator is available.
 - For list/analysis with `--save`, confirm output file exists and is non-empty.
 - Report what was downloaded/listed/analyzed (or why no product matched).
 

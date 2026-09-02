@@ -23,6 +23,9 @@ _LAZY_EXPORTS: Dict[str, Tuple[str, str]] = {
     "debug_burst_summary": ("phidown.insar_workflow", "debug_burst_summary"),
     "download_by_name": ("phidown.cli", "download_by_name"),
     "download_by_s3path": ("phidown.cli", "download_by_s3path"),
+    "BurstMergeError": ("phidown.s1_burst_merge", "BurstMergeError"),
+    "discover_burst_safes": ("phidown.s1_burst_merge", "discover_burst_safes"),
+    "merge_burst_safes": ("phidown.s1_burst_merge", "merge_burst_safes"),
     "AISDataHandler": ("phidown.ais", "AISDataHandler"),
     "download_ais_data": ("phidown.ais", "download_ais_data"),
     "InteractivePolygonTool": ("phidown.interactive_tools", "InteractivePolygonTool"),
@@ -51,6 +54,9 @@ _BASE_EXPORTS = [
     "debug_burst_summary",
     "download_by_name",
     "download_by_s3path",
+    "BurstMergeError",
+    "discover_burst_safes",
+    "merge_burst_safes",
 ]
 
 
