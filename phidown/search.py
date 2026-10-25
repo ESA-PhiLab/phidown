@@ -19,6 +19,7 @@ from .downloader import pull_down, get_token, download_burst_on_demand, TokenMan
 from .download_state import DownloadStateStore, default_state_file, is_non_empty_file, is_product_complete
 from .native_download import download_s3_resumable
 from .phisat2 import PhiSat2Searcher
+from . import stac as stac_api
 
 # Optional shapely import for AOI coverage calculation
 try:
@@ -355,6 +356,9 @@ class CopernicusDataSearcher:
         Call query_by_filter() to set search parameters before executing a query.
         """
         self.base_url: str = "https://catalogue.dataspace.copernicus.eu/odata/v1/Products"
+        # Product search uses the CDSE STAC API; burst search keeps OData.
+        self.stac_url: str = stac_api.STAC_API_URL
+        self._stac_collection_ids: typing.Optional[typing.List[str]] = None
         self.config: typing.Optional[dict] = self._load_config(config_path=config_path)
 
         # Initialize attributes to be set by query_by_filter
@@ -1173,6 +1177,11 @@ class CopernicusDataSearcher:
             self._add_coverage_column()
             return self.df
 
+        if not self.burst_mode:
+            self._execute_stac_query()
+            self._add_coverage_column()
+            return self.df
+
         url = self._build_query()
         self.response = copy.deepcopy(requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS))
         self.response.raise_for_status()  # Raise an error for bad status codes
@@ -1189,6 +1198,71 @@ class CopernicusDataSearcher:
         # Add coverage column if AOI is set
         self._add_coverage_column()
         
+        return self.df
+
+    # -------------------------------------------------------------------------
+    # STAC product search
+    # -------------------------------------------------------------------------
+
+    def _stac_collections(
+        self,
+        collection_name: typing.Optional[str],
+        product_type: typing.Optional[str] = None,
+    ) -> typing.Tuple[typing.Optional[typing.List[str]], bool]:
+        """Return the STAC collection ids for an OData collection name.
+
+        The second value is True when the product type is already expressed
+        by the collection (for example SLC -> ``sentinel-1-slc``).
+        """
+        if not collection_name:
+            return None, False
+        if self._stac_collection_ids is None:
+            self._stac_collection_ids = stac_api.list_collections(self.stac_url)
+        return stac_api.resolve_collections(collection_name, product_type, self._stac_collection_ids)
+
+    def _build_stac_search(self, limit: int) -> typing.Dict[str, typing.Any]:
+        """Build the STAC search body from the current query parameters."""
+        collections, type_in_collection = self._stac_collections(self.collection_name, self.product_type)
+        body = stac_api.build_search_body(
+            collections=collections or [],
+            product_type=None if type_in_collection else self.product_type,
+            orbit_direction=self.orbit_direction,
+            cloud_cover_threshold=self.cloud_cover_threshold,
+            attributes=self.attributes,
+            aoi_wkt=self.aoi_wkt,
+            start_date=self.start_date,
+            end_date=self.end_date,
+            limit=limit,
+            order_by=self.order_by,
+        )
+        if not collections:
+            body.pop("collections")
+        self.url = f"{self.stac_url.rstrip('/')}/search"
+        self.query = body
+        self.filter_condition = body.get("filter")
+        return body
+
+    def _run_stac_search(self, body: typing.Dict[str, typing.Any], max_items: typing.Optional[int]) -> pd.DataFrame:
+        items, matched, self.response = stac_api.search(body, max_items=max_items, base_url=self.stac_url)
+        self.json_data = {"type": "FeatureCollection", "features": items, "numberMatched": matched}
+        self.num_results = matched if matched is not None else len(items)
+        self.df = pd.DataFrame(stac_api.items_to_records(items))
+        return self.df
+
+    def _execute_stac_query(self) -> pd.DataFrame:
+        """Run the product search on the STAC API.
+
+        ``top`` limits the result count unless ``count`` is True, which
+        fetches every page.  STAC has no offset parameter, so ``skip`` is
+        applied by fetching ``skip + top`` items and dropping the first ones.
+        """
+        skip = self.skip or 0
+        max_items = None if self.count else skip + self.top
+        page_size = min(stac_api.MAX_PAGE_SIZE, max_items or stac_api.MAX_PAGE_SIZE)
+        body = self._build_stac_search(limit=page_size)
+        self._run_stac_search(body, max_items)
+        if skip:
+            self.df = self.df.iloc[skip:].reset_index(drop=True)
         return self.df
 
     def _execute_paginated_query(self):
@@ -1385,6 +1459,22 @@ class CopernicusDataSearcher:
             self.json_data = self._phisat2_searcher.json_data
             return self.df
 
+        if not self.burst_mode:
+            # STAC item ids are product names, often without the extension.
+            ids = [product_name]
+            stem, extension = os.path.splitext(product_name)
+            if extension.upper() in {".SAFE", ".SEN3", ".SEN6", ".ZIP", ".NC"}:
+                ids.append(stem)
+            body = {"ids": ids, "limit": len(ids)}
+            self.url = f"{self.stac_url.rstrip('/')}/search"
+            self.query = body
+            try:
+                self._run_stac_search(body, max_items=1)
+            except Exception as e:
+                print(f"An error occurred while querying by name '{product_name}': {e} (URL: {self.url})")
+                self.df = pd.DataFrame()
+            return self.df
+
         # Construct the query URL, including $expand=Attributes for consistency
         self.url = f"{self.base_url}?$filter=Name eq '{product_name}'&$expand=Attributes"
         
@@ -1460,6 +1550,11 @@ class CopernicusDataSearcher:
 
         self._initialize_placeholders()  # Reset previous results
 
+        if not self.burst_mode:
+            return self._search_stac_by_name_pattern(
+                name_pattern, match_type, collection_name_filter, top, order_by
+            )
+
         filters = []
 
         # 1. Name filter based on match_type
@@ -1528,6 +1623,65 @@ class CopernicusDataSearcher:
             print(f"Unexpected error for name pattern '{name_pattern}' ({match_type}): {e} (URL: {self.url})")
             self.df = pd.DataFrame()
 
+        return self.df
+
+    def _search_stac_by_name_pattern(
+        self,
+        name_pattern: str,
+        match_type: str,
+        collection_name_filter: typing.Optional[str],
+        top: typing.Optional[int],
+        order_by: typing.Optional[str],
+    ) -> pd.DataFrame:
+        """STAC version of :meth:`search_products_by_name_pattern`."""
+        if collection_name_filter:
+            try:
+                self._validate_collection(collection_name_filter)
+            except ValueError as e:
+                raise ValueError(f"Invalid 'collection_name_filter' provided: '{collection_name_filter}'. Validation error: {e}")
+        collection_name = collection_name_filter or self.collection_name
+
+        query_top = top if top is not None else self.top
+        if not (1 <= query_top <= 1000):
+            raise ValueError(f"The 'top' parameter for the query must be between 1 and 1000. Effective value: {query_top}")
+
+        def escape_like(text: str) -> str:
+            return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+        escaped = escape_like(name_pattern)
+        if match_type == "exact":
+            pattern = escaped
+        elif match_type == "contains":
+            pattern = f"%{escaped}%"
+        elif match_type == "startswith":
+            pattern = f"{escaped}%"
+        else:
+            # Item ids often drop the .SAFE-style extension of the name, so
+            # match the stem and check the full suffix on the mapped Name.
+            pattern = f"%{escape_like(os.path.splitext(name_pattern)[0])}%"
+        name_filter = {"op": "like", "args": [{"property": "id"}, pattern]}
+
+        body = stac_api.build_search_body(
+            collections=[],
+            limit=query_top,
+            order_by=order_by if order_by is not None else self.order_by,
+        )
+        body.pop("collections")
+        collections, _ = self._stac_collections(collection_name)
+        if collections:
+            body["collections"] = collections
+        body["filter-lang"] = "cql2-json"
+        body["filter"] = name_filter
+        self.url = f"{self.stac_url.rstrip('/')}/search"
+        self.query = body
+        self.filter_condition = name_filter
+        try:
+            self._run_stac_search(body, max_items=query_top)
+            if match_type == "endswith" and not self.df.empty:
+                self.df = self.df[self.df["Name"].str.endswith(name_pattern)].reset_index(drop=True)
+        except Exception as e:
+            print(f"Error for name pattern '{name_pattern}' ({match_type}): {e} (URL: {self.url})")
+            self.df = pd.DataFrame()
         return self.df
 
     def display_results(self, columns=None, top_n=10):

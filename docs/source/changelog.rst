@@ -11,6 +11,16 @@ This document tracks all notable changes to Φ-Down.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
+[Unreleased]
+------------
+
+### Changed
+- Product search (``execute_query``, ``query_by_name``, ``search_products_by_name_pattern``) now uses the CDSE STAC API (``https://stac.dataspace.copernicus.eu/v1``) instead of OData. OData collection names, product types, and attribute names are translated to STAC collections and CQL2-JSON filters, and STAC items are mapped back to the existing DataFrame columns.
+- Sentinel-1 burst search still uses the OData ``Bursts`` endpoint, because STAC has no burst catalogue.
+
+### Added
+- ``phidown.stac`` module with the STAC request builder, pagination, and item mapping.
+
 [0.1.30] - 2026-09-01
 ---------------------
 

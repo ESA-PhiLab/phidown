@@ -14,8 +14,9 @@ def test_pagination_disabled_by_default():
     """Test that pagination is not triggered when count=False"""
     searcher = CopernicusDataSearcher()
     searcher.query_by_filter(
+        burst_mode=True,  # OData pagination applies to burst search
+        swath_identifier='IW1',
         collection_name='SENTINEL-1',
-        product_type='SLC',
         top=10,
         count=False  # Pagination should not trigger
     )
@@ -40,8 +41,9 @@ def test_pagination_when_count_enabled_and_results_exceed_top():
     """Test pagination is triggered when count=True and results > top"""
     searcher = CopernicusDataSearcher()
     searcher.query_by_filter(
+        burst_mode=True,  # OData pagination applies to burst search
+        swath_identifier='IW1',
         collection_name='SENTINEL-1',
-        product_type='SLC',
         top=5,
         count=True
     )
@@ -83,8 +85,9 @@ def test_no_pagination_when_results_within_top_limit():
     """Test no pagination when count=True but results <= top"""
     searcher = CopernicusDataSearcher()
     searcher.query_by_filter(
+        burst_mode=True,  # OData pagination applies to burst search
+        swath_identifier='IW1',
         collection_name='SENTINEL-1',
-        product_type='SLC',
         top=100,
         count=True
     )
@@ -109,8 +112,9 @@ def test_pagination_with_1000_page_size():
     """Test pagination with default page size of 1000"""
     searcher = CopernicusDataSearcher()
     searcher.query_by_filter(
+        burst_mode=True,  # OData pagination applies to burst search
+        swath_identifier='IW1',
         collection_name='SENTINEL-1',
-        product_type='SLC',
         top=1000,  # Default page size
         count=True
     )
@@ -152,8 +156,9 @@ def test_pagination_handles_request_errors_gracefully():
     """Test that pagination handles request errors gracefully"""
     searcher = CopernicusDataSearcher()
     searcher.query_by_filter(
+        burst_mode=True,  # OData pagination applies to burst search
+        swath_identifier='IW1',
         collection_name='SENTINEL-1',
-        product_type='SLC',
         top=5,
         count=True
     )
@@ -186,8 +191,9 @@ def test_manual_skip_fetches_single_page():
     """Test that manual skip fetches only the requested page."""
     searcher = CopernicusDataSearcher()
     searcher.query_by_filter(
+        burst_mode=True,  # OData pagination applies to burst search
+        swath_identifier='IW1',
         collection_name='SENTINEL-1',
-        product_type='SLC',
         top=5,
         skip=10,
     )
