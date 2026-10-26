@@ -1216,27 +1216,42 @@ class CopernicusDataSearcher:
         """
         if not collection_name:
             return None, False
+        return stac_api.resolve_collections(collection_name, product_type, self._stac_available_collections())
+
+    def _stac_available_collections(self) -> typing.List[str]:
+        """Return (and cache) the collection ids that the STAC API serves."""
         if self._stac_collection_ids is None:
             self._stac_collection_ids = stac_api.list_collections(self.stac_url)
-        return stac_api.resolve_collections(collection_name, product_type, self._stac_collection_ids)
+        return self._stac_collection_ids
 
     def _build_stac_search(self, limit: int) -> typing.Dict[str, typing.Any]:
         """Build the STAC search body from the current query parameters."""
         collections, type_in_collection = self._stac_collections(self.collection_name, self.product_type)
+        attributes = dict(self.attributes or {})
+        exact_type = attributes.get("productType")
+        if collections and isinstance(exact_type, str):
+            # An exact product type (for example OL_2_LFR___) in the
+            # attributes can narrow the collections further.
+            narrowed, type_in_narrowed = self._stac_collections(self.collection_name, exact_type)
+            narrowed = [item for item in narrowed or [] if item in collections]
+            if narrowed and type_in_narrowed:
+                collections = narrowed
+                attributes.pop("productType")
+        if not collections:
+            # STAC search needs collections; use the Sentinel product ones.
+            collections = stac_api.collections_for_product_name("", self._stac_available_collections())
         body = stac_api.build_search_body(
-            collections=collections or [],
+            collections=collections,
             product_type=None if type_in_collection else self.product_type,
             orbit_direction=self.orbit_direction,
             cloud_cover_threshold=self.cloud_cover_threshold,
-            attributes=self.attributes,
+            attributes=attributes,
             aoi_wkt=self.aoi_wkt,
             start_date=self.start_date,
             end_date=self.end_date,
             limit=limit,
             order_by=self.order_by,
         )
-        if not collections:
-            body.pop("collections")
         self.url = f"{self.stac_url.rstrip('/')}/search"
         self.query = body
         self.filter_condition = body.get("filter")
@@ -1460,15 +1475,14 @@ class CopernicusDataSearcher:
             return self.df
 
         if not self.burst_mode:
-            # STAC item ids are product names, often without the extension.
-            ids = [product_name]
-            stem, extension = os.path.splitext(product_name)
-            if extension.upper() in {".SAFE", ".SEN3", ".SEN6", ".ZIP", ".NC"}:
-                ids.append(stem)
-            body = {"ids": ids, "limit": len(ids)}
+            # STAC search needs collections, so guess them from the name.
+            # Item ids are product names, often without the extension.
             self.url = f"{self.stac_url.rstrip('/')}/search"
-            self.query = body
             try:
+                collections = stac_api.collections_for_product_name(product_name, self._stac_available_collections())
+                ids = stac_api.item_ids_for_name(product_name, collections)
+                body = {"collections": collections, "ids": ids, "limit": len(ids)}
+                self.query = body
                 self._run_stac_search(body, max_items=1)
             except Exception as e:
                 print(f"An error occurred while querying by name '{product_name}': {e} (URL: {self.url})")
@@ -1650,7 +1664,10 @@ class CopernicusDataSearcher:
 
         escaped = escape_like(name_pattern)
         if match_type == "exact":
-            pattern = escaped
+            # Item ids carry no .SAFE/.SEN3 extension; the full Name is
+            # checked after the search.
+            stem = stac_api.item_ids_for_name(name_pattern, [])[0]
+            pattern = escape_like(stem)
         elif match_type == "contains":
             pattern = f"%{escaped}%"
         elif match_type == "startswith":
@@ -1668,8 +1685,17 @@ class CopernicusDataSearcher:
         )
         body.pop("collections")
         collections, _ = self._stac_collections(collection_name)
+        # STAC search needs collections, and a LIKE over many collections is
+        # slow, so narrow them by the name when the name shows the product.
+        from_name = stac_api.collections_for_product_name(name_pattern, self._stac_available_collections())
         if collections:
-            body["collections"] = collections
+            collections = [item for item in collections if item in from_name] or collections
+        else:
+            collections = from_name
+        body["collections"] = collections
+        window = stac_api.datetime_window_for_name(name_pattern)
+        if window:
+            body["datetime"] = window
         body["filter-lang"] = "cql2-json"
         body["filter"] = name_filter
         self.url = f"{self.stac_url.rstrip('/')}/search"
@@ -1679,6 +1705,9 @@ class CopernicusDataSearcher:
             self._run_stac_search(body, max_items=query_top)
             if match_type == "endswith" and not self.df.empty:
                 self.df = self.df[self.df["Name"].str.endswith(name_pattern)].reset_index(drop=True)
+            if match_type == "exact" and not self.df.empty:
+                stems = self.df["Name"].map(lambda name: stac_api.item_ids_for_name(name, [])[0])
+                self.df = self.df[(self.df["Name"] == name_pattern) | (stems == stem)].reset_index(drop=True)
         except Exception as e:
             print(f"Error for name pattern '{name_pattern}' ({match_type}): {e} (URL: {self.url})")
             self.df = pd.DataFrame()

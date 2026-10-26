@@ -14,8 +14,14 @@ AOI = "POLYGON((12.4 41.8, 12.6 41.8, 12.6 42.0, 12.4 42.0, 12.4 41.8))"
 CASES = [
     dict(collection_name="SENTINEL-1", product_type="SLC", orbit_direction="DESCENDING"),
     dict(collection_name="SENTINEL-1", product_type="GRD"),
+    dict(collection_name="SENTINEL-1", product_type="GRD", attributes={"platformSerialIdentifier": "A", "polarisationChannels": "VV&VH"}),
+    dict(collection_name="SENTINEL-2", product_type="S2MSI1C", attributes={"tileId": "33TUG"}),
     dict(collection_name="SENTINEL-2", product_type="S2MSI2A", cloud_cover_threshold=20),
-    dict(collection_name="SENTINEL-3", product_type="OL_2_LFR___"),
+    dict(collection_name="SENTINEL-3", product_type="S3OLCI", attributes={"productType": "OL_2_LFR___"}),
+    # timeliness and orbitNumber are not STAC queryables: checked on the client.
+    dict(collection_name="SENTINEL-3", product_type="S3OLCI", orbit_direction="DESCENDING",
+         attributes={"productType": "OL_2_LFR___", "timeliness": "NT", "orbitNumber": 31935}),
+    dict(collection_name="SENTINEL-1", orbit_direction="ASCENDING", order_by="ContentDate/Start desc"),
 ]
 
 for case in CASES:
@@ -26,4 +32,5 @@ for case in CASES:
     if not df.empty:
         print(df[["Name", "Collection", "S3Path", "ContentLength", "coverage"]].to_string(index=False))
         name = df.iloc[0]["Name"]
-        print("query_by_name:", len(CopernicusDataSearcher().query_by_name(name)), "row(s) for", name)
+        found = CopernicusDataSearcher().query_by_name(name)
+        print("query_by_name:", len(found), "row(s) for", name, "->", list(found["Name"]) if len(found) else [])
