@@ -96,6 +96,11 @@ _S3_TIMELINESS = {"NR": "nrt", "NT": "ntc", "ST": "stc"}
 # Full Sentinel-1 product types, for example IW_SLC__1S or EW_GRDM_1S.
 _S1_PRODUCT_TYPE_RE = re.compile(r"^(IW|EW|SM|S[1-6]|WV)_(SLC|GRD|OCN|RAW|ETA)")
 _S1_GRD_COLLECTION = "sentinel-1-grd"
+# Non-Sentinel product name prefix -> collection id prefix.
+_OTHER_NAME_PREFIXES = (
+    ("COPERNICUS_DSM_COG_", "cop-dem-glo-"),
+    ("DEM1_", "cop-dem-eea-"),
+)
 
 _PRODUCT_SUFFIXES = (".SAFE", ".SEN3", ".SEN6", ".zip", ".nc", ".tar", ".h5", ".tif", ".TIF")
 _ODATA_ID_RE = re.compile(r"Products\(([0-9a-fA-F-]{36})\)")
@@ -242,12 +247,13 @@ def product_type_slug(product_type: str) -> typing.Optional[str]:
 def _collections_for_slug(prefix: str, slug: str, candidates: typing.Sequence[str]) -> typing.List[str]:
     """Return the collection named ``prefix-slug`` or its timeliness variants."""
     base = f"{prefix}-{slug}"
-    exact = [item for item in candidates if item.lower() == base]
-    if exact:
-        return exact
+    # Some products have both a combined collection and timeliness
+    # collections (sentinel-5p-l2-no2 and -offl/-nrti/-rpro) that cover
+    # different dates, so all of them are used.  search() drops duplicates.
     return [
         item for item in candidates
-        if item.lower().startswith(base + "-") and item.lower()[len(base) + 1:] in TIMELINESS_SUFFIXES
+        if item.lower() == base
+        or (item.lower().startswith(base + "-") and item.lower()[len(base) + 1:] in TIMELINESS_SUFFIXES)
     ]
 
 
@@ -324,9 +330,15 @@ def collections_for_product_name(name: str, available: typing.Sequence[str]) -> 
     if s5:
         slug = product_type_slug(s5.group(2))
         found = _collections_for_slug("sentinel-5p", slug, available) if slug else []
-        found = [item for item in found if item.lower().endswith(s5.group(1).lower())] or found
+        base = f"sentinel-5p-{slug}"
+        found = [item for item in found if item.lower() in (base, f"{base}-{s5.group(1).lower()}")] or found
         if found:
             return found
+    for name_prefix, collection_prefix in _OTHER_NAME_PREFIXES:
+        if upper.startswith(name_prefix):
+            found = [item for item in available if item.lower().startswith(collection_prefix)]
+            if found:
+                return found
     mission = re.match(r"S([1-6])(P?)", upper)
     if mission:
         prefix = f"sentinel-{mission.group(1)}{mission.group(2).lower()}"
@@ -593,6 +605,7 @@ def search(
     # Conditions on properties that the collections do not list as
     # queryables.  CDSE rejects them, so they are checked on each item.
     client_conditions: typing.List[typing.Dict[str, typing.Any]] = []
+    seen_ids: typing.Set[typing.Any] = set()
     response = None
     while True:
         response = _send(http, method, url, **({"json": request_body} if method == "POST" else {}))
@@ -614,10 +627,13 @@ def search(
             raise StacError("STAC search response has no 'features' list")
         if matched is None and not client_conditions:
             matched = payload.get("numberMatched", payload.get("context", {}).get("matched"))
-        items.extend(
-            item for item in payload["features"]
-            if all(_matches(item, condition) for condition in client_conditions)
-        )
+        for item in payload["features"]:
+            # The same product can be in a combined and a timeliness
+            # collection; keep it once.
+            if item.get("id") in seen_ids or not all(_matches(item, condition) for condition in client_conditions):
+                continue
+            seen_ids.add(item.get("id"))
+            items.append(item)
         if max_items is not None and len(items) >= max_items:
             return items[:max_items], matched, response
         next_link = next((link for link in payload.get("links", []) if link.get("rel") == "next"), None)
@@ -638,7 +654,7 @@ def search(
 # Item -> phidown row
 # ---------------------------------------------------------------------------
 
-def _product_s3_path(href: str) -> typing.Optional[str]:
+def _product_s3_path(href: str, item_id: str = "") -> typing.Optional[str]:
     """Turn an asset href into the product's /eodata path used by downloaders."""
     if href.startswith("s3://"):
         path = "/" + href[len("s3://"):]
@@ -647,6 +663,10 @@ def _product_s3_path(href: str) -> typing.Optional[str]:
     else:
         return None
     segments = path.split("/")
+    # Products without an extension (for example Copernicus DEM tiles) sit
+    # in a folder named like the item; assets can be deeper in it.
+    if item_id and item_id in segments[:-1]:
+        return "/".join(segments[: segments.index(item_id) + 1])
     for index, segment in enumerate(segments):
         if segment.endswith(_PRODUCT_SUFFIXES):
             return "/".join(segments[: index + 1])
@@ -703,11 +723,21 @@ def item_to_record(item: typing.Dict[str, typing.Any]) -> typing.Dict[str, typin
 
     odata_id = next((match.group(1) for href in hrefs if (match := _ODATA_ID_RE.search(href))), None)
     odata_id = odata_id or private.get("product_uuid")
-    s3_path = next((path for href in hrefs if (path := _product_s3_path(href))), None)
+    s3_path = next((path for href in hrefs if (path := _product_s3_path(href, item.get("id", "")))), None)
     download_url = product_asset.get("href") if product_asset else None
     content_length = product_asset.get("file:size") if product_asset else None
     if content_length is None:
         content_length = private.get("product_size")
+    if content_length is None and s3_path:
+        # Single-file products (Sentinel-5P .nc) have no "product" asset;
+        # the asset whose href is the product itself gives the size.
+        content_length = next(
+            (
+                asset.get("file:size") for asset in assets.values()
+                if isinstance(asset, dict) and asset.get("href", "").replace("s3://", "/", 1) == s3_path
+            ),
+            None,
+        )
 
     start = properties.get("start_datetime") or properties.get("datetime")
     end = properties.get("end_datetime") or properties.get("datetime")

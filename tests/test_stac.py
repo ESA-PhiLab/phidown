@@ -18,6 +18,7 @@ COLLECTIONS = [
     "sentinel-2-l1c", "sentinel-2-l2a", "sentinel-2-l2a-tlm", "sentinel-3-olci-2-lfr-nrt",
     "sentinel-3-olci-2-lfr-ntc", "sentinel-3-sr-1-sra-a-ntc", "sentinel-3-sr-1-sra-ntc",
     "sentinel-5p-l2-no2", "sentinel-5p-l2-no2-offl", "sentinel-5p-l2-no2-nrti",
+    "cop-dem-eea-10-laea-tif", "cop-dem-glo-30-dged-cog", "cop-dem-glo-90-dged-cog",
 ]
 S1_DEFAULT = ["sentinel-1-etad", "sentinel-1-grd", "sentinel-1-ocn", "sentinel-1-slc", "sentinel-1-slc-wv"]
 PRODUCT = "S1A_IW_SLC__1SDV_20240102T030405_20240102T030432_052000_064A1B_ABCD"
@@ -99,7 +100,9 @@ def test_resolve_collections_maps_sentinel3_and_5p_product_types():
         ["sentinel-3-olci-2-lfr-nrt", "sentinel-3-olci-2-lfr-ntc"], True)
     assert stac.resolve_collections("SENTINEL-3", "SR_1_SRA___", COLLECTIONS) == (["sentinel-3-sr-1-sra-ntc"], True)
     assert stac.resolve_collections("SENTINEL-3", "SR_1_SRA_A_", COLLECTIONS) == (["sentinel-3-sr-1-sra-a-ntc"], True)
-    assert stac.resolve_collections("SENTINEL-5P", "L2__NO2___", COLLECTIONS) == (["sentinel-5p-l2-no2"], True)
+    # The combined and the timeliness collections cover different dates.
+    assert stac.resolve_collections("SENTINEL-5P", "L2__NO2___", COLLECTIONS) == (
+        ["sentinel-5p-l2-no2", "sentinel-5p-l2-no2-offl", "sentinel-5p-l2-no2-nrti"], True)
     assert stac.resolve_collections("SENTINEL-3", "S3SRAL", COLLECTIONS) == (
         ["sentinel-3-sr-1-sra-a-ntc", "sentinel-3-sr-1-sra-ntc"], True)
 
@@ -363,3 +366,53 @@ def test_exact_name_pattern_drops_extension_and_adds_date_window(mock_post, _col
     assert body["filter"]["args"][1] == PRODUCT.replace("_", "\\_")
     assert body["datetime"] == "2024-01-01T00:00:00Z/2024-01-04T00:00:00Z"
     assert list(df["Name"]) == [f"{PRODUCT}.SAFE"]
+
+
+def test_collections_for_other_product_names():
+    assert stac.collections_for_product_name(
+        "S5P_OFFL_L2__NO2____20240607T115910_20240607T134040_34463_03_020600_20240612T103851", COLLECTIONS
+    ) == ["sentinel-5p-l2-no2", "sentinel-5p-l2-no2-offl"]
+    assert stac.collections_for_product_name("Copernicus_DSM_COG_10_N42_00_E012_00_DEM", COLLECTIONS) == [
+        "cop-dem-glo-30-dged-cog", "cop-dem-glo-90-dged-cog"]
+    assert stac.collections_for_product_name("DEM1_SAR_INS_10_20110207T170647_x", COLLECTIONS) == ["cop-dem-eea-10-laea-tif"]
+
+
+def test_item_to_record_cuts_s3_path_at_item_folder():
+    """Copernicus DEM EEA-10 item shape (2026-10): no extension, deep data asset."""
+    item_id = "DEM1_SAR_INS_10_20110207T170647_20140322T165914_ADS_000000_6414_f681a935"
+    folder = f"s3://eodata/CCM/COP-DEM_EEA-10-INSP/SAR_INS_10_52C5/2011/02/07/{item_id}"
+    item = {
+        "id": item_id,
+        "properties": {"datetime": "2011-02-07T17:06:49Z"},
+        "assets": {
+            "data": {"href": f"{folder}/Copernicus_DSM_03_N42_00_E012_00/DEM/Copernicus_DSM_03_N42_00_E012_00_DEM.tif"},
+            "product": {"href": f"https://download.dataspace.copernicus.eu/odata/v1/Products({UUID})/$value", "file:size": 1171285320},
+            "inspire_metadata": {"href": f"{folder}/INSPIRE.xml"},
+        },
+    }
+    record = stac.item_to_record(item)
+    assert record["S3Path"] == folder.replace("s3://", "/")
+    assert record["Name"] == item_id
+    assert record["ContentLength"] == 1171285320
+
+
+def test_search_drops_duplicate_items_across_collections():
+    page = _response({"features": [_item("A"), _item("A"), _item("B")], "links": []})
+    session = Mock()
+    session.post.return_value = page
+    items, _, _ = stac.search({"collections": ["x", "x-offl"]}, max_items=None, session=session)
+    assert [item["id"] for item in items] == ["A", "B"]
+
+
+def test_item_to_record_size_of_single_file_product():
+    """Sentinel-5P item shape (2026-10): one netcdf asset, no product asset."""
+    name = "S5P_OFFL_L2__NO2____20240607T115910_20240607T134040_34463_03_020600_20240612T103851"
+    href = f"s3://eodata/Sentinel-5P/TROPOMI/L2__NO2___/2024/06/07/{name}.nc"
+    record = stac.item_to_record({
+        "id": name,
+        "properties": {"datetime": "2024-06-07T12:00:00Z"},
+        "assets": {"netcdf": {"href": href, "file:size": 616351858}},
+    })
+    assert record["Name"] == f"{name}.nc"
+    assert record["S3Path"] == href.replace("s3://", "/")
+    assert record["ContentLength"] == 616351858
