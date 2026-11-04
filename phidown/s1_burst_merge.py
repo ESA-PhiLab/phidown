@@ -45,6 +45,28 @@ from typing import Any, Iterable, Sequence
 from xml.sax.saxutils import escape
 
 
+_MANIFEST_NAMESPACES = {
+    "xfdu": "urn:ccsds:schema:xfdu:1",
+    "gml": "http://www.opengis.net/gml",
+    "safe": "http://www.esa.int/safe/sentinel-1.0",
+    "s1": "http://www.esa.int/safe/sentinel-1.0/sentinel-1",
+    "s1sar": "http://www.esa.int/safe/sentinel-1.0/sentinel-1/sar",
+    "s1sarl1": "http://www.esa.int/safe/sentinel-1.0/sentinel-1/sar/level-1",
+    "s1sarl2": "http://www.esa.int/safe/sentinel-1.0/sentinel-1/sar/level-2",
+    "gx": "http://www.google.com/kml/ext/2.2",
+}
+_MANIFEST_SCHEMAS = {
+    "s1Level1ProductSchema": "s1-level-1-product.xsd",
+    "s1Level1NoiseSchema": "s1-level-1-noise.xsd",
+    "s1Level1RfiSchema": "s1-level-1-rfi.xsd",
+    "s1Level1CalibrationSchema": "s1-level-1-calibration.xsd",
+    "s1ObjectTypesSchema": "s1-object-types.xsd",
+    "s1Level1MeasurementSchema": "s1-level-1-measurement.xsd",
+    "s1Level1ProductPreviewSchema": "s1-product-preview.xsd",
+    "s1Level1MapOverlaySchema": "s1-map-overlay.xsd",
+}
+
+
 class BurstMergeError(ValueError):
     """Raised when burst inputs cannot form a valid assembled SAFE."""
 
@@ -382,8 +404,9 @@ def _record_from_paths(safe_path: Path, data_path: Path) -> _BurstRecord:
     platform = (_first_text(product, "missionId") or str(fallback["platform"] or "")).upper()
     mode = (_first_text(product, "mode") or str(fallback["mode"] or "IW")).upper()
     datatake_text = _first_text(product, "missionDataTakeId") or str(fallback["datatake"] or "")
-    if datatake_text.isdigit():
-        datatake_id = f"{int(datatake_text):06d}"
+    if _first_text(product, "missionDataTakeId") and datatake_text.isdigit():
+        # Annotations hold it in decimal; SAFE and file names use 6-digit hex.
+        datatake_id = f"{int(datatake_text):06X}"
     else:
         datatake_id = datatake_text.upper()
 
@@ -519,6 +542,60 @@ def _transform_noise_azimuth_vector(
     return True
 
 
+def _parent_first_line(record: _BurstRecord) -> int:
+    """Return the burst's first line in its parent slice, from its grid lines.
+
+    Burst grids are relative to the burst, so the parent's first line shows up
+    as the lowest (negative) line.
+    """
+    grid = _child(_child(record.product, "geolocationGrid"), "geolocationGridPointList")
+    lines = [_first_text(point, "line") for point in _children(grid, "geolocationGridPoint")]
+    values = [int(float(line)) for line in lines if line]
+    return max(0, -min(values)) if values else 0
+
+
+def _rebase_noise_azimuth_vector(vector: ET.Element, shift: int, total_lines: int) -> bool:
+    """Move a parent-slice noise azimuth vector onto the merged image lines.
+
+    CDSE burst products keep this vector in parent lines, unlike their other
+    annotations.  The LUT is interpolated at the image's first and last line,
+    because negative lines are not valid here.
+    """
+    line = _first_descendant(vector, "line")
+    lut = _first_descendant(vector, "noiseAzimuthLut")
+    if line is None or lut is None or not line.text or not lut.text:
+        return False
+    lines = [int(float(value)) + shift for value in line.text.split()]
+    values = [float(value) for value in lut.text.split()]
+    kept = [(row, text) for row, text in zip(lines, lut.text.split()) if 0 <= row < total_lines]
+    last_line = total_lines - 1
+
+    def interpolated(row: int) -> str | None:
+        for index in range(len(lines) - 1):
+            if lines[index] < row < lines[index + 1]:
+                weight = (row - lines[index]) / (lines[index + 1] - lines[index])
+                return f"{values[index] + weight * (values[index + 1] - values[index]):.6e}"
+        return None
+
+    if not kept or kept[0][0] != 0:
+        value = interpolated(0)
+        if value is not None:
+            kept.insert(0, (0, value))
+    if not kept:
+        return False
+    if kept[-1][0] != last_line:
+        value = interpolated(last_line)
+        if value is not None:
+            kept.append((last_line, value))
+    line.text = " ".join(str(row) for row, _ in kept)
+    line.set("count", str(len(kept)))
+    lut.text = " ".join(text for _, text in kept)
+    lut.set("count", str(len(kept)))
+    _set_text(_first_descendant(vector, "firstAzimuthLine"), kept[0][0])
+    _set_text(_first_descendant(vector, "lastAzimuthLine"), kept[-1][0])
+    return True
+
+
 def _localize_raw_auxiliary(root: ET.Element | None, kind: str, burst_index: int, lines: int) -> ET.Element | None:
     component = _as_named_component(root, kind)
     if component is None:
@@ -581,7 +658,11 @@ def _record_from_raw_tree(
     platform = (_first_text(product, "missionId") or str(fallback["platform"] or "")).upper()
     mode = (_first_text(product, "mode") or str(fallback["mode"] or "IW")).upper()
     datatake_text = _first_text(product, "missionDataTakeId") or str(fallback["datatake"] or "")
-    datatake_id = f"{int(datatake_text):06d}" if datatake_text.isdigit() else datatake_text.upper()
+    datatake_id = (
+        f"{int(datatake_text):06X}"
+        if _first_text(product, "missionDataTakeId") and datatake_text.isdigit()
+        else datatake_text.upper()
+    )
     return _BurstRecord(
         safe_path=metadata_path.parent,
         data_path=data_path,
@@ -722,52 +803,63 @@ def _load_numpy_tiff(path: Path):
     return np.ascontiguousarray(components, dtype=np.int16)
 
 
-def _measurement_gcps(group: Sequence[_BurstRecord]) -> list[tuple[float, float, float, float, float]]:
-    """Return merged TIFF GCPs as (sample, line, x, y, z) tuples."""
-    gcps: list[tuple[float, float, float, float, float]] = []
+def _merged_grid_points(group: Sequence[_BurstRecord]) -> list[ET.Element]:
+    """Return one geolocation grid for the merged image.
+
+    Each burst annotation repeats the whole slice grid with lines relative to
+    that burst.  Offsetting them gives one set of points, which is cut to the
+    rows that bound the merged image.
+    """
+    points: dict[tuple[float, str], ET.Element] = {}
     offset = 0
     for record in group:
         grid = _child(_child(record.product, "geolocationGrid"), "geolocationGridPointList")
         for point in _children(grid, "geolocationGridPoint"):
-            line_text = _first_text(point, "line")
-            pixel_text = _first_text(point, "pixel")
-            lon_text = _first_text(point, "longitude")
-            lat_text = _first_text(point, "latitude")
-            height_text = _first_text(point, "height") or "0"
-            if any(value is None for value in (line_text, pixel_text, lon_text, lat_text)):
-                continue
-            assert line_text is not None and pixel_text is not None and lon_text is not None and lat_text is not None
+            copy = ET.fromstring(ET.tostring(point, encoding="utf-8"))
+            line = _first_descendant(copy, "line")
             try:
-                gcps.append(
-                    (
-                        float(pixel_text),
-                        float(line_text) + offset,
-                        float(lon_text),
-                        float(lat_text),
-                        float(height_text),
-                    )
-                )
-            except ValueError:
+                value = float(line.text) + offset
+            except (AttributeError, TypeError, ValueError):
                 continue
+            _set_text(line, int(value) if value.is_integer() else value)
+            points.setdefault((value, _first_text(copy, "pixel") or ""), copy)
         offset += record.lines
+    rows = sorted({row for row, _ in points})
+    if not rows:
+        return []
+    first_row = max((row for row in rows if row <= 0), default=rows[0])
+    last_row = min((row for row in rows if row >= offset - 1), default=rows[-1])
+    return [point for (row, _), point in points.items() if first_row <= row <= last_row]
+
+
+def _measurement_gcps(group: Sequence[_BurstRecord]) -> list[tuple[float, float, float, float, float]]:
+    """Return merged TIFF GCPs as (sample, line, x, y, z) tuples."""
+    gcps: list[tuple[float, float, float, float, float]] = []
+    for point in _merged_grid_points(group):
+        try:
+            gcps.append(
+                (
+                    float(_first_text(point, "pixel")),
+                    float(_first_text(point, "line")),
+                    float(_first_text(point, "longitude")),
+                    float(_first_text(point, "latitude")),
+                    float(_first_text(point, "height") or "0"),
+                )
+            )
+        except (TypeError, ValueError):
+            continue
     return gcps
 
 
-def _gdal_metadata(gcps: Sequence[tuple[float, float, float, float, float]]) -> str:
-    """Create the GDAL TIFF metadata block used to expose GCPs."""
-    projection = (
-        'GEOGCS["WGS 84",DATUM["WGS_1984",'
-        'SPHEROID["WGS 84",6378137,298.257223563]],'
-        'PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]'
-    )
-    items = []
-    for index, (sample, line, x, y, z) in enumerate(gcps):
-        items.append(
-            f'<Item name="GCP_{index}" sample="{sample:.12g}" line="{line:.12g}" '
-            f'x="{x:.12g}" y="{y:.12g}" z="{z:.12g}" />'
-        )
-    items.append(f'<Item name="GCPProjection">{escape(projection)}</Item>')
-    return "<GDALMetadata>" + "".join(items) + "</GDALMetadata>"
+def _geotiff_gcp_tags(gcps: Sequence[tuple[float, float, float, float, float]]) -> list[tuple]:
+    """Return GeoTIFF tie point and WGS 84 key tags, as ESA measurement files have."""
+    tie_points = [value for sample, line, x, y, z in gcps for value in (sample, line, 0.0, x, y, z)]
+    # Key directory: geographic model, pixel-is-area, EPSG:4326.
+    geo_keys = (1, 1, 0, 3, 1024, 0, 1, 2, 1025, 0, 1, 1, 2048, 0, 1, 4326)
+    return [
+        (33922, "d", len(tie_points), tie_points, False),
+        (34735, "H", len(geo_keys), geo_keys, False),
+    ]
 
 
 def _patch_s1_complex_int16_tags(path: Path, samples: int) -> None:
@@ -856,29 +948,26 @@ def _write_measurement_stream(
     _lines, samples, components = expected_shape
     if components != 2:
         raise BurstMergeError(f"Expected I/Q data with two components; got {expected_shape}")
-    sums = 0.0 + 0.0j
-    sum_squared_magnitudes = 0.0
-    nonzero_count = 0
+    # ESA's image statistics cover every pixel, with I and Q kept separate.
+    sums = np.zeros(2)
+    sum_squares = np.zeros(2)
     total_count = 0
 
     def rows():
-        nonlocal sums, sum_squared_magnitudes, nonzero_count, total_count
+        nonlocal sums, sum_squares, total_count
         for data_input in data_inputs:
             array = _load_numpy_tiff(data_input) if isinstance(data_input, Path) else data_input
             if array.shape != expected_shape:
                 raise BurstMergeError(f"Measurement has shape {array.shape}; expected {expected_shape}")
-            values = array[..., 0].astype("float64") + 1j * array[..., 1].astype("float64")
-            valid = np.any(array != 0, axis=-1)
-            selected = values[valid]
-            sums += selected.sum()
-            sum_squared_magnitudes += np.square(np.abs(selected)).sum()
-            nonzero_count += int(selected.size)
-            total_count += int(values.size)
+            values = array.astype("float64")
+            sums += values.sum(axis=(0, 1))
+            sum_squares += np.square(values).sum(axis=(0, 1))
+            total_count += int(values.shape[0] * values.shape[1])
             for row in array:
                 yield np.ascontiguousarray(row.reshape(samples * 2))
 
     try:
-        extra_tags = [(42112, "s", len(_gdal_metadata(gcps)) + 1, _gdal_metadata(gcps), False)] if gcps else None
+        extra_tags = _geotiff_gcp_tags(gcps) if gcps else None
         storage_bytes = total_lines * samples * 4
         with tifffile.TiffWriter(str(path), bigtiff=bool(storage_bytes >= 4 * 1024**3)) as writer:
             writer.write(
@@ -910,13 +999,9 @@ def _write_measurement_stream(
     if len(offsets) != total_lines:
         raise BurstMergeError(f"Assembled TIFF has {len(offsets)} row offsets for {total_lines} rows")
 
-    if nonzero_count:
-        mean = sums / nonzero_count
-        variance = max(0.0, sum_squared_magnitudes / nonzero_count - float(abs(mean) ** 2))
-    else:
-        mean = 0.0 + 0.0j
-        variance = 0.0
-    return list(offsets), mean, float(np.sqrt(variance))
+    means = sums / max(total_count, 1)
+    deviations = np.sqrt(np.maximum(sum_squares / max(total_count, 1) - np.square(means), 0.0))
+    return list(offsets), complex(means[0], means[1]), complex(deviations[0], deviations[1])
 
 
 def _write_measurement(path: Path, array, gcps: Sequence[tuple[float, float, float, float, float]] = ()) -> list[int]:
@@ -937,6 +1022,9 @@ def _validate_records(records: Sequence[_BurstRecord]) -> None:
         raise BurstMergeError(f"All bursts must use the same acquisition mode; found {sorted(modes)}")
     if len(orbits) != 1:
         raise BurstMergeError(f"All bursts must have the same absolute orbit; found {sorted(orbits)}")
+    datatakes = {record.datatake_id for record in records if record.datatake_id}
+    if len(datatakes) > 1:
+        raise BurstMergeError(f"All bursts must come from the same datatake; found {sorted(datatakes)}")
 
     grouped: dict[tuple[str, str], list[_BurstRecord]] = {}
     for record in records:
@@ -1013,6 +1101,12 @@ def _merge_product(
     image_info = _child(_child(product, "imageAnnotation"), "imageInformation")
     if image_info is not None:
         image_info.attrib.pop("numberOfLines", None)
+        # The source's slice list describes the parent datatake, not this product.
+        slice_list = _child(image_info, "sliceList")
+        if slice_list is not None:
+            for item in list(slice_list):
+                slice_list.remove(item)
+            slice_list.set("count", "0")
     _set_path_text(product, total_lines, "imageAnnotation", "imageInformation", "numberOfLines")
     _set_path_text(product, f"{mean.real:.6e}", "imageAnnotation", "imageInformation", "imageStatistics", "outputDataMean", "re")
     _set_path_text(product, f"{mean.imag:.6e}", "imageAnnotation", "imageInformation", "imageStatistics", "outputDataMean", "im")
@@ -1040,18 +1134,7 @@ def _merge_product(
     if geo is not None:
         source_grid = _child(geo, "geolocationGridPointList")
         merged_grid = ET.Element("geolocationGridPointList")
-        for record, offset in zip(group, [sum(item.lines for item in group[:index]) for index in range(len(group))]):
-            source_geo = _child(_child(record.product, "geolocationGrid"), "geolocationGridPointList")
-            for point in _children(source_geo, "geolocationGridPoint"):
-                copy = ET.fromstring(ET.tostring(point, encoding="utf-8"))
-                line = _first_descendant(copy, "line")
-                if line is not None and line.text:
-                    try:
-                        value = float(line.text) + offset
-                        _set_text(line, int(value) if value.is_integer() else value)
-                    except ValueError:
-                        pass
-                merged_grid.append(copy)
+        merged_grid.extend(_merged_grid_points(group))
         merged_grid.set("count", str(len(merged_grid)))
         _replace_child(geo, source_grid, merged_grid)
 
@@ -1063,6 +1146,34 @@ def _merge_product(
     return product
 
 
+def _keep_rfi_reports_of_bursts(
+    output: ET.Element, group: Sequence[_BurstRecord], other_components: Sequence[ET.Element] = ()
+) -> None:
+    """Keep one burst RFI report per burst of this product.
+
+    Each burst's file repeats its parent's reports, including parent bursts
+    that are not in this product.  Bursts can also come from two parent slices.
+    """
+    report_list = _first_descendant(output, "rfiBurstReportList")
+    if report_list is None:
+        return
+    for component in other_components:
+        other_list = _first_descendant(component, "rfiBurstReportList")
+        known = {_first_text(report, "azimuthTime") for report in report_list}
+        for report in list(other_list) if other_list is not None else []:
+            if _first_text(report, "azimuthTime") not in known:
+                report_list.append(ET.fromstring(ET.tostring(report, encoding="utf-8")))
+    burst_times = set()
+    for record in group:
+        source_list = _child(_child(record.product, "swathTiming"), "burstList")
+        burst_times.update(_first_text(burst, "azimuthTime") for burst in _children(source_list, "burst"))
+    for report in list(report_list):
+        report_time = _first_text(report, "azimuthTime")
+        if report_time and report_time not in burst_times:
+            report_list.remove(report)
+    report_list.set("count", str(len(report_list)))
+
+
 def _merge_auxiliary(
     group: Sequence[_BurstRecord],
     kind: str,
@@ -1072,19 +1183,22 @@ def _merge_auxiliary(
     image_number: int | None = None,
 ) -> ET.Element | None:
     component_pairs = [
-        (component, offset)
+        (component, offset, record)
         for record, offset in zip(group, line_offsets)
         if (component := getattr(record, kind)) is not None
     ]
     if not component_pairs:
         return None
-    components = [component for component, _ in component_pairs]
+    components = [component for component, _, _ in component_pairs]
+    total_lines = sum(record.lines for record in group)
     output = ET.fromstring(ET.tostring(components[0], encoding="utf-8"))
     _set_path_text(output, _format_time(start), "adsHeader", "startTime")
     _set_path_text(output, _format_time(stop), "adsHeader", "stopTime")
     if image_number is not None:
         _set_path_text(output, f"{image_number:03d}", "adsHeader", "imageNumber")
 
+    if kind == "rfi":
+        _keep_rfi_reports_of_bursts(output, group, components[1:])
     lists = [candidate for candidate in output.iter() if _local_name(candidate.tag).endswith("VectorList")]
     if not lists:
         return output
@@ -1092,7 +1206,7 @@ def _merge_auxiliary(
         list_name = _local_name(output_list.tag)
         merged: list[ET.Element] = []
         seen: set[bytes] = set()
-        for component, offset in component_pairs:
+        for component, offset, record in component_pairs:
             input_list = next(
                 (candidate for candidate in component.iter() if _local_name(candidate.tag) == list_name), None
             )
@@ -1101,7 +1215,12 @@ def _merge_auxiliary(
             for vector in list(input_list):
                 copy = ET.fromstring(ET.tostring(vector, encoding="utf-8"))
                 if kind == "noise" and list_name == "noiseAzimuthVectorList":
-                    if not _transform_noise_azimuth_vector(copy, offset=offset):
+                    line = _first_descendant(copy, "line")
+                    spans_parent = line is not None and line.text and float(line.text.split()[-1]) >= record.lines
+                    if spans_parent:
+                        if not _rebase_noise_azimuth_vector(copy, offset - _parent_first_line(record), total_lines):
+                            continue
+                    elif not _transform_noise_azimuth_vector(copy, offset=offset):
                         continue
                 else:
                     line = _first_descendant(copy, "line")
@@ -1145,18 +1264,26 @@ def _polygon_hull(points: Iterable[tuple[float, float]]) -> list[tuple[float, fl
 
 
 def _group_footprint(group: Sequence[_BurstRecord]) -> list[tuple[float, float]]:
-    points: list[tuple[float, float]] = []
-    for record in group:
-        grid = _child(_child(record.product, "geolocationGrid"), "geolocationGridPointList")
-        for point in _children(grid, "geolocationGridPoint"):
-            lon = _first_text(point, "longitude")
-            lat = _first_text(point, "latitude")
-            if lon is not None and lat is not None:
-                try:
-                    points.append((float(lon), float(lat)))
-                except ValueError:
-                    pass
-    return _polygon_hull(points)
+    """Return the corners of the merged image, not of the parent slice."""
+    rows: dict[float, list[tuple[float, float, float]]] = {}
+    for point in _merged_grid_points(group):
+        try:
+            rows.setdefault(float(_first_text(point, "line")), []).append(
+                (
+                    float(_first_text(point, "pixel")),
+                    float(_first_text(point, "longitude")),
+                    float(_first_text(point, "latitude")),
+                )
+            )
+        except (TypeError, ValueError):
+            continue
+    if not rows:
+        return []
+    corners: list[tuple[float, float]] = []
+    for line in (min(rows), max(rows)):
+        ordered = sorted(rows[line])
+        corners.extend(point[1:] for point in (ordered[0], ordered[-1]))
+    return _polygon_hull(corners)
 
 
 def _all_footprint(records: Sequence[_BurstRecord]) -> list[tuple[float, float]]:
@@ -1167,7 +1294,8 @@ def _all_footprint(records: Sequence[_BurstRecord]) -> list[tuple[float, float]]
 
 
 def _footprint_string(points: Sequence[tuple[float, float]]) -> str:
-    return " ".join(f"{lon:.6f},{lat:.6f}" for lon, lat in points)
+    # GML coordinates in Sentinel-1 manifests are latitude first.
+    return " ".join(f"{lat:.6f},{lon:.6f}" for lon, lat in points)
 
 
 def _safe_product_name(records: Sequence[_BurstRecord], output_name: str | None) -> str:
@@ -1194,7 +1322,7 @@ def _output_stem(record: _BurstRecord, start: datetime, stop: datetime, image_nu
     return (
         f"{record.platform.lower()}-{record.swath.lower()}-slc-{record.polarization.lower()}-"
         f"{start.strftime('%Y%m%dt%H%M%S')}-{stop.strftime('%Y%m%dt%H%M%S')}-"
-        f"{record.absolute_orbit:06d}-{record.datatake_id or '000000'}-{image_number:03d}"
+        f"{record.absolute_orbit:06d}-{(record.datatake_id or '000000').lower()}-{image_number:03d}"
     )
 
 
@@ -1229,7 +1357,51 @@ def _md5(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _copy_template_metadata(template: ET.Element | None, output: ET.Element, start: datetime, stop: datetime, footprint: str) -> None:
+def _mark_manifest_assembled(general_information: ET.Element, polarizations: Sequence[str] = ()) -> None:
+    """Describe the merged product, not the parent slice, in the manifest."""
+    for parent in list(general_information.iter()):
+        for child in list(parent):
+            name = _local_name(child.tag)
+            if name == "productComposition":
+                child.text = "Assembled"
+            elif name == "sliceProductFlag":
+                child.text = "false"
+            elif name in ("sliceNumber", "totalSlices"):
+                parent.remove(child)
+            elif name == "transmitterReceiverPolarisation" and polarizations and child.text not in polarizations:
+                parent.remove(child)
+
+
+def _add_schema_references(metadata_section: ET.Element, files: Sequence[_OutputFile]) -> None:
+    """Add the metadata objects that the manifest's ``repID`` values point to."""
+    present = {item.get("ID") for item in metadata_section}
+    wanted = {file.rep_id for file in files} | {"s1ObjectTypesSchema"}
+    for schema_id, filename in _MANIFEST_SCHEMAS.items():
+        if schema_id in wanted and schema_id not in present:
+            schema = ET.SubElement(
+                metadata_section, "metadataObject", {"ID": schema_id, "classification": "SYNTAX", "category": "REP"}
+            )
+            ET.SubElement(
+                schema,
+                "metadataReference",
+                {
+                    "mimeType": "text/xml",
+                    "vocabularyName": "XML Schema",
+                    "locatorType": "URL",
+                    "href": f"./support/{filename}",
+                },
+            )
+
+
+def _copy_template_metadata(
+    template: ET.Element | None,
+    output: ET.Element,
+    start: datetime,
+    stop: datetime,
+    footprint: str,
+    ascending_node: datetime | None = None,
+    polarizations: Sequence[str] = (),
+) -> None:
     if template is None:
         return
     metadata_section = ET.SubElement(output, "metadataSection")
@@ -1254,6 +1426,13 @@ def _copy_template_metadata(template: ET.Element | None, output: ET.Element, sta
             if object_id == "acquisitionPeriod":
                 _set_path_text(clone, _format_time(start), "metadataWrap", "xmlData", "acquisitionPeriod", "startTime")
                 _set_path_text(clone, _format_time(stop), "metadataWrap", "xmlData", "acquisitionPeriod", "stopTime")
+                if ascending_node is not None:
+                    for name, value in (("startTimeANX", start), ("stopTimeANX", stop)):
+                        element = _first_descendant(clone, name)
+                        if element is not None:
+                            _set_text(element, f"{(value - ascending_node).total_seconds() * 1000:.6e}")
+            if object_id == "generalProductInformation":
+                _mark_manifest_assembled(clone, polarizations)
             if object_id == "measurementFrameSet":
                 coordinates = _first_descendant(clone, "coordinates")
                 _set_text(coordinates, footprint)
@@ -1268,12 +1447,19 @@ def _create_manifest(
     start: datetime,
     stop: datetime,
     footprint: str,
+    ascending_node: datetime | None = None,
+    polarizations: Sequence[str] = (),
 ) -> None:
     xfdu_ns = "urn:ccsds:schema:xfdu:1"
-    ET.register_namespace("xfdu", xfdu_ns)
+    for prefix, uri in _MANIFEST_NAMESPACES.items():
+        ET.register_namespace(prefix, uri)
     root = ET.Element(
         f"{{{xfdu_ns}}}XFDU",
-        {"version": "esa/safe/sentinel-1.0/sentinel-1/sar/level-1/slc/standard/iwdp"},
+        {
+            # The template names the real mode (IW or EW) and polarisation class.
+            "version": (template.get("version") if template is not None else None)
+            or "esa/safe/sentinel-1.0/sentinel-1/sar/level-1/slc/standard/iwdp"
+        },
     )
     information_map = ET.SubElement(root, "informationPackageMap")
     parent = ET.SubElement(
@@ -1290,14 +1476,15 @@ def _create_manifest(
     for file in files:
         attrs = {"unitType": file.unit_type, "repID": file.rep_id}
         if file.kind == "measurement":
-            attrs["dmdID"] = " ".join(item.metadata_id for item in metadata_files)
+            attrs["dmdID"] = " ".join(item.metadata_id for item in metadata_files if file.path.stem in item.path.stem)
         unit = ET.SubElement(parent, f"{{{xfdu_ns}}}contentUnit", attrs)
         ET.SubElement(unit, "dataObjectPointer", {"dataObjectID": file.data_id})
 
-    _copy_template_metadata(template, root, start, stop, footprint)
+    _copy_template_metadata(template, root, start, stop, footprint, ascending_node, polarizations)
     metadata_section = _child(root, "metadataSection")
     if metadata_section is None:
         metadata_section = ET.SubElement(root, "metadataSection")
+    _add_schema_references(metadata_section, files)
 
     for file in files:
         metadata_object = ET.SubElement(
@@ -1398,7 +1585,14 @@ def merge_burst_safes(
     overwrite: bool = False,
 ) -> Path:
     """Merge downloaded burst SAFEs or burst ZIP archives into one SAFE."""
-    input_paths = [Path(raw).expanduser().resolve() for raw in inputs]
+    input_paths: list[Path] = []
+    for raw in inputs:
+        path = Path(raw).expanduser().resolve()
+        # download_bursts leaves a folder of ZIP archives.
+        if path.is_dir() and not _is_burst_safe(path) and not any(_is_burst_safe(item) for item in path.rglob("*.SAFE")):
+            input_paths.extend(sorted(path.glob("*.zip")) or [path])
+        else:
+            input_paths.append(path)
     archives = [path for path in input_paths if path.suffix.lower() == ".zip"]
     if not archives:
         return _merge_burst_safes_without_archives(
@@ -1474,6 +1668,9 @@ def _merge_burst_safes_without_archives(
         image_number = 0
         for (_swath, _polarization), group in grouped:
             image_number += 1
+            source_image_number = _first_text(group[0].product, "imageNumber") or ""
+            if source_image_number.isdigit():
+                image_number = int(source_image_number)
             expected_shape = (group[0].lines, group[0].samples, 2)
             total_lines = group[0].lines * len(group)
             start = min(record.start for record in group)
@@ -1531,6 +1728,8 @@ def _merge_burst_safes_without_archives(
             min(record.start for record in records),
             max(record.stop for record in records),
             footprint,
+            _ascending_node_time(records[0]),
+            sorted({record.polarization for record in records}),
         )
 
         # The product name ends in a four-character CRC in the normal SAFE
@@ -1551,6 +1750,14 @@ def _merge_burst_safes_without_archives(
     finally:
         if work_parent.exists():
             shutil.rmtree(work_parent, ignore_errors=True)
+
+
+def _ascending_node_time(record: _BurstRecord) -> datetime | None:
+    text = _first_text(record.product, "ascendingNodeTime")
+    try:
+        return _parse_time(text) if text else None
+    except (BurstMergeError, ValueError):
+        return None
 
 
 def _crc16(path: Path) -> str:

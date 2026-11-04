@@ -3,6 +3,7 @@ from pathlib import Path
 import copy
 import json
 import zipfile
+from types import SimpleNamespace
 import xml.etree.ElementTree as ET
 
 import numpy as np
@@ -11,7 +12,19 @@ import pytest
 tifffile = pytest.importorskip("tifffile")
 
 from phidown.cli import main
-from phidown.s1_burst_merge import BurstMergeError, discover_burst_safes, merge_burst_safes
+from phidown.s1_burst_merge import (
+    BurstMergeError,
+    _footprint_string,
+    _group_footprint,
+    _keep_rfi_reports_of_bursts,
+    _mark_manifest_assembled,
+    _measurement_gcps,
+    _merged_grid_points,
+    _parent_first_line,
+    _rebase_noise_azimuth_vector,
+    discover_burst_safes,
+    merge_burst_safes,
+)
 
 
 BASE_TIME = datetime(2024, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
@@ -139,7 +152,8 @@ def test_merge_burst_safes_concatenates_data_and_rewrites_metadata(tmp_path):
         assert page.samplesperpixel == 1
         assert page.bitspersample == 32
         assert page.sampleformat.value == 5
-        assert "GCP_0" in str(page.tags[42112].value)
+        assert len(page.tags[33922].value) % 6 == 0 and page.tags[33922].value
+        assert 4326 in page.tags[34735].value
         burst_offsets = (page.dataoffsets[0], page.dataoffsets[2])
     expected = np.concatenate(
         [tifffile.imread(next((first / "measurement").glob("*.tiff"))), tifffile.imread(next((second / "measurement").glob("*.tiff")))],
@@ -326,3 +340,159 @@ def test_merge_burst_tree_accepts_raw_tiffs_and_combined_metadata(tmp_path):
     vectors = noise_root.find("noiseAzimuthVectorList")
     assert vectors is not None and [item.findtext("line") for item in vectors] == ["0 1", "2 3"]
     assert (output / "support" / "s1-level-1-product.xsd").is_file()
+
+
+def _grid_record(lines, burst_lines):
+    product = ET.fromstring(
+        "<product><geolocationGrid><geolocationGridPointList>"
+        + "".join(
+            f"<geolocationGridPoint><line>{line}</line><pixel>{pixel}</pixel>"
+            "<latitude>1</latitude><longitude>2</longitude><height>3</height></geolocationGridPoint>"
+            for line in lines
+            for pixel in (0, 10)
+        )
+        + "</geolocationGridPointList></geolocationGrid></product>"
+    )
+    return SimpleNamespace(product=product, lines=burst_lines)
+
+
+def test_merged_grid_has_one_set_of_points_bounding_the_image():
+    """CDSE burst grids repeat the slice grid relative to each burst."""
+    group = [_grid_record([0, 100, 200, 300, 399], 100), _grid_record([-100, 0, 100, 200, 299], 100)]
+    rows = sorted(int(point.findtext("line")) for point in _merged_grid_points(group))
+    assert rows == [0, 0, 100, 100, 200, 200]
+    assert len(_measurement_gcps(group)) == 6
+
+
+def test_merged_grid_of_later_bursts_starts_at_image_line_zero():
+    group = [_grid_record([-100, 0, 100, 200, 299], 100)]
+    assert sorted({int(point.findtext("line")) for point in _merged_grid_points(group)}) == [0, 100]
+    assert _parent_first_line(group[0]) == 100
+
+
+def _noise_vector():
+    return ET.fromstring(
+        "<noiseAzimuthVector><firstAzimuthLine>0</firstAzimuthLine><lastAzimuthLine>400</lastAzimuthLine>"
+        '<line count="5">0 100 200 300 400</line><noiseAzimuthLut count="5">1 2 3 4 5</noiseAzimuthLut></noiseAzimuthVector>'
+    )
+
+
+def test_noise_vector_of_first_bursts_is_cut_at_image_end():
+    vector = _noise_vector()
+    assert _rebase_noise_azimuth_vector(vector, 0, 201)
+    assert vector.findtext("line") == "0 100 200"
+    assert vector.findtext("noiseAzimuthLut") == "1 2 3"
+    assert vector.findtext("lastAzimuthLine") == "200"
+
+
+def test_noise_vector_of_later_bursts_is_shifted_and_interpolated():
+    vector = _noise_vector()
+    assert _rebase_noise_azimuth_vector(vector, -150, 100)
+    assert vector.findtext("line") == "0 50 99"
+    assert [float(value) for value in vector.findtext("noiseAzimuthLut").split()] == pytest.approx([2.5, 3.0, 3.49])
+    assert vector.findtext("firstAzimuthLine") == "0"
+    assert vector.findtext("lastAzimuthLine") == "99"
+
+
+def test_merge_accepts_a_folder_of_burst_zip_archives(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    archives = tmp_path / "archives"
+    archives.mkdir()
+    for ordinal, burst_id in enumerate((1001, 1002), start=1):
+        safe = _make_burst_safe(source, ordinal, burst_id, start=BASE_TIME + timedelta(seconds=ordinal))
+        with zipfile.ZipFile(archives / f"{safe.stem}.zip", "w") as archive:
+            for item in safe.rglob("*"):
+                if item.is_file():
+                    archive.write(item, item.relative_to(source))
+
+    output = merge_burst_safes([archives], tmp_path / "out")
+
+    assert (output / "manifest.safe").exists()
+    assert "_000315_" in output.name  # missionDataTakeId 789 in hex.
+
+
+def test_merged_manifest_describes_the_assembled_product(tmp_path):
+    first = _make_burst_safe(tmp_path / "inputs", 1, 100, start=BASE_TIME)
+    second = _make_burst_safe(tmp_path / "inputs", 2, 101, start=BASE_TIME + timedelta(seconds=2))
+
+    output = merge_burst_safes([first, second], tmp_path / "output")
+
+    manifest = (output / "manifest.safe").read_text()
+    assert 'ID="s1Level1ProductSchema"' in manifest and "./support/s1-level-1-product.xsd" in manifest
+    assert 'xmlns:xfdu="urn:ccsds:schema:xfdu:1"' in manifest and "ns0:" not in manifest
+    assert next((output / "measurement").glob("*.tiff")).name.endswith("-000315-001.tiff")
+
+
+def test_manifest_general_information_is_marked_assembled():
+    general = ET.fromstring(
+        "<g><productComposition>Slice</productComposition><sliceProductFlag>true</sliceProductFlag>"
+        "<sliceNumber>11</sliceNumber><totalSlices>11</totalSlices></g>"
+    )
+    _mark_manifest_assembled(general)
+    assert general.findtext("productComposition") == "Assembled"
+    assert general.findtext("sliceProductFlag") == "false"
+    assert general.find("sliceNumber") is None and general.find("totalSlices") is None
+
+
+def test_rfi_reports_of_absent_bursts_are_removed():
+    burst_list = "".join(f"<burst><azimuthTime>{time}</azimuthTime></burst>" for time in ("t1", "t2"))
+    record = SimpleNamespace(
+        product=ET.fromstring(f"<product><swathTiming><burstList>{burst_list}</burstList></swathTiming></product>")
+    )
+    rfi = ET.fromstring(
+        '<rfi><rfiBurstReportList count="3">'
+        + "".join(f"<rfiBurstReport><azimuthTime>{time}</azimuthTime></rfiBurstReport>" for time in ("t0", "t1", "t2"))
+        + "</rfiBurstReportList></rfi>"
+    )
+    _keep_rfi_reports_of_bursts(rfi, [record])
+    assert rfi.find("rfiBurstReportList").get("count") == "2"
+
+
+def test_merge_rejects_bursts_from_different_datatakes(tmp_path):
+    first = _make_burst_safe(tmp_path / "inputs", 1, 100, start=BASE_TIME)
+    second = _make_burst_safe(tmp_path / "inputs", 2, 101, start=BASE_TIME + timedelta(seconds=2))
+    annotation = next((second / "annotation").glob("*.xml"))
+    annotation.write_text(annotation.read_text().replace("<missionDataTakeId>789<", "<missionDataTakeId>790<"))
+    with pytest.raises(BurstMergeError, match="same datatake"):
+        merge_burst_safes([first, second], tmp_path / "output")
+
+
+def test_manifest_lists_only_polarisations_in_the_product():
+    general = ET.fromstring(
+        "<g><transmitterReceiverPolarisation>VV</transmitterReceiverPolarisation>"
+        "<transmitterReceiverPolarisation>VH</transmitterReceiverPolarisation></g>"
+    )
+    _mark_manifest_assembled(general, ["VV"])
+    assert [item.text for item in general] == ["VV"]
+
+
+def test_footprint_uses_merged_image_corners_latitude_first():
+    product = ET.fromstring(
+        "<product><geolocationGrid><geolocationGridPointList>"
+        + "".join(
+            f"<geolocationGridPoint><line>{line}</line><pixel>{pixel}</pixel>"
+            f"<latitude>{-26 - line / 100}</latitude><longitude>{30 + pixel}</longitude></geolocationGridPoint>"
+            for line in (0, 100, 200)
+            for pixel in (0, 1)
+        )
+        + "</geolocationGridPointList></geolocationGrid></product>"
+    )
+    corners = _group_footprint([SimpleNamespace(product=product, lines=100)])
+    assert sorted(corners) == [(30.0, -27.0), (30.0, -26.0), (31.0, -27.0), (31.0, -26.0)]
+    assert _footprint_string([(30.0, -26.0)]) == "-26.000000,30.000000"
+
+
+def test_rfi_reports_are_combined_across_parent_slices():
+    burst_list = "".join(f"<burst><azimuthTime>{time}</azimuthTime></burst>" for time in ("t1", "t2"))
+    record = SimpleNamespace(
+        product=ET.fromstring(f"<product><swathTiming><burstList>{burst_list}</burstList></swathTiming></product>")
+    )
+
+    def rfi(*times):
+        reports = "".join(f"<rfiBurstReport><azimuthTime>{time}</azimuthTime></rfiBurstReport>" for time in times)
+        return ET.fromstring(f"<rfi><rfiBurstReportList>{reports}</rfiBurstReportList></rfi>")
+
+    output = rfi("t0", "t1")
+    _keep_rfi_reports_of_bursts(output, [record], [rfi("t1", "t2", "t3")])
+    assert [item.findtext("azimuthTime") for item in output.find("rfiBurstReportList")] == ["t1", "t2"]

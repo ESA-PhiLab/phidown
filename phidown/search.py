@@ -6,7 +6,7 @@ import json
 import ast
 import typing
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import copy 
 import asyncio
@@ -1260,6 +1260,7 @@ class CopernicusDataSearcher:
         # Parent Product Name
         if self.parent_product_name is not None:
             filters.append(f"ParentProductName eq '{_odata_text(self.parent_product_name)}'")
+            filters.extend(self._parent_product_date_filters())
         
         # Parent Product Type
         if self.parent_product_type is not None:
@@ -1288,6 +1289,24 @@ class CopernicusDataSearcher:
         # Platform Serial Identifier
         if self.platform_serial_identifier is not None:
             filters.append(f"PlatformSerialIdentifier eq '{_odata_text(self.platform_serial_identifier)}'")
+
+    def _parent_product_date_filters(self) -> typing.List[str]:
+        """Limit a parent product query to the dates in the product name.
+
+        Without a date range this query can exceed the request timeout on
+        CDSE; with one it takes well under a second.
+        """
+        if self.start_date or self.end_date:
+            return []
+        match = re.search(r"_(\d{8}T\d{6})_(\d{8}T\d{6})_", str(self.parent_product_name))
+        if match is None:
+            return []
+        margin = timedelta(minutes=5)
+        start, end = (datetime.strptime(value, "%Y%m%dT%H%M%S") for value in match.groups())
+        return [
+            f"ContentDate/Start ge {(start - margin).isoformat()}Z",
+            f"ContentDate/Start le {(end + margin).isoformat()}Z",
+        ]
 
     def _build_filter(self):
         """

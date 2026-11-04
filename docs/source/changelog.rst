@@ -50,6 +50,10 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 - Download checks accept every product layout, not only ``manifest.safe``, so Sentinel-3, Sentinel-6, Sentinel-5P, DEM and SMOS products are no longer reported as failed or incomplete.
 - ``s5cmd`` is found next to the Python interpreter when its environment is not activated, as in notebook kernels.
 - Products without an S3 path report a clear message instead of raising ``KeyError``.
+- Burst searches by ``parent_product_name`` use the dates in the name when no dates are given. These queries took 18-36 s and could exceed the request timeout; they now take under a second.
+- ``merge-bursts`` output was checked against a real parent SLC, which fixed: tie points missing from the measurement TIFF; repeated geolocation grid points and points beyond the image; noise azimuth vectors shifted once per burst; datatake IDs in decimal instead of hex in names; the source ``imageNumber``; manifest slice flags and ANX times describing the parent; manifest schema references with no target; RFI reports and the slice list of absent bursts; generated XML namespace prefixes; manifest footprints that were longitude first and covered the whole parent slice; polarisations not in the product; image statistics, which now cover all pixels with I and Q separate; and manifest metadata links, which now point to each dataset's own annotations.
+- ``merge-bursts`` rejects bursts from different datatakes.
+- ``merge-bursts`` accepts a folder of burst ZIP archives, which is what ``download_bursts`` writes.
 - Coverage is measured for point and line AOIs, and the AOI centroid is correct across the antimeridian.
 - ``plot_kml_coordinates`` reads KML files with a default namespace, and ``get_ais_data`` checks the AOI before downloading data.
 
