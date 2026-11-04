@@ -16,7 +16,6 @@ Sentinel-1 burst search has no STAC equivalent and stays on OData.
 from __future__ import annotations
 
 import datetime
-import fnmatch
 import re
 import time
 import typing
@@ -28,13 +27,33 @@ REQUEST_TIMEOUT_SECONDS = 30
 # Upper bound for one STAC page.  ``top`` larger than this is fetched over
 # several pages.
 MAX_PAGE_SIZE = 1000
-# Page size for collections that reject MAX_PAGE_SIZE.  CDSE needs the
-# ``fields`` extension for larger pages of heavy collections (sentinel-2-l2a).
-FALLBACK_PAGE_SIZE = 100
 # CDSE answers 429 when requests come too fast (for example while paging
 # /collections).  Retry these with a back-off.
 MAX_RATE_LIMIT_RETRIES = 6
 MAX_RETRY_DELAY_SECONDS = 30
+# Heavy pages can exceed REQUEST_TIMEOUT_SECONDS once and then succeed.
+MAX_TIMEOUT_RETRIES = 2
+
+# phidown collections that the STAC catalogue fully serves.  The others in
+# config.json (SMOS, ENVISAT, Landsat, CCM, ...) have no matching STAC
+# collection or incomplete S3 paths, so they are searched through OData.
+STAC_COLLECTIONS = frozenset({"SENTINEL-1", "SENTINEL-2", "SENTINEL-3", "SENTINEL-5P", "SENTINEL-6", "COP-DEM"})
+# Attributes with the same meaning and values in STAC and OData.  Others are
+# missing from STAC items or have other values (processingLevel is LEVEL1 in
+# OData and L1 in STAC), so queries that use them are searched through OData.
+STAC_ATTRIBUTES = frozenset({
+    "productType",
+    "orbitDirection",
+    "relativeOrbitNumber",
+    "orbitNumber",
+    "platformSerialIdentifier",
+    "operationalMode",
+    "polarisationChannels",
+    "tileId",
+})
+_STAC_NAME_RE = re.compile(r"^(S[1-6][A-D_P]?_|COPERNICUS_DSM_COG_|DEM1_)", re.IGNORECASE)
+_S1_NON_COG_GRD_RE = re.compile(r"^S1[A-D_]_\w\w_GRD(?!.*_COG(\.SAFE)?$)", re.IGNORECASE)
+_S1_RAW_RE = re.compile(r"^S1[A-D_]_\w\w_RAW", re.IGNORECASE)
 
 # OData attribute name -> STAC item property (names checked against CDSE
 # STAC items).
@@ -99,7 +118,6 @@ _S3_INSTRUMENTS = {"ol": "olci", "sl": "sl", "sr": "sr", "sy": "syn"}
 _S3_TIMELINESS = {"NR": "nrt", "NT": "ntc", "ST": "stc"}
 # Full Sentinel-1 product types, for example IW_SLC__1S or EW_GRDM_1S.
 _S1_PRODUCT_TYPE_RE = re.compile(r"^(IW|EW|SM|S[1-6]|WV)_(SLC|GRD|OCN|RAW|ETA)")
-_S1_GRD_COLLECTION = "sentinel-1-grd"
 # Non-Sentinel product name prefix -> collection id prefix.
 _OTHER_NAME_PREFIXES = (
     ("COPERNICUS_DSM_COG_", "cop-dem-glo-"),
@@ -112,6 +130,10 @@ _ODATA_ID_RE = re.compile(r"Products\(([0-9a-fA-F-]{36})\)")
 
 class StacError(RuntimeError):
     """Raised when the STAC API returns an unusable response."""
+
+
+class StacQueryRejected(StacError):
+    """Raised when the collections cannot answer a query as requested."""
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +245,8 @@ def _property_value(name: str, value: typing.Any, constellation: typing.Optional
         return f"MGRS-{value.upper().lstrip('T')}"
     if name == "eopf:datatake_id" and isinstance(value, int):
         return str(value)
+    if name in ("sat:relative_orbit", "sat:absolute_orbit") and isinstance(value, str) and value.strip().isdigit():
+        return int(value)
     return value
 
 
@@ -296,7 +320,9 @@ def resolve_collections(
         if slug:
             selected = _collections_for_slug(prefix, slug, candidates)
             if selected:
-                return selected, True
+                # A bare SLC or OCN also covers the separate wave mode collection.
+                wave_mode = _collections_for_slug(prefix, f"{slug}-wv", candidates)
+                return selected + wave_mode, True
     default = [item for item in candidates if not any(marker in item.lower() for marker in EXCLUDED_COLLECTION_MARKERS)]
     return default or candidates, False
 
@@ -354,41 +380,38 @@ def collections_for_product_name(name: str, available: typing.Sequence[str]) -> 
     ]
 
 
-def datetime_window_for_name(name: str) -> typing.Optional[str]:
-    """Return a STAC datetime range around the first date in a product name.
+def name_needs_odata(name: str) -> bool:
+    """Return whether a product name can only be resolved through OData.
 
-    A LIKE filter on ``id`` over a large collection times out on CDSE unless
-    a datetime range limits it.  Product names start with the sensing date,
-    so a range of one day on each side of it is safe.
+    STAC holds no Sentinel-1 RAW items and only the ``_COG`` version of
+    Sentinel-1 GRD, and needs a collection for each name it looks up.
     """
-    match = re.search(r"(?<!\d)(\d{4})(\d{2})(\d{2})(?:T|\d|_|$)", name)
-    if not match:
-        return None
-    try:
-        day = datetime.date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
-    except ValueError:
-        return None
-    start = day - datetime.timedelta(days=1)
-    end = day + datetime.timedelta(days=2)
-    return f"{start.isoformat()}T00:00:00Z/{end.isoformat()}T00:00:00Z"
+    return (
+        not _STAC_NAME_RE.match(name)
+        or bool(_S1_NON_COG_GRD_RE.match(name))
+        or bool(_S1_RAW_RE.match(name))
+    )
 
 
-def item_ids_for_name(name: str, collections: typing.Sequence[str]) -> typing.List[str]:
-    """Return the STAC item ids to try for a product name.
+def item_id_for_name(name: str) -> str:
+    """Return the STAC item id for a product name.
 
-    Item ids drop the ``.SAFE``-style extension, and Sentinel-1 GRD items
-    are COG products whose ids end with ``_COG`` (the API rejects other ids
-    for that collection).
+    Item ids drop the ``.SAFE``-style extension; CDSE rejects ids with one.
     """
-    stem = name
     for suffix in _PRODUCT_SUFFIXES:
         if name.upper().endswith(suffix.upper()):
-            stem = name[: -len(suffix)]
-            break
-    # CDSE rejects ids with a .SAFE suffix, so only the stem is sent.
-    if _S1_GRD_COLLECTION in collections:
-        return [stem if stem.endswith("_COG") else f"{stem}_COG"]
-    return [stem]
+            return name[: -len(suffix)]
+    return name
+
+
+def odata_names_for_name(name: str) -> typing.List[str]:
+    """Return the OData ``Name`` values to try for a product name.
+
+    OData names carry the extension, which STAC lookups let users leave out.
+    """
+    if item_id_for_name(name) == name and re.match(r"^S[12][A-D_]_", name, re.IGNORECASE):
+        return [f"{name}.SAFE"]
+    return [name]
 
 
 def _rfc3339(value: typing.Optional[str]) -> str:
@@ -424,7 +447,8 @@ def build_search_body(
     if aoi_wkt:
         body["intersects"] = wkt_to_geojson(aoi_wkt)
     if start_date or end_date:
-        body["datetime"] = f"{_rfc3339(start_date)}/{_rfc3339(end_date)}"
+        # CDSE's firewall blocks "../end", so an open start is left empty.
+        body["datetime"] = f"{_rfc3339(start_date) if start_date else ''}/{_rfc3339(end_date)}"
 
     conditions: typing.List[typing.Dict[str, typing.Any]] = []
     constellation = _constellation(collections)
@@ -462,13 +486,21 @@ def build_search_body(
 # HTTP
 # ---------------------------------------------------------------------------
 
+def _request(http: typing.Any, method: str, url: str, **kwargs: typing.Any) -> typing.Any:
+    """Send one request and retry it when it times out."""
+    send = http.post if method == "POST" else http.get
+    for attempt in range(MAX_TIMEOUT_RETRIES + 1):
+        try:
+            return send(url, timeout=REQUEST_TIMEOUT_SECONDS, **kwargs)
+        except requests.exceptions.Timeout:
+            if attempt == MAX_TIMEOUT_RETRIES:
+                raise
+
+
 def _send(http: typing.Any, method: str, url: str, **kwargs: typing.Any) -> typing.Any:
     """Send one request and retry it while the API answers 429."""
     for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
-        if method == "POST":
-            response = http.post(url, timeout=REQUEST_TIMEOUT_SECONDS, **kwargs)
-        else:
-            response = http.get(url, timeout=REQUEST_TIMEOUT_SECONDS, **kwargs)
+        response = _request(http, method, url, **kwargs)
         if getattr(response, "status_code", None) != 429 or attempt == MAX_RATE_LIMIT_RETRIES:
             return response
         retry_after = (getattr(response, "headers", None) or {}).get("Retry-After")
@@ -497,72 +529,19 @@ def _rejected_filter_properties(response: typing.Any) -> typing.Set[str]:
     return rejected
 
 
-def _accepted_limit(response: typing.Any, limit: typing.Any) -> typing.Optional[int]:
-    """Return a smaller page size after a 400 LimitValidationError, if any."""
-    if getattr(response, "status_code", None) != 400 or not isinstance(limit, int):
-        return None
+def _rejects_limit(response: typing.Any) -> bool:
+    """Return whether a response is a 400 LimitValidationError.
+
+    CDSE caps the page size of heavy collections (sentinel-2-l2a).  Smaller
+    pages take about 10 s each there, which is too slow for large results.
+    """
+    if getattr(response, "status_code", None) != 400:
+        return False
     try:
         detail = response.json().get("detail", {})
     except Exception:
-        return None
-    if not isinstance(detail, dict) or detail.get("code") != "LimitValidationError":
-        return None
-    match = re.search(r"maximum of (\d+)", str(detail.get("message", "")))
-    accepted = min(int(match.group(1)), FALLBACK_PAGE_SIZE) if match else FALLBACK_PAGE_SIZE
-    return accepted if 0 < accepted < limit else None
-
-
-def _condition_property(condition: typing.Dict[str, typing.Any]) -> typing.Optional[str]:
-    for arg in condition.get("args", []):
-        if isinstance(arg, dict) and "property" in arg:
-            return arg["property"]
-    return None
-
-
-def _split_conditions(
-    filter_expr: typing.Dict[str, typing.Any],
-    rejected: typing.Set[str],
-) -> typing.Tuple[typing.List[typing.Dict[str, typing.Any]], typing.List[typing.Dict[str, typing.Any]]]:
-    """Split a filter into server-side and client-side conditions."""
-    conditions = filter_expr["args"] if filter_expr.get("op") == "and" else [filter_expr]
-    server = [item for item in conditions if _condition_property(item) not in rejected]
-    client = [item for item in conditions if _condition_property(item) in rejected]
-    return server, client
-
-
-def _combine(conditions: typing.List[typing.Dict[str, typing.Any]]) -> typing.Dict[str, typing.Any]:
-    return conditions[0] if len(conditions) == 1 else {"op": "and", "args": conditions}
-
-
-def _same(left: typing.Any, right: typing.Any) -> bool:
-    if isinstance(left, str) or isinstance(right, str):
-        return str(left).lower() == str(right).lower()
-    return left == right
-
-
-def _matches(item: typing.Dict[str, typing.Any], condition: typing.Dict[str, typing.Any]) -> bool:
-    """Evaluate one CQL2-JSON condition (as built here) on a STAC item."""
-    op = condition.get("op")
-    if op == "and":
-        return all(_matches(item, part) for part in condition["args"])
-    name = _condition_property(condition)
-    expected = condition["args"][1]
-    value = item.get("id") if name == "id" else (item.get("properties") or {}).get(name)
-    if value is None:
         return False
-    if op == "=":
-        return _same(value, expected)
-    if op == "a_contains":
-        values = {str(entry).lower() for entry in (value if isinstance(value, list) else [value])}
-        return all(str(entry).lower() in values for entry in expected)
-    if op == "like":
-        pattern = expected.replace("\\%", "\0").replace("\\_", "\1").replace("%", "*").replace("_", "?")
-        return fnmatch.fnmatchcase(str(value), pattern.replace("\0", "%").replace("\1", "_"))
-    try:
-        number, limit = float(value), float(expected)
-    except (TypeError, ValueError):
-        return False
-    return {"<": number < limit, "<=": number <= limit, ">": number > limit, ">=": number >= limit}.get(op, False)
+    return isinstance(detail, dict) and detail.get("code") == "LimitValidationError"
 
 
 # base_url -> (time fetched, collection ids).  CDSE serves 400+ collections
@@ -585,7 +564,8 @@ def list_collections(
         if cached and time.monotonic() - cached[0] < COLLECTIONS_CACHE_SECONDS:
             return list(cached[1])
     http = session or requests
-    url: typing.Optional[str] = f"{base_url.rstrip('/')}/collections"
+    # A large limit avoids 40+ requests at the default page size of 10.
+    url: typing.Optional[str] = f"{base_url.rstrip('/')}/collections?limit={MAX_PAGE_SIZE}"
     ids: typing.List[str] = []
     while url:
         response = _send(http, "GET", url)
@@ -604,12 +584,20 @@ def search(
     max_items: typing.Optional[int],
     base_url: str = STAC_API_URL,
     session: typing.Optional[typing.Any] = None,
+    keep: typing.Optional[typing.Callable[[typing.Dict[str, typing.Any]], bool]] = None,
 ) -> typing.Tuple[typing.List[typing.Dict[str, typing.Any]], typing.Optional[int], typing.Any]:
     """Run a STAC search and follow ``next`` links.
 
     Args:
         body: The POST body from :func:`build_search_body`.
         max_items: Stop after this many items; ``None`` fetches every page.
+        keep: Optional check on each item; other items do not count towards
+            ``max_items``.
+
+    Raises:
+        StacQueryRejected: If the collections cannot filter on a property or
+            reject the page size.
+        StacError: If the response is not a STAC search result.
 
     Returns:
         The items, the ``numberMatched`` value when the API reports it, and
@@ -621,41 +609,33 @@ def search(
     request_body: typing.Optional[typing.Dict[str, typing.Any]] = dict(body)
     items: typing.List[typing.Dict[str, typing.Any]] = []
     matched: typing.Optional[int] = None
-    # Conditions on properties that the collections do not list as
-    # queryables.  CDSE rejects them, so they are checked on each item.
-    client_conditions: typing.List[typing.Dict[str, typing.Any]] = []
     seen_ids: typing.Set[typing.Any] = set()
     response = None
     while True:
         response = _send(http, method, url, **({"json": request_body} if method == "POST" else {}))
-        accepted_limit = _accepted_limit(response, (request_body or {}).get("limit")) if not items else None
-        if accepted_limit is not None:
-            request_body = {**request_body, "limit": accepted_limit}
-            continue
+        if not items and _rejects_limit(response):
+            raise StacQueryRejected(f"The collections reject a page size of {(request_body or {}).get('limit')}")
         rejected = _rejected_filter_properties(response) if not items else set()
-        if rejected and request_body and request_body.get("filter"):
-            server_conditions, moved = _split_conditions(request_body["filter"], rejected)
-            if moved:
-                client_conditions.extend(moved)
-                request_body = dict(request_body)
-                if server_conditions:
-                    request_body["filter"] = _combine(server_conditions)
-                else:
-                    request_body.pop("filter", None)
-                    request_body.pop("filter-lang", None)
-                continue
+        if rejected:
+            raise StacQueryRejected(f"The collections cannot filter on: {', '.join(sorted(rejected))}")
         response.raise_for_status()
-        payload = response.json()
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            # CDSE's firewall answers some requests with an HTML page and HTTP 200.
+            raise StacError("STAC search response is not JSON") from exc
         if not isinstance(payload, dict) or "features" not in payload:
             raise StacError("STAC search response has no 'features' list")
-        if matched is None and not client_conditions:
+        if matched is None:
             matched = payload.get("numberMatched", payload.get("context", {}).get("matched"))
         for item in payload["features"]:
             # The same product can be in a combined and a timeliness
-            # collection; keep it once.
-            if item.get("id") in seen_ids or not all(_matches(item, condition) for condition in client_conditions):
+            # collection, or have ids with and without an extension; keep it
+            # once.
+            product = item_id_for_name(str(item.get("id")))
+            if product in seen_ids or (keep is not None and not keep(item)):
                 continue
-            seen_ids.add(item.get("id"))
+            seen_ids.add(product)
             items.append(item)
         if max_items is not None and len(items) >= max_items:
             return items[:max_items], matched, response
@@ -694,6 +674,45 @@ def _product_s3_path(href: str, item_id: str = "") -> typing.Optional[str]:
         if segment.endswith(_PRODUCT_SUFFIXES):
             return "/".join(segments[: index + 1])
     return path.rsplit("/", 1)[0] if "." in segments[-1] else path
+
+
+def _odata_footprint(geometry: typing.Optional[typing.Dict[str, typing.Any]]) -> typing.Optional[str]:
+    """Return a footprint in the OData ``geography'SRID=4326;...'`` format."""
+    wkt = geojson_to_wkt(geometry)
+    return f"geography'SRID=4326;{wkt}'" if wkt else None
+
+
+def _parse_timestamp(value: str) -> datetime.datetime:
+    """Parse an RFC 3339 timestamp; values without a zone are taken as UTC."""
+    text = re.sub(r"(\.\d{6})\d+", r"\1", value.strip())
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        text += "T00:00:00"
+    parsed = datetime.datetime.fromisoformat(re.sub(r"[zZ]$", "+00:00", text))
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=datetime.timezone.utc)
+
+
+def item_starts_within(
+    start_date: typing.Optional[str],
+    end_date: typing.Optional[str],
+) -> typing.Callable[[typing.Dict[str, typing.Any]], bool]:
+    """Return a check that an item's sensing start is in ``[start, end)``.
+
+    STAC ``datetime`` matches any item that overlaps the range, and CDSE does
+    not allow a ``start_datetime`` filter.  phidown's dates select by sensing
+    start.
+    """
+    start = _parse_timestamp(start_date) if start_date else None
+    end = _parse_timestamp(end_date) if end_date else None
+
+    def check(item: typing.Dict[str, typing.Any]) -> bool:
+        properties = item.get("properties") or {}
+        value = properties.get("start_datetime") or properties.get("datetime")
+        if not value:
+            return True
+        sensed = _parse_timestamp(value)
+        return (start is None or sensed >= start) and (end is None or sensed < end)
+
+    return check
 
 
 def _attribute_value_type(value: typing.Any) -> str:
@@ -802,7 +821,7 @@ def item_to_record(item: typing.Dict[str, typing.Any]) -> typing.Dict[str, typin
         "Online": True,
         "S3Path": s3_path,
         "DownloadUrl": download_url,
-        "Footprint": geojson_to_wkt(item.get("geometry")),
+        "Footprint": _odata_footprint(item.get("geometry")),
         "GeoFootprint": item.get("geometry"),
         "ContentDate": {"Start": start, "End": end},
         "Attributes": attributes,
@@ -819,9 +838,11 @@ __all__ = [
     "StacError",
     "build_search_body",
     "collections_for_product_name",
-    "datetime_window_for_name",
     "geojson_to_wkt",
-    "item_ids_for_name",
+    "item_id_for_name",
+    "item_starts_within",
+    "name_needs_odata",
+    "odata_names_for_name",
     "item_to_record",
     "items_to_records",
     "list_collections",

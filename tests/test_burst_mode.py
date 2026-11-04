@@ -56,7 +56,7 @@ class TestBurstModeInitialization:
             end_date=end_date,
         )
 
-        output = capsys.readouterr().out
+        output = capsys.readouterr().err
         assert (
             'Burst availability depends on the CDSE catalogue and may vary by '
             'acquisition date, area, platform, and acquisition mode. Please verify '

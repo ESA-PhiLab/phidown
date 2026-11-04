@@ -35,7 +35,8 @@ Common Filters
 The most frequently used ``query_by_filter()`` parameters are:
 
 * ``collection_name``: Mission or collection such as ``SENTINEL-1`` or ``SENTINEL-2``
-* ``product_type``: Product identifier such as ``GRD``, ``SLC``, ``S2MSI1C``, or ``OL_2_WFR___``
+* ``product_type``: Product identifier such as ``GRD``, ``SLC``, ``S2MSI1C``, or ``S3OLCI``.
+  An exact Sentinel-3 type goes in ``attributes``, for example ``{'productType': 'OL_2_WFR___'}``
 * ``aoi_wkt``: Area of interest as WKT in EPSG:4326. Supported types are ``POINT``,
   ``MULTIPOINT``, ``LINESTRING``, ``MULTILINESTRING``, ``POLYGON``, and ``MULTIPOLYGON``
 * ``start_date`` and ``end_date``: ISO 8601 time filters

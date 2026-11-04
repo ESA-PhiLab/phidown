@@ -96,6 +96,10 @@ class AISDataHandler:
         
         self._errors.clear()
         
+        # Check the AOI first: the data download below can be large
+        if aoi_wkt:
+            aoi_wkt = validate_wkt(aoi_wkt)
+        
         # Parse and validate dates
         start_date_obj = self._parse_date(start_date)
         if start_date_obj is None:
@@ -463,7 +467,7 @@ class AISDataHandler:
             )
         
         try:
-            geom = shapely_wkt.loads(validate_wkt(wkt_clean))
+            geom = shapely_wkt.loads(wkt_clean)
         except Exception as exc:
             raise ValueError(f"AOI parse error: {exc}")
         

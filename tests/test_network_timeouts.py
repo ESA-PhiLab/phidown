@@ -48,7 +48,7 @@ def test_stac_product_search_uses_request_timeout(mock_get, mock_post):
     mock_post.return_value = search
 
     searcher = CopernicusDataSearcher()
-    searcher.query_by_filter(collection_name='SENTINEL-1')
+    searcher.query_by_filter(collection_name='SENTINEL-1', product_type='SLC')
     searcher.execute_query()
     searcher.query_by_name('S1A_TEST_PRODUCT')
 

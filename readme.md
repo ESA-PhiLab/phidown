@@ -10,7 +10,7 @@
 `phidown` is a Python package and CLI for searching and downloading Copernicus Data Space products and PhiSat-2 INSULA platform files.
 
 It supports:
-- Product search through the CDSE STAC API (collection, dates, AOI, orbit direction, cloud cover). Results keep the OData-style columns (`Id`, `Name`, `S3Path`, `ContentDate`, `GeoFootprint`, `Attributes`).
+- Product search through the CDSE STAC API (collection, dates, AOI, orbit direction, cloud cover). Results keep the OData-style columns (`Id`, `Name`, `S3Path`, `ContentDate`, `GeoFootprint`, `Attributes`). Queries that STAC cannot answer fully use OData instead: name patterns, Sentinel-1 RAW and non-COG GRD, collections outside Sentinel-1/2/3/5P/6 and COP-DEM, large Sentinel-2 L2A pages, and most `attributes`.
 - Product download through S3 (`s5cmd`).
 - PhiSat-2 search and download through the INSULA platform.
 - Sentinel-1 SLC burst search and burst coverage analysis workflows.

@@ -82,7 +82,7 @@ def test_wkt_to_geojson_handles_supported_types():
 
 
 def test_resolve_collections_uses_product_type_suffix():
-    assert stac.resolve_collections("SENTINEL-1", "SLC", COLLECTIONS) == (["sentinel-1-slc"], True)
+    assert stac.resolve_collections("SENTINEL-1", "SLC", COLLECTIONS) == (["sentinel-1-slc", "sentinel-1-slc-wv"], True)
     assert stac.resolve_collections("SENTINEL-1", "GRD", COLLECTIONS) == (["sentinel-1-grd"], True)
     assert stac.resolve_collections("SENTINEL-2", "S2MSI1C", COLLECTIONS) == (["sentinel-2-l1c"], True)
     assert stac.resolve_collections("SENTINEL-2", "S2MSI2A", COLLECTIONS) == (["sentinel-2-l2a"], True)
@@ -137,20 +137,6 @@ def test_collections_for_product_name():
     assert "sentinel-1-slc-burst" not in stac.collections_for_product_name("", COLLECTIONS)
 
 
-def test_datetime_window_for_name():
-    assert stac.datetime_window_for_name(PRODUCT) == "2024-01-01T00:00:00Z/2024-01-04T00:00:00Z"
-    assert stac.datetime_window_for_name("S2B_MSIL2A_20240608T0955") == "2024-06-07T00:00:00Z/2024-06-10T00:00:00Z"
-    assert stac.datetime_window_for_name("IW_SLC") is None
-    assert stac.datetime_window_for_name("_20241399") is None
-
-
-def test_item_ids_for_name_handles_extension_and_cog_suffix():
-    assert stac.item_ids_for_name(f"{PRODUCT}.SAFE", ["sentinel-1-slc"]) == [PRODUCT]
-    assert stac.item_ids_for_name(PRODUCT, ["sentinel-1-slc"]) == [PRODUCT]
-    assert stac.item_ids_for_name("S1A_IW_GRDH_X.SAFE", ["sentinel-1-grd"]) == ["S1A_IW_GRDH_X_COG"]
-    assert stac.item_ids_for_name("S1A_IW_GRDH_X_COG.SAFE", ["sentinel-1-grd"]) == ["S1A_IW_GRDH_X_COG"]
-
-
 def test_build_search_body_translates_filters():
     body = stac.build_search_body(
         collections=["sentinel-2-l2a"],
@@ -188,7 +174,7 @@ def test_build_search_body_open_date_range_and_no_filter():
     assert body["datetime"] == "2024-01-01T00:00:00Z/.."
     body = stac.build_search_body(collections=["x"], start_date="2024-01-01T00:00:00", end_date="2024-02-01")
     assert body["datetime"] == "2024-01-01T00:00:00Z/2024-02-01T00:00:00Z"
-    assert stac.build_search_body(collections=["x"], end_date="2024-02-01T00:00:00+01:00")["datetime"] == "../2024-02-01T00:00:00+01:00"
+    assert stac.build_search_body(collections=["x"], end_date="2024-02-01T00:00:00+01:00")["datetime"] == "/2024-02-01T00:00:00+01:00"
     assert "filter" not in body
 
 
@@ -201,7 +187,7 @@ def test_item_to_record_maps_odata_columns():
     assert record["ContentLength"] == 4200000000
     assert record["ContentDate"] == {"Start": "2024-01-02T03:04:05Z", "End": "2024-01-02T03:04:32Z"}
     assert record["GeoFootprint"]["type"] == "Polygon"
-    assert record["Footprint"].startswith("POLYGON ((10 40")
+    assert record["Footprint"].startswith("geography'SRID=4326;POLYGON ((10 40")
     attributes = {item["Name"]: item["Value"] for item in record["Attributes"]}
     assert attributes["productType"] == "IW_SLC__1S"
     assert attributes["orbitDirection"] == "DESCENDING"
@@ -240,25 +226,18 @@ def test_search_follows_next_links():
     assert session.get.call_args.args[0] == "https://stac/v1/search?token=p3"
 
 
-def test_search_moves_rejected_filter_properties_to_client():
+def test_search_reports_rejected_filter_properties():
     rejected = _response({"detail": {
         "code": "FilterValidationError",
         "collections": {"sentinel-1-ocn": {"invalid_attributes": ["sat:orbit_state"]}},
     }}, status_code=400)
-    ascending = _item("A")
-    ascending["properties"]["sat:orbit_state"] = "ascending"
-    page = _response({"features": [ascending, _item("B")], "links": []})
     session = Mock()
-    session.post.side_effect = [rejected, page]
-    body = {"collections": ["sentinel-1-ocn"], "filter-lang": "cql2-json", "filter": {"op": "and", "args": [
-        {"op": "=", "args": [{"property": "sat:orbit_state"}, "descending"]},
-        {"op": "like", "args": [{"property": "id"}, "B%"]},
-    ]}}
+    session.post.return_value = rejected
 
-    items, _, _ = stac.search(body, max_items=None, session=session)
+    with pytest.raises(stac.StacQueryRejected, match="sat:orbit_state"):
+        stac.search({"collections": ["sentinel-1-ocn"]}, max_items=None, session=session)
 
-    assert [item["id"] for item in items] == ["B"]
-    assert session.post.call_args_list[1].kwargs["json"]["filter"] == {"op": "like", "args": [{"property": "id"}, "B%"]}
+    assert session.post.call_count == 1
 
 
 @patch("phidown.stac.time.sleep")
@@ -301,7 +280,7 @@ def test_searcher_execute_query_uses_stac(mock_post, _collections):
 
     body = mock_post.call_args.kwargs["json"]
     assert mock_post.call_args.args[0] == "https://stac.dataspace.copernicus.eu/v1/search"
-    assert body["collections"] == ["sentinel-1-slc"]
+    assert body["collections"] == ["sentinel-1-slc", "sentinel-1-slc-wv"]
     assert body["limit"] == 10
     assert body["filter"] == {"op": "=", "args": [{"property": "sat:orbit_state"}, "descending"]}
     assert searcher.num_results == 1
@@ -335,20 +314,6 @@ def test_query_by_name_searches_item_ids(mock_post, _collections):
     assert df.iloc[0]["S3Path"].endswith(f"{PRODUCT}.SAFE")
 
 
-@patch("phidown.stac.list_collections", return_value=COLLECTIONS)
-@patch("phidown.stac.requests.post")
-def test_name_pattern_search_uses_like_filter(mock_post, _collections):
-    mock_post.return_value = _response({"features": [_item()], "links": []})
-    searcher = CopernicusDataSearcher()
-
-    df = searcher.search_products_by_name_pattern("IW_SLC", "contains", collection_name_filter="SENTINEL-1", top=5)
-
-    body = mock_post.call_args.kwargs["json"]
-    assert body["filter"] == {"op": "like", "args": [{"property": "id"}, "%IW\\_SLC%"]}
-    assert body["collections"] == S1_DEFAULT
-    assert len(df) == 1
-
-
 def test_list_collections_follows_next_links_and_caches():
     first = _response({"collections": [{"id": "a"}], "links": [{"rel": "next", "href": "https://stac/collections?offset=1"}]})
     second = _response({"collections": [{"id": "b"}], "links": []})
@@ -356,21 +321,7 @@ def test_list_collections_follows_next_links_and_caches():
         assert stac.list_collections("https://stac") == ["a", "b"]
         assert stac.list_collections("https://stac") == ["a", "b"]
     assert mock_get.call_count == 2
-
-
-@patch("phidown.stac.list_collections", return_value=COLLECTIONS)
-@patch("phidown.stac.requests.post")
-def test_exact_name_pattern_drops_extension_and_adds_date_window(mock_post, _collections):
-    mock_post.return_value = _response({"features": [_item()], "links": []})
-    searcher = CopernicusDataSearcher()
-
-    df = searcher.search_products_by_name_pattern(f"{PRODUCT}.SAFE", "exact", top=5)
-
-    body = mock_post.call_args.kwargs["json"]
-    assert body["collections"] == ["sentinel-1-slc"]
-    assert body["filter"]["args"][1] == PRODUCT.replace("_", "\\_")
-    assert body["datetime"] == "2024-01-01T00:00:00Z/2024-01-04T00:00:00Z"
-    assert list(df["Name"]) == [f"{PRODUCT}.SAFE"]
+    assert mock_get.call_args_list[0].args[0] == "https://stac/collections?limit=1000"
 
 
 def test_collections_for_other_product_names():
@@ -423,30 +374,220 @@ def test_item_to_record_size_of_single_file_product():
     assert record["ContentLength"] == 616351858
 
 
-def test_search_lowers_page_size_after_limit_rejection():
-    rejection = _response(
-        {"detail": {"code": "LimitValidationError", "message": "Limit of 1000 exceeds maximum of 200 for sentinel-2-l2a."}},
+def _odata_response(rows):
+    return _response({"value": rows, "@odata.count": len(rows)})
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        {"collection_name": "SMOS"},
+        {"collection_name": "LANDSAT-8-ESA"},
+        {"collection_name": "CCM"},
+        {"collection_name": "SENTINEL-1"},
+        {"collection_name": "SENTINEL-1", "attributes": {"productType": "IW_RAW__0S"}},
+        {"collection_name": "SENTINEL-1", "product_type": "SLC", "attributes": {"processingLevel": "LEVEL1"}},
+        {"collection_name": "SENTINEL-2", "attributes": {"instrumentShortName": "MSI"}},
+    ],
+)
+@patch("phidown.stac.requests.post")
+def test_queries_stac_cannot_answer_use_odata(mock_post, query):
+    with patch("phidown.search.requests.get", return_value=_odata_response([{"Id": "x", "Name": "x"}])) as mock_get:
+        searcher = CopernicusDataSearcher()
+        searcher.query_by_filter(**query)
+        df = searcher.execute_query()
+    mock_post.assert_not_called()
+    assert "odata/v1/Products" in mock_get.call_args.args[0]
+    assert list(df["Id"]) == ["x"]
+
+
+@patch("phidown.stac.list_collections", return_value=COLLECTIONS)
+@patch("phidown.stac.requests.post")
+def test_rejected_stac_filter_falls_back_to_odata(mock_post, _collections):
+    mock_post.return_value = _response({"detail": {
+        "code": "FilterValidationError",
+        "collections": {"sentinel-1-slc": {"invalid_attributes": ["eo:cloud_cover"]}},
+    }}, status_code=400)
+    with patch("phidown.search.requests.get", return_value=_odata_response([])) as mock_get:
+        searcher = CopernicusDataSearcher()
+        searcher.query_by_filter(collection_name="SENTINEL-1", product_type="SLC", cloud_cover_threshold=50)
+        assert searcher.execute_query().empty
+    assert mock_post.call_count == 1
+    assert "cloudCover" in mock_get.call_args.args[0]
+
+
+@patch("phidown.stac.list_collections", return_value=COLLECTIONS)
+@patch("phidown.stac.requests.post", side_effect=requests.exceptions.ConnectionError("down"))
+def test_stac_outage_falls_back_to_odata(_post, _collections):
+    with patch("phidown.search.requests.get", return_value=_odata_response([{"Id": "x"}])):
+        searcher = CopernicusDataSearcher()
+        searcher.query_by_filter(collection_name="SENTINEL-2", product_type="S2MSI2A")
+        assert list(searcher.execute_query()["Id"]) == ["x"]
+
+
+def test_search_rejects_html_response_as_stac_error():
+    html = _response({})
+    html.json.side_effect = ValueError("not JSON")
+    session = Mock()
+    session.post.return_value = html
+    with pytest.raises(stac.StacError, match="not JSON"):
+        stac.search({"collections": ["x"]}, max_items=None, session=session)
+
+
+def test_search_retries_timeouts():
+    session = Mock()
+    session.post.side_effect = [requests.exceptions.ReadTimeout(), _response({"features": [_item("A")], "links": []})]
+    items, _, _ = stac.search({"collections": ["x"]}, max_items=None, session=session)
+    assert [item["id"] for item in items] == ["A"]
+
+
+def test_search_keeps_one_item_per_product_across_id_forms():
+    session = Mock()
+    session.post.return_value = _response({"features": [_item("S6A_X"), _item("S6A_X.SEN6")], "links": []})
+    items, _, _ = stac.search({"collections": ["x"]}, max_items=None, session=session)
+    assert [item["id"] for item in items] == ["S6A_X"]
+
+
+def test_keep_check_does_not_count_towards_max_items():
+    session = Mock()
+    session.post.return_value = _response({"features": [_item("A"), _item("B")], "links": []})
+    items, _, _ = stac.search({"collections": ["x"]}, max_items=1, session=session, keep=lambda item: item["id"] == "B")
+    assert [item["id"] for item in items] == ["B"]
+
+
+def test_item_starts_within_selects_by_sensing_start():
+    check = stac.item_starts_within("2024-01-01T00:00:00", "2024-01-02T00:00:00Z")
+    def item(start):
+        return {"properties": {"start_datetime": start}}
+    assert check(item("2024-01-01T00:00:00.000000Z"))
+    assert check(item("2024-01-01T23:59:59.123456789Z"))
+    assert not check(item("2023-12-31T23:59:59Z"))
+    assert not check(item("2024-01-02T00:00:00Z"))
+    assert check({"properties": {}})
+
+
+@pytest.mark.parametrize(
+    ("name", "needs_odata"),
+    [
+        (f"{PRODUCT}.SAFE", False),
+        ("S1A_IW_GRDH_1SDV_20240101T003214_20240101T003238_051906_064571_1F54.SAFE", True),
+        ("S1A_IW_GRDH_1SDV_20240101T003214_20240101T003238_051906_064571_1F54_COG.SAFE", False),
+        ("S1A_IW_GRDH_1SDV_20240101T003214_20240101T003238_051906_064571_1F54_COG", False),
+        ("S1A_IW_RAW__0SDV_20240101T003214", True),
+        ("LC09_L1GT_001002_20240101", True),
+        ("hello world", True),
+        ("S2A_MSIL2A_20240613T100031_N0510", False),
+        ("S5P_OFFL_L2__NO2____20240607T115910", False),
+        ("Copernicus_DSM_COG_10_N42_00_E012_00_DEM", False),
+    ],
+)
+def test_name_needs_odata(name, needs_odata):
+    assert stac.name_needs_odata(name) is needs_odata
+
+
+@patch("phidown.stac.list_collections", return_value=COLLECTIONS)
+@patch("phidown.stac.requests.post")
+def test_query_by_name_falls_back_to_odata_when_stac_is_empty(mock_post, _collections):
+    mock_post.return_value = _response({"features": [], "links": []})
+    with patch("phidown.search.requests.get", return_value=_odata_response([{"Id": "x"}])) as mock_get:
+        df = CopernicusDataSearcher().query_by_name(PRODUCT)
+    assert mock_post.call_count == 1
+    assert f"Name eq '{PRODUCT}.SAFE'" in mock_get.call_args.args[0]
+    assert list(df["Id"]) == ["x"]
+
+
+@patch("phidown.stac.requests.post")
+def test_query_by_name_of_non_cog_grd_uses_odata(mock_post):
+    name = "S1A_IW_GRDH_1SDV_20240101T003214_20240101T003238_051906_064571_1F54.SAFE"
+    with patch("phidown.search.requests.get", return_value=_odata_response([{"Id": "x"}])) as mock_get:
+        CopernicusDataSearcher().query_by_name(name)
+    mock_post.assert_not_called()
+    assert f"Name eq '{name}'" in mock_get.call_args.args[0]
+
+
+@pytest.mark.parametrize(
+    ("match_type", "expected"),
+    [
+        ("exact", "Name eq 'a''b'"),
+        ("contains", "contains(Name,'a''b')"),
+        ("startswith", "startswith(Name,'a''b')"),
+        ("endswith", "endswith(Name,'a''b')"),
+    ],
+)
+@patch("phidown.stac.requests.post")
+def test_name_pattern_search_uses_odata_and_escapes_quotes(mock_post, match_type, expected):
+    with patch("phidown.search.requests.get", return_value=_odata_response([{"Id": "x"}])) as mock_get:
+        df = CopernicusDataSearcher().search_products_by_name_pattern("a'b", match_type, top=5)
+    mock_post.assert_not_called()
+    assert expected in mock_get.call_args.args[0]
+    assert list(df["Id"]) == ["x"]
+
+
+def test_odata_filters_escape_values_and_encode_offsets():
+    searcher = CopernicusDataSearcher()
+    searcher.query_by_filter(
+        burst_mode=True,
+        parent_product_name="x' or 1 eq 1 or ParentProductName eq 'y",
+        start_date="2024-08-02T00:00:00+02:00",
+    )
+    url = searcher._build_query()
+    assert "ParentProductName eq 'x'' or 1 eq 1 or ParentProductName eq ''y'" in url
+    assert "ContentDate/Start ge 2024-08-02T00:00:00%2B02:00" in url
+
+
+def test_burst_parameters_require_burst_mode():
+    with pytest.raises(ValueError, match="burst_id, swath_identifier"):
+        CopernicusDataSearcher().query_by_filter(collection_name="SENTINEL-1", burst_id=1, swath_identifier="IW1")
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        {"burst_mode": True, "order_by": "PublicationDate desc"},
+        {"burst_mode": True, "order_by": "ModificationDate asc"},
+        {"top": 2.5},
+        {"start_date": "20240617"},
+    ],
+)
+def test_invalid_parameters_are_rejected_when_set(query):
+    with pytest.raises(ValueError):
+        CopernicusDataSearcher().query_by_filter(collection_name="SENTINEL-1", **query)
+
+
+def test_coverage_of_point_and_line_aois():
+    pytest.importorskip("shapely")
+    footprint = {"type": "Polygon", "coordinates": [[[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]]}
+    searcher = CopernicusDataSearcher()
+    searcher.aoi_wkt = "POINT(1 1)"
+    assert searcher._calculate_aoi_coverage(footprint) == 100.0
+    searcher.aoi_wkt = "POINT(5 5)"
+    assert searcher._calculate_aoi_coverage(footprint) == 0.0
+    searcher.aoi_wkt = "LINESTRING(1 1, 3 1)"
+    assert searcher._calculate_aoi_coverage(footprint) == 50.0
+
+
+def test_aoi_centroid_across_antimeridian():
+    searcher = CopernicusDataSearcher()
+    lon, _ = searcher._get_aoi_centroid("POLYGON((179 0, -179 0, -179 1, 179 1, 179 0))")
+    assert abs(lon) == pytest.approx(180)
+
+
+@patch("phidown.stac.list_collections", return_value=COLLECTIONS)
+@patch("phidown.stac.requests.post")
+def test_rejected_page_size_falls_back_to_odata(mock_post, _collections):
+    mock_post.return_value = _response(
+        {"detail": {"code": "LimitValidationError", "message": "Limit of 1000 exceeds maximum of 200."}},
         status_code=400,
     )
-    session = Mock()
-    session.post.side_effect = [rejection, _response({"features": [_item("A"), _item("B")], "links": []})]
+    with patch("phidown.search.requests.get", return_value=_odata_response([{"Id": "x"}])) as mock_get:
+        searcher = CopernicusDataSearcher()
+        searcher.query_by_filter(collection_name="SENTINEL-2", product_type="S2MSI2A")
+        assert list(searcher.execute_query()["Id"]) == ["x"]
+    assert mock_post.call_count == 1
+    assert "$top=1000" in mock_get.call_args.args[0]
 
-    items, _, _ = stac.search({"collections": ["sentinel-2-l2a"], "limit": 1000}, max_items=None, session=session)
 
-    assert [item["id"] for item in items] == ["A", "B"]
-    assert [call.kwargs["json"]["limit"] for call in session.post.call_args_list] == [1000, 100]
-
-
-def test_search_raises_when_lowered_page_size_is_rejected():
-    rejection = _response(
-        {"detail": {"code": "LimitValidationError", "message": "Limit of 100 exceeds maximum of 200."}},
-        status_code=400,
-    )
-    rejection.raise_for_status.side_effect = requests.HTTPError("400")
-    session = Mock()
-    session.post.return_value = rejection
-
-    with pytest.raises(requests.HTTPError):
-        stac.search({"collections": ["sentinel-2-l2a"], "limit": 100}, max_items=None, session=session)
-
-    assert session.post.call_count == 1
+def test_landsat_8_uses_its_odata_collection_name():
+    searcher = CopernicusDataSearcher()
+    searcher.query_by_filter(collection_name="LANDSAT-8-ESA")
+    assert "Collection/Name eq 'LANDSAT-8'" in searcher._build_query()

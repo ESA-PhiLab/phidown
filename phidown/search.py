@@ -13,7 +13,9 @@ import asyncio
 import time
 import random
 import re
+import sys
 import warnings
+from urllib.parse import quote
 
 from .downloader import pull_down, get_token, download_burst_on_demand, TokenManager
 from .download_state import DownloadStateStore, default_state_file, is_non_empty_file, is_product_complete
@@ -70,6 +72,17 @@ _WKT_NUMBER_PATTERN = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
 _WKT_COORDINATE_RE = re.compile(
     rf"^\s*{_WKT_NUMBER_PATTERN}\s+{_WKT_NUMBER_PATTERN}\s*$"
 )
+
+
+# config.json collection names that OData knows under another name.
+_ODATA_COLLECTION_NAMES = {"LANDSAT-8-ESA": "LANDSAT-8"}
+# Parallel OData page requests.  More than this trips the CDSE rate limit.
+MAX_CONCURRENT_PAGE_REQUESTS = 4
+
+
+def _odata_text(value: typing.Any) -> str:
+    """Escape a value for an OData string literal or date inside a URL."""
+    return quote(str(value).replace("'", "''"), safe=" '()*,:;=/-_.~")
 
 
 def _compute_backoff_delay(attempt_index: int, backoff_base: float, backoff_max: float) -> float:
@@ -366,7 +379,8 @@ def validate_wkt(aoi_wkt: str) -> str:
         aoi_wkt (str): WKT geometry, for example ``POINT(12.4 41.9)``.
 
     Returns:
-        str: The WKT string with repeated whitespace collapsed.
+        str: The WKT string with repeated whitespace collapsed and the
+        geometry type in upper case.
 
     Raises:
         TypeError: If ``aoi_wkt`` is not a string.
@@ -377,6 +391,8 @@ def validate_wkt(aoi_wkt: str) -> str:
     normalized = " ".join(aoi_wkt.split())
     if not normalized:
         raise ValueError("The 'aoi_wkt' parameter cannot be empty")
+    # OData only accepts geometry keywords in upper case.
+    normalized = re.sub(r"^[A-Za-z]+", lambda match: match.group(0).upper(), normalized)
     try:
         _validate_supported_aoi_wkt(normalized)
     except ValueError as exc:
@@ -683,6 +699,23 @@ class CopernicusDataSearcher:
             
             # Validate burst-specific parameters
             self._validate_burst_parameters()
+        else:
+            burst_arguments = {
+                "burst_id": burst_id,
+                "absolute_burst_id": absolute_burst_id,
+                "swath_identifier": swath_identifier,
+                "parent_product_name": parent_product_name,
+                "parent_product_type": parent_product_type,
+                "parent_product_id": parent_product_id,
+                "datatake_id": datatake_id,
+                "relative_orbit_number": relative_orbit_number,
+                "operational_mode": operational_mode,
+                "polarisation_channels": polarisation_channels,
+                "platform_serial_identifier": platform_serial_identifier,
+            }
+            given = [name for name, value in burst_arguments.items() if value is not None]
+            if given:
+                raise ValueError(f"These parameters require burst_mode=True: {', '.join(given)}")
 
     # - Private Methods:
     def _load_config(self, config_path=None):
@@ -860,6 +893,11 @@ class CopernicusDataSearcher:
                     f"Invalid order_by format: {self.order_by}. It must be in the format 'field direction'."
                 )
             field, direction = parts
+            if self.burst_mode and field not in ("ContentDate/Start", "ContentDate/End"):
+                raise ValueError(
+                    f"Invalid order_by value for burst search: {self.order_by}. "
+                    "Bursts can only be ordered by ContentDate/Start or ContentDate/End."
+                )
             if field in valid_order_by_fields and direction in valid_order_by_directions:
                 self.order_by = self.order_by
             else:
@@ -877,7 +915,7 @@ class CopernicusDataSearcher:
         Raises:
             ValueError: If the 'top' parameter is not between 1 and 1000.
         """
-        if not (1 <= self.top <= 1000):
+        if not isinstance(self.top, int) or isinstance(self.top, bool) or not (1 <= self.top <= 1000):
             raise ValueError("The 'top' parameter must be between 1 and 1000")
 
     def _validate_skip(self):
@@ -944,6 +982,9 @@ class CopernicusDataSearcher:
             return date_str
 
         def is_iso8601(date_str):
+            # Python 3.11+ also parses compact dates, which the APIs reject.
+            if not re.match(r"\d{4}-\d{2}-\d{2}", str(date_str)):
+                return False
             try:
                 datetime.fromisoformat(normalize_iso8601(date_str))
                 return True
@@ -976,7 +1017,8 @@ class CopernicusDataSearcher:
             print(
                 "Warning: Burst availability depends on the CDSE catalogue and may vary by "
                 "acquisition date, area, platform, and acquisition mode. Please verify "
-                "availability for the requested query."
+                "availability for the requested query.",
+                file=sys.stderr,
             )
 
     def _validate_attributes(self):
@@ -1056,7 +1098,7 @@ class CopernicusDataSearcher:
                     self.burst_id = int(self.burst_id)
                 except ValueError:
                     raise TypeError("burst_id must be an integer")
-            elif not isinstance(self.burst_id, int):
+            elif not isinstance(self.burst_id, int) or isinstance(self.burst_id, bool):
                 raise TypeError("burst_id must be an integer")
         
         if self.absolute_burst_id is not None:
@@ -1113,14 +1155,15 @@ class CopernicusDataSearcher:
     # - Methods to build and execute the query:
     def _add_collection_filter(self, filters):
         if self.collection_name and not self.burst_mode:
-            collection_filter = f"Collection/Name eq '{self.collection_name}'"
+            name = _ODATA_COLLECTION_NAMES.get(self.collection_name, self.collection_name)
+            collection_filter = f"Collection/Name eq '{name}'"
             filters.append(f"({collection_filter})")
 
     def _add_product_type_filter(self, filters):
         if self.product_type and not self.burst_mode:
             filters.append(
                 "Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'productType' "
-                f"and att/OData.CSC.StringAttribute/Value eq '{self.product_type}')"
+                f"and att/OData.CSC.StringAttribute/Value eq '{_odata_text(self.product_type)}')"
             )
 
     def _add_orbit_direction_filter(self, filters):
@@ -1146,32 +1189,29 @@ class CopernicusDataSearcher:
 
     def _add_date_filters(self, filters):
         if self.start_date:
-            if self.burst_mode:
-                filters.append(f"ContentDate/Start ge {self.start_date}")
-            else:
-                filters.append(f"ContentDate/Start ge {self.start_date}")
+            filters.append(f"ContentDate/Start ge {_odata_text(self.start_date)}")
         if self.end_date:
             if self.burst_mode:
-                filters.append(f"ContentDate/Start le {self.end_date}")
+                filters.append(f"ContentDate/Start le {_odata_text(self.end_date)}")
             else:
-                filters.append(f"ContentDate/Start lt {self.end_date}")
+                filters.append(f"ContentDate/Start lt {_odata_text(self.end_date)}")
 
     def _add_attribute_filters(self, filters):
         if self.attributes and not self.burst_mode:
             for key, value in self.attributes.items():
                 if isinstance(value, str):
                     filters.append(
-                        f"Attributes/OData.CSC.StringAttribute/any(att:att/Name eq '{key}' "
-                        f"and att/OData.CSC.StringAttribute/Value eq '{value}')"
+                        f"Attributes/OData.CSC.StringAttribute/any(att:att/Name eq '{_odata_text(key)}' "
+                        f"and att/OData.CSC.StringAttribute/Value eq '{_odata_text(value)}')"
                     )
                 elif isinstance(value, int):
                     filters.append(
-                        f"Attributes/OData.CSC.IntegerAttribute/any(att:att/Name eq '{key}' "
+                        f"Attributes/OData.CSC.IntegerAttribute/any(att:att/Name eq '{_odata_text(key)}' "
                         f"and att/OData.CSC.IntegerAttribute/Value eq {value})"
                     )
                 elif isinstance(value, float):
                     filters.append(
-                        f"Attributes/OData.CSC.DoubleAttribute/any(att:att/Name eq '{key}' "
+                        f"Attributes/OData.CSC.DoubleAttribute/any(att:att/Name eq '{_odata_text(key)}' "
                         f"and att/OData.CSC.DoubleAttribute/Value eq {value})"
                     )
                 else:
@@ -1192,19 +1232,19 @@ class CopernicusDataSearcher:
         
         # Swath Identifier
         if self.swath_identifier is not None:
-            filters.append(f"SwathIdentifier eq '{self.swath_identifier}'")
+            filters.append(f"SwathIdentifier eq '{_odata_text(self.swath_identifier)}'")
         
         # Parent Product Name
         if self.parent_product_name is not None:
-            filters.append(f"ParentProductName eq '{self.parent_product_name}'")
+            filters.append(f"ParentProductName eq '{_odata_text(self.parent_product_name)}'")
         
         # Parent Product Type
         if self.parent_product_type is not None:
-            filters.append(f"ParentProductType eq '{self.parent_product_type}'")
+            filters.append(f"ParentProductType eq '{_odata_text(self.parent_product_type)}'")
         
         # Parent Product ID
         if self.parent_product_id is not None:
-            filters.append(f"ParentProductId eq '{self.parent_product_id}'")
+            filters.append(f"ParentProductId eq '{_odata_text(self.parent_product_id)}'")
         
         # Datatake ID
         if self.datatake_id is not None:
@@ -1216,15 +1256,15 @@ class CopernicusDataSearcher:
         
         # Operational Mode
         if self.operational_mode is not None:
-            filters.append(f"OperationalMode eq '{self.operational_mode}'")
+            filters.append(f"OperationalMode eq '{_odata_text(self.operational_mode)}'")
         
         # Polarisation Channels
         if self.polarisation_channels is not None:
-            filters.append(f"PolarisationChannels eq '{self.polarisation_channels}'")
+            filters.append(f"PolarisationChannels eq '{_odata_text(self.polarisation_channels)}'")
         
         # Platform Serial Identifier
         if self.platform_serial_identifier is not None:
-            filters.append(f"PlatformSerialIdentifier eq '{self.platform_serial_identifier}'")
+            filters.append(f"PlatformSerialIdentifier eq '{_odata_text(self.platform_serial_identifier)}'")
 
     def _build_filter(self):
         """
@@ -1304,13 +1344,18 @@ class CopernicusDataSearcher:
             self._add_coverage_column()
             return self.df
 
-        if not self.burst_mode:
-            self._execute_stac_query()
-            self._add_coverage_column()
-            return self.df
+        if not self.burst_mode and self._stac_can_answer():
+            try:
+                self._execute_stac_query()
+                self._add_coverage_column()
+                return self.df
+            except stac_api.StacQueryRejected as exc:
+                logger.debug(f"Using OData: {exc}")
+            except (requests.exceptions.RequestException, stac_api.StacError) as exc:
+                logger.warning(f"STAC search failed, using OData instead: {exc}")
 
         url = self._build_query()
-        self.response = copy.deepcopy(requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS))
+        self.response = copy.deepcopy(stac_api._send(requests, "GET", url))
         self.response.raise_for_status()  # Raise an error for bad status codes
 
         self.json_data = self.response.json()
@@ -1330,6 +1375,21 @@ class CopernicusDataSearcher:
     # -------------------------------------------------------------------------
     # STAC product search
     # -------------------------------------------------------------------------
+
+    def _stac_can_answer(self) -> bool:
+        """Return whether the STAC catalogue can answer the current query fully."""
+        collection = (self.collection_name or "").upper()
+        if collection not in stac_api.STAC_COLLECTIONS:
+            return False
+        attributes = self.attributes or {}
+        if any(key not in stac_api.STAC_ATTRIBUTES for key in attributes):
+            return False
+        if collection == "SENTINEL-1":
+            # STAC has no Sentinel-1 RAW collection.
+            product_types = [item for item in (self.product_type, attributes.get("productType")) if item]
+            if not product_types or any("RAW" in str(item).upper() for item in product_types):
+                return False
+        return True
 
     def _stac_collections(
         self,
@@ -1385,7 +1445,8 @@ class CopernicusDataSearcher:
         return body
 
     def _run_stac_search(self, body: typing.Dict[str, typing.Any], max_items: typing.Optional[int]) -> pd.DataFrame:
-        items, matched, self.response = stac_api.search(body, max_items=max_items, base_url=self.stac_url)
+        keep = stac_api.item_starts_within(self.start_date, self.end_date) if "datetime" in body else None
+        items, matched, self.response = stac_api.search(body, max_items=max_items, base_url=self.stac_url, keep=keep)
         self.json_data = {"type": "FeatureCollection", "features": items, "numberMatched": matched}
         self.num_results = matched if matched is not None else len(items)
         self.df = pd.DataFrame(stac_api.items_to_records(items))
@@ -1438,20 +1499,19 @@ class CopernicusDataSearcher:
         for skip in skips:
             urls.append(self._build_query(skip=skip))
             
-        async def fetch_url(url):
+        async def fetch_url(url, limiter):
             loop = asyncio.get_running_loop()
-            try:
+            async with limiter:
                 response = await loop.run_in_executor(
-                    None, lambda: requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
+                    None, lambda: stac_api._send(requests, "GET", url)
                 )
                 response.raise_for_status()
                 return response.json()
-            except Exception as e:
-                return e
 
         async def fetch_all(urls):
-            tasks = [fetch_url(url) for url in urls]
-            return await asyncio.gather(*tasks, return_exceptions=True)
+            limiter = asyncio.Semaphore(MAX_CONCURRENT_PAGE_REQUESTS)
+            tasks = [fetch_url(url, limiter) for url in urls]
+            return await asyncio.gather(*tasks)
 
         try:
             loop = asyncio.get_running_loop()
@@ -1468,9 +1528,7 @@ class CopernicusDataSearcher:
 
         # Process results
         for res in results:
-            if isinstance(res, Exception):
-                print(f"Warning: Error retrieving page: {res}")
-            elif isinstance(res, dict) and 'value' in res:
+            if isinstance(res, dict) and 'value' in res:
                 all_data.extend(res['value'])
         
         # Create DataFrame from all collected data
@@ -1525,7 +1583,10 @@ class CopernicusDataSearcher:
             if aoi_geom.area > 0:
                 coverage_pct = (intersection.area / aoi_geom.area) * 100
                 return min(100.0, round(coverage_pct, 2))
-            return 0.0
+            # Points and lines have no area: measure them by length or count.
+            if aoi_geom.length > 0:
+                return min(100.0, round((intersection.length / aoi_geom.length) * 100, 2))
+            return 100.0 if aoi_geom.intersects(fp_geom) else 0.0
             
         except Exception as e:
             logger.debug(f"Could not calculate coverage: {e}")
@@ -1542,7 +1603,7 @@ class CopernicusDataSearcher:
         
         if self.aoi_wkt is None:
             # No AOI set, skip coverage calculation
-            print("Warning: No AOI (aoi_wkt) provided. Coverage calculation requires an AOI to measure against.")
+            logger.debug("No AOI (aoi_wkt) provided. Coverage calculation requires an AOI to measure against.")
             self.df['coverage'] = None
             return
         
@@ -1601,26 +1662,28 @@ class CopernicusDataSearcher:
             self.json_data = self._phisat2_searcher.json_data
             return self.df
 
+        names = [product_name]
         if not self.burst_mode:
-            # STAC search needs collections, so guess them from the name.
-            # Item ids are product names, often without the extension.
-            self.url = f"{self.stac_url.rstrip('/')}/search"
-            try:
-                collections = stac_api.collections_for_product_name(product_name, self._stac_available_collections())
-                ids = stac_api.item_ids_for_name(product_name, collections)
-                body = {"collections": collections, "ids": ids, "limit": len(ids)}
-                self.query = body
-                self._run_stac_search(body, max_items=1)
-            except Exception as e:
-                print(f"An error occurred while querying by name '{product_name}': {e} (URL: {self.url})")
-                self.df = pd.DataFrame()
-            return self.df
+            if not stac_api.name_needs_odata(product_name):
+                # STAC search needs collections, so guess them from the name.
+                # Item ids are product names without the extension.
+                self.url = f"{self.stac_url.rstrip('/')}/search"
+                try:
+                    collections = stac_api.collections_for_product_name(product_name, self._stac_available_collections())
+                    body = {"collections": collections, "ids": [stac_api.item_id_for_name(product_name)], "limit": 1}
+                    self.query = body
+                    self._run_stac_search(body, max_items=1)
+                    if not self.df.empty:
+                        return self.df
+                except Exception as e:
+                    logger.warning(f"STAC lookup of '{product_name}' failed, using OData instead: {e}")
+            names = stac_api.odata_names_for_name(product_name)
 
         # Construct the query URL, including $expand=Attributes for consistency
-        self.url = f"{self.base_url}?$filter=Name eq '{product_name}'&$expand=Attributes"
+        self.url = f"{self.base_url}?$filter=Name eq '{_odata_text(names[0])}'&$expand=Attributes"
         
         try:
-            self.response = requests.get(self.url, timeout=REQUEST_TIMEOUT_SECONDS)
+            self.response = stac_api._send(requests, "GET", self.url)
             self.response.raise_for_status()  # Raise an error for bad status codes (4xx or 5xx)
 
             self.json_data = self.response.json()
@@ -1691,22 +1754,21 @@ class CopernicusDataSearcher:
 
         self._initialize_placeholders()  # Reset previous results
 
-        if not self.burst_mode:
-            return self._search_stac_by_name_pattern(
-                name_pattern, match_type, collection_name_filter, top, order_by
-            )
-
+        # Name patterns use OData in every mode.  A STAC id LIKE filter needs a
+        # collection and a sensing date to finish in time, and ids lack the
+        # extension that names have.
         filters = []
 
         # 1. Name filter based on match_type
+        escaped_pattern = _odata_text(name_pattern)
         if match_type == 'exact':
-            name_filter_str = f"Name eq '{name_pattern}'"
+            name_filter_str = f"Name eq '{escaped_pattern}'"
         elif match_type == 'contains':
-            name_filter_str = f"contains(Name,'{name_pattern}')"
+            name_filter_str = f"contains(Name,'{escaped_pattern}')"
         elif match_type == 'startswith':
-            name_filter_str = f"startswith(Name,'{name_pattern}')"
+            name_filter_str = f"startswith(Name,'{escaped_pattern}')"
         elif match_type == 'endswith':
-            name_filter_str = f"endswith(Name,'{name_pattern}')"
+            name_filter_str = f"endswith(Name,'{escaped_pattern}')"
         filters.append(name_filter_str)
 
         # 2. Collection filter
@@ -1722,7 +1784,8 @@ class CopernicusDataSearcher:
             final_collection_name_to_use = self.collection_name
 
         if final_collection_name_to_use:
-            filters.append(f"Collection/Name eq '{final_collection_name_to_use}'")
+            name = _ODATA_COLLECTION_NAMES.get(final_collection_name_to_use, final_collection_name_to_use)
+            filters.append(f"Collection/Name eq '{name}'")
 
         filter_condition = " and ".join(filters)
 
@@ -1742,7 +1805,7 @@ class CopernicusDataSearcher:
         self.url = f"{self.base_url}{self.query}"
 
         try:
-            self.response = requests.get(self.url, timeout=REQUEST_TIMEOUT_SECONDS)
+            self.response = stac_api._send(requests, "GET", self.url)
             self.response.raise_for_status()
             self.json_data = self.response.json()
 
@@ -1764,80 +1827,6 @@ class CopernicusDataSearcher:
             print(f"Unexpected error for name pattern '{name_pattern}' ({match_type}): {e} (URL: {self.url})")
             self.df = pd.DataFrame()
 
-        return self.df
-
-    def _search_stac_by_name_pattern(
-        self,
-        name_pattern: str,
-        match_type: str,
-        collection_name_filter: typing.Optional[str],
-        top: typing.Optional[int],
-        order_by: typing.Optional[str],
-    ) -> pd.DataFrame:
-        """STAC version of :meth:`search_products_by_name_pattern`."""
-        if collection_name_filter:
-            try:
-                self._validate_collection(collection_name_filter)
-            except ValueError as e:
-                raise ValueError(f"Invalid 'collection_name_filter' provided: '{collection_name_filter}'. Validation error: {e}")
-        collection_name = collection_name_filter or self.collection_name
-
-        query_top = top if top is not None else self.top
-        if not (1 <= query_top <= 1000):
-            raise ValueError(f"The 'top' parameter for the query must be between 1 and 1000. Effective value: {query_top}")
-
-        def escape_like(text: str) -> str:
-            return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
-        escaped = escape_like(name_pattern)
-        if match_type == "exact":
-            # Item ids carry no .SAFE/.SEN3 extension; the full Name is
-            # checked after the search.
-            stem = stac_api.item_ids_for_name(name_pattern, [])[0]
-            pattern = escape_like(stem)
-        elif match_type == "contains":
-            pattern = f"%{escaped}%"
-        elif match_type == "startswith":
-            pattern = f"{escaped}%"
-        else:
-            # Item ids often drop the .SAFE-style extension of the name, so
-            # match the stem and check the full suffix on the mapped Name.
-            pattern = f"%{escape_like(os.path.splitext(name_pattern)[0])}%"
-        name_filter = {"op": "like", "args": [{"property": "id"}, pattern]}
-
-        body = stac_api.build_search_body(
-            collections=[],
-            limit=query_top,
-            order_by=order_by if order_by is not None else self.order_by,
-        )
-        body.pop("collections")
-        collections, _ = self._stac_collections(collection_name)
-        # STAC search needs collections, and a LIKE over many collections is
-        # slow, so narrow them by the name when the name shows the product.
-        from_name = stac_api.collections_for_product_name(name_pattern, self._stac_available_collections())
-        if collections:
-            collections = [item for item in collections if item in from_name] or collections
-        else:
-            collections = from_name
-        body["collections"] = collections
-        window = stac_api.datetime_window_for_name(name_pattern)
-        if window:
-            body["datetime"] = window
-        body["filter-lang"] = "cql2-json"
-        body["filter"] = name_filter
-        self.url = f"{self.stac_url.rstrip('/')}/search"
-        self.query = body
-        self.filter_condition = name_filter
-        try:
-            self._run_stac_search(body, max_items=query_top)
-            if match_type == "endswith" and not self.df.empty:
-                self.df = self.df[self.df["Name"].str.endswith(name_pattern)].reset_index(drop=True)
-            if match_type == "exact" and not self.df.empty:
-                stems = self.df["Name"].map(lambda name: stac_api.item_ids_for_name(name, [])[0])
-                self.df = self.df[(self.df["Name"] == name_pattern) | (stems == stem)].reset_index(drop=True)
-        except Exception as e:
-            print(f"Error for name pattern '{name_pattern}' ({match_type}): {e} (URL: {self.url})")
-            self.df = pd.DataFrame()
         return self.df
 
     def display_results(self, columns=None, top_n=10):
@@ -2082,7 +2071,13 @@ class CopernicusDataSearcher:
             if not coords:
                 raise ValueError("Could not parse AOI coordinates")
 
-            lon_avg = sum(c[0] for c in coords) / len(coords)
+            lons = [c[0] for c in coords]
+            if max(lons) - min(lons) > 180:
+                # The AOI crosses the antimeridian: average across it.
+                lon_avg = sum(lon % 360 for lon in lons) / len(lons)
+                lon_avg = lon_avg - 360 if lon_avg > 180 else lon_avg
+            else:
+                lon_avg = sum(lons) / len(lons)
             lat_avg = sum(c[1] for c in coords) / len(coords)
             return lon_avg, lat_avg
         except ValueError as e:

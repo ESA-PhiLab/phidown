@@ -339,7 +339,7 @@ def download_burst_on_demand(
             logger.info('✅ Burst processing completed successfully')
 
             try:
-                zipfile_name = response.headers['Content-Disposition'].split('filename=')[1]
+                zipfile_name = response.headers['Content-Disposition'].split('filename=')[1].split(';')[0].strip().strip('"')
             except (KeyError, IndexError):
                 zipfile_name = 'output_burst.zip'
                 logger.warning(f'⚠️  Could not extract filename from headers, using default: {zipfile_name}')

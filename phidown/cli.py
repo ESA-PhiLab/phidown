@@ -706,11 +706,11 @@ def burst_coverage_analysis(
             preferred_subswath=preferred
         )
 
-        if df.empty:
+        if df.empty and output_format != 'json':
             logger.info('No bursts found for the selected filters.')
             return True
 
-        if selected_columns:
+        if selected_columns and not df.empty:
             missing_columns = [col for col in selected_columns if col not in df.columns]
             if missing_columns:
                 logger.error(f'Requested columns are not available: {", ".join(missing_columns)}')

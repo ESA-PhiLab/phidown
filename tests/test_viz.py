@@ -260,3 +260,14 @@ def test_plot_product_footprints_missing_columns():
     df = pd.DataFrame([{"Id": "x1"}])
     with pytest.raises(ValueError):
         plot_product_footprints(df=df, aoi_wkt=None)
+
+
+@patch("phidown.viz.folium.Map")
+def test_plot_kml_coordinates_reads_default_namespace_kml(mock_map, tmp_path):
+    kml = tmp_path / "doc.kml"
+    kml.write_text(
+        '<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">'
+        "<gx:LatLonQuad><coordinates>0,0 1,0 1,1 0,1</coordinates></gx:LatLonQuad></kml>"
+    )
+    plot_kml_coordinates(str(kml), str(tmp_path / "map.html"))
+    mock_map.assert_called_once()

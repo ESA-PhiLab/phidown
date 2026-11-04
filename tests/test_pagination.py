@@ -152,8 +152,8 @@ def test_pagination_with_1000_page_size():
     assert '$skip=2000' in calls[2][0][0]
 
 
-def test_pagination_handles_request_errors_gracefully():
-    """Test that pagination handles request errors gracefully"""
+def test_pagination_raises_when_a_page_fails():
+    """A failed page must not silently give a partial result."""
     searcher = CopernicusDataSearcher()
     searcher.query_by_filter(
         burst_mode=True,  # OData pagination applies to burst search
@@ -179,12 +179,8 @@ def test_pagination_handles_request_errors_gracefully():
         return first_page
 
     with patch('requests.get', side_effect=mock_get):
-        # Should not raise exception, but return partial results
-        df = searcher.execute_query()
-        
-    # Should return at least the first page
-    assert len(df) == 5
-    assert 'product_0' in df['Id'].values
+        with pytest.raises(Exception, match="Network error"):
+            searcher.execute_query()
 
 
 def test_manual_skip_fetches_single_page():
