@@ -212,7 +212,7 @@ def download_by_name(
         
     Example:
         >>> success = download_by_name(
-        ...     'S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003',
+        ...     'S1A_IW_GRDH_1SDV_20240503T031929_20240503T031942_053701_0685FB_7532_COG',
         ...     '/path/to/output'
         ... )
     """
@@ -619,6 +619,8 @@ def list_products(
 
             if df.empty:
                 logger.info('No PhiSat-2 products found for the selected filter.')
+                if output_format == 'json':
+                    print('[]')
                 return True
 
             return _render_listing_output(
@@ -651,6 +653,8 @@ def list_products(
 
         if df.empty:
             logger.info('No products found for the selected filters.')
+            if output_format == 'json':
+                print('[]')
             return True
 
         return _render_listing_output(
@@ -747,7 +751,7 @@ def burst_coverage_analysis(
 
         if output_format == 'json':
             rendered = json.dumps(
-                {'summary': summary, 'bursts': out_df.to_dict(orient='records')},
+                {'summary': summary, 'bursts': out_df.astype(object).where(out_df.notna(), None).to_dict(orient='records')},
                 indent=2,
                 default=str
             )
@@ -950,7 +954,7 @@ Examples:
   phidown list --provider phisat2 --filter SESSION_ID_12345
 
   # Download by product name
-  phidown --name S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003 -o ./data
+  phidown --name S1A_IW_GRDH_1SDV_20240503T031929_20240503T031942_053701_0685FB_7532_COG -o ./data
 
   # Download a PhiSat-2 product by exact filename or unique search token
   phidown --provider phisat2 --name SESSION_ID_12345 -o ./data

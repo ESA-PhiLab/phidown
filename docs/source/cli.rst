@@ -48,7 +48,7 @@ Download by product name:
 
 .. code-block:: bash
 
-   phidown --name S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003 -o ./data
+   phidown --name S1A_IW_GRDH_1SDV_20240503T031929_20240503T031942_053701_0685FB_7532_COG -o ./data
 
 Download a PhiSat-2 product by exact filename or unique search token:
 
@@ -185,7 +185,7 @@ Run a resumable download:
 .. code-block:: bash
 
    phidown \
-     --name S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003 \
+     --name S1A_IW_GRDH_1SDV_20240503T031929_20240503T031942_053701_0685FB_7532_COG \
      -o ./data \
      --mode safe
 

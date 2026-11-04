@@ -591,3 +591,68 @@ def test_landsat_8_uses_its_odata_collection_name():
     searcher = CopernicusDataSearcher()
     searcher.query_by_filter(collection_name="LANDSAT-8-ESA")
     assert "Collection/Name eq 'LANDSAT-8'" in searcher._build_query()
+
+
+def test_cop_dem_product_types_select_collections():
+    available = ["cop-dem-glo-30-dged-cog", "cop-dem-glo-90-dged-cog", "cop-dem-eea-10-laea-tif"]
+    assert stac.resolve_collections("COP-DEM", "COP-DEM-GLO-30", available) == (["cop-dem-glo-30-dged-cog"], True)
+    assert stac.resolve_collections("COP-DEM", "COP-DEM-GLO-90", available) == (["cop-dem-glo-90-dged-cog"], True)
+
+
+@patch("phidown.stac.list_collections", return_value=["cop-dem-glo-30-dged-cog"])
+@patch("phidown.stac.requests.post")
+def test_cop_dem_name_pattern_uses_stac(mock_post, _collections):
+    mock_post.return_value = _response({"features": [_item("Copernicus_DSM_COG_10_N42")], "links": []})
+    df = CopernicusDataSearcher().search_products_by_name_pattern("DSM_COG", "contains", "COP-DEM", top=5)
+    assert mock_post.call_args.kwargs["json"]["filter"]["args"][1] == "%DSM\\_COG%"
+    assert len(df) == 1
+
+
+def test_item_ids_and_odata_names_handle_extensions():
+    assert stac.item_ids_for_name("S6A_X") == ["S6A_X", "S6A_X.SEN6"]
+    assert stac.item_ids_for_name("S6A_X.SEN6") == ["S6A_X", "S6A_X.SEN6"]
+    assert stac.item_ids_for_name("S5P_X.nc") == ["S5P_X", "S5P_X.nc"]
+    assert stac.item_ids_for_name(f"{PRODUCT}.SAFE") == [PRODUCT]
+    assert stac.odata_name_for_name("S1A_X") == "S1A_X.SAFE"
+    assert stac.odata_name_for_name("S3A_X") == "S3A_X.SEN3"
+    assert stac.odata_name_for_name("S6A_X") == "S6A_X.SEN6"
+    assert stac.odata_name_for_name("S5P_X") == "S5P_X.nc"
+    assert stac.odata_name_for_name("DEM1_X") == "DEM1_X.DEM"
+    assert stac.odata_name_for_name("S1A_X.SAFE") == "S1A_X.SAFE"
+    assert stac.odata_name_for_name("LC08_X") == "LC08_X"
+
+
+def test_odata_sends_integer_attributes_given_as_strings_as_integers():
+    searcher = CopernicusDataSearcher()
+    searcher.query_by_filter(collection_name="SENTINEL-1", product_type="SLC", attributes={"relativeOrbitNumber": "66"})
+    url = searcher._build_query()
+    assert "IntegerAttribute/Value eq 66" in url
+    assert "StringAttribute/Value eq '66'" not in url
+
+
+def test_odata_selects_sentinel3_groups_by_name():
+    searcher = CopernicusDataSearcher()
+    searcher.query_by_filter(collection_name="SENTINEL-3", product_type="S3OLCI", attributes={"instrumentShortName": "OLCI"})
+    url = searcher._build_query()
+    assert "contains(Name,'_OL_')" in url
+    assert "Value eq 'S3OLCI'" not in url
+
+
+@pytest.mark.parametrize("header", ["-5", "nan"])
+def test_send_ignores_invalid_retry_after(header):
+    session = Mock()
+    session.get.side_effect = [_response({}, status_code=429, headers={"Retry-After": header}), _response({})]
+    with patch("phidown.stac.time.sleep") as mock_sleep:
+        stac._send(session, "GET", "https://stac")
+    assert mock_sleep.call_args.args[0] == 1.0
+
+
+@patch("phidown.stac.list_collections", return_value=COLLECTIONS)
+@patch("phidown.stac.requests.post")
+def test_query_by_name_resets_state_after_fallback(mock_post, _collections):
+    mock_post.return_value = _response({"features": [], "links": []})
+    searcher = CopernicusDataSearcher()
+    with patch("phidown.search.requests.get", return_value=_odata_response([{"Id": "x"}])):
+        searcher.query_by_name(PRODUCT)
+    assert searcher.query is None
+    assert searcher.num_results == 1

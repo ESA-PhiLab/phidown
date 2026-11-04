@@ -141,7 +141,8 @@ def test_validate_wkt_accepts_valid_geometries(aoi_wkt):
 
 
 def test_validate_wkt_normalizes_whitespace_and_checks_type():
-    assert validate_wkt('  POINT( 1   2 )\n') == 'POINT( 1 2 )'
+    assert validate_wkt('  POINT( 1   2 )\n') == 'POINT(1 2)'
+    assert validate_wkt('POLYGON((\n 0 0 , 1 0, 1 1, 0 0\n))') == 'POLYGON((0 0, 1 0, 1 1, 0 0))'
     assert validate_wkt('polygon((0 0, 1 0, 1 1, 0 0))') == 'POLYGON((0 0, 1 0, 1 1, 0 0))'
     with pytest.raises(TypeError):
         validate_wkt(12)

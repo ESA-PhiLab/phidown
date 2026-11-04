@@ -53,6 +53,13 @@ STAC_ATTRIBUTES = frozenset({
 })
 _STAC_NAME_RE = re.compile(r"^(S[1-6][A-D_P]?_|COPERNICUS_DSM_COG_|DEM1_)", re.IGNORECASE)
 _S1_NON_COG_GRD_RE = re.compile(r"^S1[A-D_]_\w\w_GRD(?!.*_COG(\.SAFE)?$)", re.IGNORECASE)
+_ODATA_NAME_SUFFIXES = (
+    (r"S[12][A-D_]_", ".SAFE"),
+    (r"S3[A-D_]_", ".SEN3"),
+    (r"S6[A-D_]_", ".SEN6"),
+    (r"S5P_", ".nc"),
+    (r"DEM1_", ".DEM"),
+)
 _S1_RAW_RE = re.compile(r"^S1[A-D_]_\w\w_RAW", re.IGNORECASE)
 
 # OData attribute name -> STAC item property (names checked against CDSE
@@ -99,6 +106,11 @@ PRODUCT_TYPE_COLLECTION_SUFFIX: typing.Dict[str, str] = {
     "ETA": "etad",
     "S2MSI1C": "l1c",
     "S2MSI2A": "l2a",
+}
+# Copernicus DEM product types -> collections.
+COP_DEM_PRODUCT_TYPES: typing.Dict[str, str] = {
+    "COP-DEM-GLO-30": "cop-dem-glo-30-dged-cog",
+    "COP-DEM-GLO-90": "cop-dem-glo-90-dged-cog",
 }
 # phidown's Sentinel-3 product type groups (config.json) -> collection id
 # part.  Each group selects every collection of that instrument.
@@ -301,6 +313,9 @@ def resolve_collections(
     if not candidates:
         raise StacError(f"No STAC collection matches the collection name {collection_name!r}")
     if product_type:
+        cop_dem = COP_DEM_PRODUCT_TYPES.get(product_type.upper())
+        if cop_dem in candidates:
+            return [cop_dem], True
         s1_match = _S1_PRODUCT_TYPE_RE.match(product_type.upper())
         if s1_match:
             # A full Sentinel-1 type selects the collection, and the
@@ -404,14 +419,31 @@ def item_id_for_name(name: str) -> str:
     return name
 
 
-def odata_names_for_name(name: str) -> typing.List[str]:
-    """Return the OData ``Name`` values to try for a product name.
+def item_ids_for_name(name: str) -> typing.List[str]:
+    """Return the STAC item ids to try for a product name.
+
+    Sentinel-6 and some Sentinel-5P items keep the extension in their id.
+    """
+    stem = item_id_for_name(name)
+    upper = name.upper()
+    if upper.startswith("S6"):
+        return [stem, f"{stem}.SEN6"]
+    if upper.startswith("S5P"):
+        return [stem, f"{stem}.nc"]
+    return [stem]
+
+
+def odata_name_for_name(name: str) -> str:
+    """Return the OData ``Name`` for a product name.
 
     OData names carry the extension, which STAC lookups let users leave out.
     """
-    if item_id_for_name(name) == name and re.match(r"^S[12][A-D_]_", name, re.IGNORECASE):
-        return [f"{name}.SAFE"]
-    return [name]
+    if item_id_for_name(name) != name:
+        return name
+    for pattern, suffix in _ODATA_NAME_SUFFIXES:
+        if re.match(pattern, name, re.IGNORECASE):
+            return f"{name}{suffix}"
+    return name
 
 
 def _rfc3339(value: typing.Optional[str]) -> str:
@@ -507,6 +539,8 @@ def _send(http: typing.Any, method: str, url: str, **kwargs: typing.Any) -> typi
         try:
             delay = float(retry_after) if retry_after is not None else 2.0 ** attempt
         except ValueError:
+            delay = 2.0 ** attempt
+        if not 0 <= delay:  # Also catches a NaN header value.
             delay = 2.0 ** attempt
         time.sleep(min(delay, MAX_RETRY_DELAY_SECONDS))
     return response
@@ -842,7 +876,8 @@ __all__ = [
     "item_id_for_name",
     "item_starts_within",
     "name_needs_odata",
-    "odata_names_for_name",
+    "item_ids_for_name",
+    "odata_name_for_name",
     "item_to_record",
     "items_to_records",
     "list_collections",

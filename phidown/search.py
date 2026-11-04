@@ -76,6 +76,19 @@ _WKT_COORDINATE_RE = re.compile(
 
 # config.json collection names that OData knows under another name.
 _ODATA_COLLECTION_NAMES = {"LANDSAT-8-ESA": "LANDSAT-8"}
+# OData stores these attributes as integers.
+_ODATA_INTEGER_ATTRIBUTES = frozenset({
+    "orbitNumber",
+    "relativeOrbitNumber",
+    "cycleNumber",
+    "sliceNumber",
+    "totalSlices",
+    "datatakeID",
+    "instrumentConfigurationID",
+})
+# phidown's Sentinel-3 product type groups are not OData productType values,
+# so they select by the instrument part of the product name.
+_ODATA_S3_GROUP_NAME_PARTS = {"S3OLCI": "_OL_", "S3SLSTR": "_SL_", "S3SRAL": "_SR_", "S3SYN": "_SY_"}
 # Parallel OData page requests.  More than this trips the CDSE rate limit.
 MAX_CONCURRENT_PAGE_REQUESTS = 4
 
@@ -379,7 +392,7 @@ def validate_wkt(aoi_wkt: str) -> str:
         aoi_wkt (str): WKT geometry, for example ``POINT(12.4 41.9)``.
 
     Returns:
-        str: The WKT string with repeated whitespace collapsed and the
+        str: The WKT string with redundant whitespace removed and the
         geometry type in upper case.
 
     Raises:
@@ -393,6 +406,10 @@ def validate_wkt(aoi_wkt: str) -> str:
         raise ValueError("The 'aoi_wkt' parameter cannot be empty")
     # OData only accepts geometry keywords in upper case.
     normalized = re.sub(r"^[A-Za-z]+", lambda match: match.group(0).upper(), normalized)
+    # OData rejects spaces just inside parentheses or before commas.
+    normalized = re.sub(r"\(\s+", "(", normalized)
+    normalized = re.sub(r"\s+\)", ")", normalized)
+    normalized = re.sub(r"\s+,", ",", normalized)
     try:
         _validate_supported_aoi_wkt(normalized)
     except ValueError as exc:
@@ -1161,6 +1178,10 @@ class CopernicusDataSearcher:
 
     def _add_product_type_filter(self, filters):
         if self.product_type and not self.burst_mode:
+            name_part = _ODATA_S3_GROUP_NAME_PARTS.get(self.product_type)
+            if name_part:
+                filters.append(f"contains(Name,'{name_part}')")
+                return
             filters.append(
                 "Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'productType' "
                 f"and att/OData.CSC.StringAttribute/Value eq '{_odata_text(self.product_type)}')"
@@ -1199,6 +1220,8 @@ class CopernicusDataSearcher:
     def _add_attribute_filters(self, filters):
         if self.attributes and not self.burst_mode:
             for key, value in self.attributes.items():
+                if key in _ODATA_INTEGER_ATTRIBUTES and isinstance(value, str) and value.strip().isdigit():
+                    value = int(value)
                 if isinstance(value, str):
                     filters.append(
                         f"Attributes/OData.CSC.StringAttribute/any(att:att/Name eq '{_odata_text(key)}' "
@@ -1586,7 +1609,8 @@ class CopernicusDataSearcher:
             # Points and lines have no area: measure them by length or count.
             if aoi_geom.length > 0:
                 return min(100.0, round((intersection.length / aoi_geom.length) * 100, 2))
-            return 100.0 if aoi_geom.intersects(fp_geom) else 0.0
+            points = list(getattr(aoi_geom, "geoms", [aoi_geom]))
+            return round(100.0 * sum(point.intersects(fp_geom) for point in points) / len(points), 2)
             
         except Exception as e:
             logger.debug(f"Could not calculate coverage: {e}")
@@ -1662,7 +1686,7 @@ class CopernicusDataSearcher:
             self.json_data = self._phisat2_searcher.json_data
             return self.df
 
-        names = [product_name]
+        odata_name = product_name
         if not self.burst_mode:
             if not stac_api.name_needs_odata(product_name):
                 # STAC search needs collections, so guess them from the name.
@@ -1670,17 +1694,19 @@ class CopernicusDataSearcher:
                 self.url = f"{self.stac_url.rstrip('/')}/search"
                 try:
                     collections = stac_api.collections_for_product_name(product_name, self._stac_available_collections())
-                    body = {"collections": collections, "ids": [stac_api.item_id_for_name(product_name)], "limit": 1}
+                    ids = stac_api.item_ids_for_name(product_name)
+                    body = {"collections": collections, "ids": ids, "limit": len(ids)}
                     self.query = body
                     self._run_stac_search(body, max_items=1)
                     if not self.df.empty:
                         return self.df
                 except Exception as e:
                     logger.warning(f"STAC lookup of '{product_name}' failed, using OData instead: {e}")
-            names = stac_api.odata_names_for_name(product_name)
+            odata_name = stac_api.odata_name_for_name(product_name)
+            self.query = None
 
         # Construct the query URL, including $expand=Attributes for consistency
-        self.url = f"{self.base_url}?$filter=Name eq '{_odata_text(names[0])}'&$expand=Attributes"
+        self.url = f"{self.base_url}?$filter=Name eq '{_odata_text(odata_name)}'&$expand=Attributes"
         
         try:
             self.response = stac_api._send(requests, "GET", self.url)
@@ -1711,6 +1737,7 @@ class CopernicusDataSearcher:
             # Optionally re-raise 
             # raise
 
+        self.num_results = len(self.df)
         return self.df
 
     def search_products_by_name_pattern(
@@ -1796,6 +1823,10 @@ class CopernicusDataSearcher:
         # Validate effective top value
         if not (1 <= query_top <= 1000):
             raise ValueError(f"The 'top' parameter for the query must be between 1 and 1000. Effective value: {query_top}")
+
+        # OData has no COP-DEM collection, so its tiles are searched on STAC.
+        if (final_collection_name_to_use or "").upper() == "COP-DEM":
+            return self._search_cop_dem_by_name_pattern(name_pattern, match_type, query_top, query_order_by)
         
         # Note: query_order_by uses instance default or passed argument.
         # self.order_by is validated when set by _query_by_filter.
@@ -1827,6 +1858,29 @@ class CopernicusDataSearcher:
             print(f"Unexpected error for name pattern '{name_pattern}' ({match_type}): {e} (URL: {self.url})")
             self.df = pd.DataFrame()
 
+        return self.df
+
+    def _search_cop_dem_by_name_pattern(
+        self,
+        name_pattern: str,
+        match_type: str,
+        top: int,
+        order_by: str,
+    ) -> pd.DataFrame:
+        """STAC version of :meth:`search_products_by_name_pattern` for Copernicus DEM tiles."""
+        escaped = stac_api.item_id_for_name(name_pattern).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = {"exact": "{}", "contains": "%{}%", "startswith": "{}%", "endswith": "%{}"}[match_type].format(escaped)
+        try:
+            collections, _ = self._stac_collections("COP-DEM")
+            body = stac_api.build_search_body(collections=collections, limit=top, order_by=order_by)
+            body["filter-lang"] = "cql2-json"
+            body["filter"] = {"op": "like", "args": [{"property": "id"}, pattern]}
+            self.url = f"{self.stac_url.rstrip('/')}/search"
+            self.query = body
+            self._run_stac_search(body, max_items=top)
+        except Exception as e:
+            print(f"Error for name pattern '{name_pattern}' ({match_type}): {e} (URL: {self.url})")
+            self.df = pd.DataFrame()
         return self.df
 
     def display_results(self, columns=None, top_n=10):

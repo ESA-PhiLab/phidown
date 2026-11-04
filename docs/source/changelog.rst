@@ -42,6 +42,10 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 - OData string filters escape quotes and encode date offsets. Burst pagination retries HTTP 429 and sends at most four requests at a time.
 - ``--burst-coverage --format json`` prints valid JSON, also when no burst matches.
 - ``LANDSAT-8-ESA`` searches use the OData collection name ``LANDSAT-8``.
+- ``COP-DEM-GLO-30`` and ``COP-DEM-GLO-90`` product types select their collections, and COP-DEM name patterns search STAC, because OData has no COP-DEM collection.
+- ``query_by_name`` finds Sentinel-6, Sentinel-5P, Sentinel-3 and DEM products given without an extension.
+- AOI whitespace just inside parentheses no longer causes HTTP 400. Integer attributes given as strings, and Sentinel-3 product groups, now work on OData.
+- ``--list --format json`` prints ``[]`` when nothing matches.
 - Coverage is measured for point and line AOIs, and the AOI centroid is correct across the antimeridian.
 - ``plot_kml_coordinates`` reads KML files with a default namespace, and ``get_ais_data`` checks the AOI before downloading data.
 

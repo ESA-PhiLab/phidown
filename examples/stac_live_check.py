@@ -30,7 +30,9 @@ for case in CASES:
     df = searcher.execute_query()
     print(f"\n{case} -> {len(df)} rows, STAC body: {searcher.query}")
     if not df.empty:
-        print(df[["Name", "Collection", "S3Path", "ContentLength", "coverage"]].to_string(index=False))
+        # Rows from the OData path have no Collection column.
+        columns = [column for column in ["Name", "Collection", "S3Path", "ContentLength", "coverage"] if column in df.columns]
+        print(df[columns].to_string(index=False))
         name = df.iloc[0]["Name"]
         found = CopernicusDataSearcher().query_by_name(name)
         print("query_by_name:", len(found), "row(s) for", name, "->", list(found["Name"]) if len(found) else [])

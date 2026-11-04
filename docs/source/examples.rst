@@ -34,7 +34,7 @@ Example 2: Query by Product Name
 
    searcher = CopernicusDataSearcher()
    result = searcher.query_by_name(
-       "S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003"
+       "S1A_IW_GRDH_1SDV_20240503T031929_20240503T031942_053701_0685FB_7532_COG"
    )
 
    print(result[["Name", "S3Path", "ContentLength"]].head(1))

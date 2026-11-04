@@ -87,7 +87,7 @@ If you already know the product identifier, use ``query_by_name()``:
 
    searcher = CopernicusDataSearcher()
    result = searcher.query_by_name(
-       "S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003"
+       "S1A_IW_GRDH_1SDV_20240503T031929_20240503T031942_053701_0685FB_7532_COG"
    )
 
    print(result[["Name", "S3Path"]].head(1))
@@ -161,7 +161,7 @@ Download a single product by name:
 
    searcher = CopernicusDataSearcher()
    searcher.download_product(
-       eo_product_name="S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003",
+       eo_product_name="S1A_IW_GRDH_1SDV_20240503T031929_20240503T031942_053701_0685FB_7532_COG",
        output_dir="./data",
        config_file=".s5cfg",
    )
@@ -213,7 +213,7 @@ The CLI supports downloads, product listing, and burst coverage analysis.
 .. code-block:: bash
 
    # Download by product name
-   phidown --name S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003 -o ./data
+   phidown --name S1A_IW_GRDH_1SDV_20240503T031929_20240503T031942_053701_0685FB_7532_COG -o ./data
 
    # Download by direct S3 path
    phidown --s3path /eodata/Sentinel-1/SAR/IW_GRDH_1S/2024/05/03/... -o ./data
