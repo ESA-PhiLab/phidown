@@ -12,6 +12,8 @@ import warnings
 import pandas as pd
 from huggingface_hub import hf_hub_download
 
+from .search import validate_wkt
+
 try:
     from shapely import wkt as shapely_wkt
     from shapely.geometry import Point
@@ -461,7 +463,7 @@ class AISDataHandler:
             )
         
         try:
-            geom = shapely_wkt.loads(wkt_clean)
+            geom = shapely_wkt.loads(validate_wkt(wkt_clean))
         except Exception as exc:
             raise ValueError(f"AOI parse error: {exc}")
         

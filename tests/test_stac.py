@@ -7,6 +7,7 @@ They do not replace a live check against https://stac.dataspace.copernicus.eu.
 from unittest.mock import Mock, patch
 
 import pytest
+import requests
 
 from phidown import stac
 from phidown.search import CopernicusDataSearcher
@@ -119,6 +120,10 @@ def test_searcher_exact_product_type_attribute_narrows_collections(mock_post, _c
     body = mock_post.call_args.kwargs["json"]
     assert body["collections"] == ["sentinel-3-olci-2-lfr-nrt", "sentinel-3-olci-2-lfr-ntc"]
     assert "filter" not in body
+
+
+def test_resolve_collections_sentinel1_raw_product_type():
+    assert stac.resolve_collections("SENTINEL-1", "IW_RAW__0S", ["sentinel-1-raw"]) == (["sentinel-1-raw"], False)
 
 
 def test_collections_for_product_name():
@@ -416,3 +421,32 @@ def test_item_to_record_size_of_single_file_product():
     assert record["Name"] == f"{name}.nc"
     assert record["S3Path"] == href.replace("s3://", "/")
     assert record["ContentLength"] == 616351858
+
+
+def test_search_lowers_page_size_after_limit_rejection():
+    rejection = _response(
+        {"detail": {"code": "LimitValidationError", "message": "Limit of 1000 exceeds maximum of 200 for sentinel-2-l2a."}},
+        status_code=400,
+    )
+    session = Mock()
+    session.post.side_effect = [rejection, _response({"features": [_item("A"), _item("B")], "links": []})]
+
+    items, _, _ = stac.search({"collections": ["sentinel-2-l2a"], "limit": 1000}, max_items=None, session=session)
+
+    assert [item["id"] for item in items] == ["A", "B"]
+    assert [call.kwargs["json"]["limit"] for call in session.post.call_args_list] == [1000, 100]
+
+
+def test_search_raises_when_lowered_page_size_is_rejected():
+    rejection = _response(
+        {"detail": {"code": "LimitValidationError", "message": "Limit of 100 exceeds maximum of 200."}},
+        status_code=400,
+    )
+    rejection.raise_for_status.side_effect = requests.HTTPError("400")
+    session = Mock()
+    session.post.return_value = rejection
+
+    with pytest.raises(requests.HTTPError):
+        stac.search({"collections": ["sentinel-2-l2a"], "limit": 100}, max_items=None, session=session)
+
+    assert session.post.call_count == 1

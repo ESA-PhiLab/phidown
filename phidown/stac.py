@@ -28,6 +28,9 @@ REQUEST_TIMEOUT_SECONDS = 30
 # Upper bound for one STAC page.  ``top`` larger than this is fetched over
 # several pages.
 MAX_PAGE_SIZE = 1000
+# Page size for collections that reject MAX_PAGE_SIZE.  CDSE needs the
+# ``fields`` extension for larger pages of heavy collections (sentinel-2-l2a).
+FALLBACK_PAGE_SIZE = 100
 # CDSE answers 429 when requests come too fast (for example while paging
 # /collections).  Retry these with a back-off.
 MAX_RATE_LIMIT_RETRIES = 6
@@ -73,6 +76,7 @@ PRODUCT_TYPE_COLLECTION_SUFFIX: typing.Dict[str, str] = {
     "SLC": "slc",
     "GRD": "grd",
     "OCN": "ocn",
+    "RAW": "raw",
     "ETA": "etad",
     "S2MSI1C": "l1c",
     "S2MSI2A": "l2a",
@@ -493,6 +497,21 @@ def _rejected_filter_properties(response: typing.Any) -> typing.Set[str]:
     return rejected
 
 
+def _accepted_limit(response: typing.Any, limit: typing.Any) -> typing.Optional[int]:
+    """Return a smaller page size after a 400 LimitValidationError, if any."""
+    if getattr(response, "status_code", None) != 400 or not isinstance(limit, int):
+        return None
+    try:
+        detail = response.json().get("detail", {})
+    except Exception:
+        return None
+    if not isinstance(detail, dict) or detail.get("code") != "LimitValidationError":
+        return None
+    match = re.search(r"maximum of (\d+)", str(detail.get("message", "")))
+    accepted = min(int(match.group(1)), FALLBACK_PAGE_SIZE) if match else FALLBACK_PAGE_SIZE
+    return accepted if 0 < accepted < limit else None
+
+
 def _condition_property(condition: typing.Dict[str, typing.Any]) -> typing.Optional[str]:
     for arg in condition.get("args", []):
         if isinstance(arg, dict) and "property" in arg:
@@ -609,6 +628,10 @@ def search(
     response = None
     while True:
         response = _send(http, method, url, **({"json": request_body} if method == "POST" else {}))
+        accepted_limit = _accepted_limit(response, (request_body or {}).get("limit")) if not items else None
+        if accepted_limit is not None:
+            request_body = {**request_body, "limit": accepted_limit}
+            continue
         rejected = _rejected_filter_properties(response) if not items else set()
         if rejected and request_body and request_body.get("filter"):
             server_conditions, moved = _split_conditions(request_body["filter"], rejected)

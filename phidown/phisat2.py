@@ -535,6 +535,11 @@ class PhiSat2Searcher:
             raise ValueError("results_per_page must be a positive integer")
         if not isinstance(page, int) or page < 0:
             raise ValueError("page must be a non-negative integer")
+        if aoi_wkt:
+            # Imported here because phidown.search imports this module.
+            from .search import validate_wkt
+
+            aoi_wkt = validate_wkt(aoi_wkt)
 
         ensure_phisat2_config(self.config_file, reset=reset_config)
         config = _read_phisat2_config(self.config_file)

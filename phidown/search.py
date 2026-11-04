@@ -171,9 +171,18 @@ def _parse_coordinate(text: str) -> typing.Tuple[float, float]:
     return float(lon_text), float(lat_text)
 
 
+def _validate_coordinate_range(coord: typing.Tuple[float, float]) -> None:
+    """Check that a coordinate pair is a valid EPSG:4326 longitude and latitude."""
+    lon, lat = coord
+    if not -180.0 <= lon <= 180.0:
+        raise ValueError(f"longitude {lon} is outside the range -180 to 180")
+    if not -90.0 <= lat <= 90.0:
+        raise ValueError(f"latitude {lat} is outside the range -90 to 90")
+
+
 def _validate_coordinate(text: str) -> None:
     """Validate a 2D WKT coordinate pair."""
-    _parse_coordinate(text)
+    _validate_coordinate_range(_parse_coordinate(text))
 
 
 def _coordinates_from_sequence(text: str) -> typing.List[typing.Tuple[float, float]]:
@@ -182,8 +191,12 @@ def _coordinates_from_sequence(text: str) -> typing.List[typing.Tuple[float, flo
 
 
 def _validate_coordinate_sequence(text: str) -> None:
-    """Validate a comma-separated sequence of 2D WKT coordinate pairs."""
-    _coordinates_from_sequence(text)
+    """Validate a WKT line: at least two distinct coordinate pairs in range."""
+    coords = _coordinates_from_sequence(text)
+    for coord in coords:
+        _validate_coordinate_range(coord)
+    if len(set(coords)) < 2:
+        raise ValueError("WKT line must have at least 2 distinct coordinate pairs")
 
 
 def _validate_point_body(body: str) -> None:
@@ -207,17 +220,110 @@ def _validate_multilinestring_body(body: str) -> None:
         _validate_coordinate_sequence(_unwrap_wkt_group(component))
 
 
-def _validate_polygon_ring(ring: str) -> None:
+def _cross(
+    origin: typing.Tuple[float, float],
+    first: typing.Tuple[float, float],
+    second: typing.Tuple[float, float],
+) -> float:
+    """Return the z component of ``(first - origin) x (second - origin)``."""
+    return (first[0] - origin[0]) * (second[1] - origin[1]) - (first[1] - origin[1]) * (second[0] - origin[0])
+
+
+def _in_segment_box(
+    start: typing.Tuple[float, float],
+    end: typing.Tuple[float, float],
+    point: typing.Tuple[float, float],
+) -> bool:
+    return (
+        min(start[0], end[0]) <= point[0] <= max(start[0], end[0])
+        and min(start[1], end[1]) <= point[1] <= max(start[1], end[1])
+    )
+
+
+def _segments_touch(
+    first: typing.Tuple[typing.Tuple[float, float], typing.Tuple[float, float]],
+    second: typing.Tuple[typing.Tuple[float, float], typing.Tuple[float, float]],
+) -> bool:
+    """Return whether two segments share at least one point."""
+    a, b = first
+    c, d = second
+    side_c, side_d = _cross(a, b, c), _cross(a, b, d)
+    side_a, side_b = _cross(c, d, a), _cross(c, d, b)
+    if ((side_c > 0) != (side_d > 0)) and ((side_a > 0) != (side_b > 0)) and 0 not in (side_a, side_b, side_c, side_d):
+        return True
+    return (
+        (side_c == 0 and _in_segment_box(a, b, c))
+        or (side_d == 0 and _in_segment_box(a, b, d))
+        or (side_a == 0 and _in_segment_box(c, d, a))
+        or (side_b == 0 and _in_segment_box(c, d, b))
+    )
+
+
+def _validate_ring_is_simple(coords: typing.List[typing.Tuple[float, float]]) -> None:
+    """Reject closed rings that are degenerate or that touch or cross themselves."""
+    points = [coord for index, coord in enumerate(coords) if index == 0 or coord != coords[index - 1]]
+    if len(points) < 4:
+        raise ValueError("WKT polygon ring must have at least 3 distinct corners")
+
+    segments = list(zip(points, points[1:]))
+    count = len(segments)
+    for index in range(count):
+        before = segments[index - 1][0]
+        corner, after = segments[index]
+        # Neighbouring segments share a corner, so they only conflict when
+        # the outline folds straight back along itself.
+        if _cross(corner, before, after) == 0 and (
+            (before[0] - corner[0]) * (after[0] - corner[0]) + (before[1] - corner[1]) * (after[1] - corner[1]) > 0
+        ):
+            raise ValueError("WKT polygon ring must not intersect itself")
+
+    # Sweep along longitude so that long rings only compare nearby segments.
+    order = sorted(range(count), key=lambda index: min(segments[index][0][0], segments[index][1][0]))
+    for position, index in enumerate(order):
+        right_edge = max(segments[index][0][0], segments[index][1][0])
+        for next_position in range(position + 1, count):
+            other = order[next_position]
+            if min(segments[other][0][0], segments[other][1][0]) > right_edge:
+                break
+            if abs(index - other) in (1, count - 1):
+                continue
+            if _segments_touch(segments[index], segments[other]):
+                raise ValueError("WKT polygon ring must not intersect itself")
+
+
+def _point_in_ring(
+    point: typing.Tuple[float, float],
+    ring: typing.List[typing.Tuple[float, float]],
+) -> bool:
+    """Return whether a point is inside a closed ring or on its outline."""
+    inside = False
+    for start, end in zip(ring, ring[1:]):
+        if _cross(start, end, point) == 0 and _in_segment_box(start, end, point):
+            return True
+        if (start[1] > point[1]) != (end[1] > point[1]):
+            crossing = start[0] + (point[1] - start[1]) * (end[0] - start[0]) / (end[1] - start[1])
+            if point[0] < crossing:
+                inside = not inside
+    return inside
+
+
+def _validate_polygon_ring(ring: str) -> typing.List[typing.Tuple[float, float]]:
     coords = _coordinates_from_sequence(_unwrap_wkt_group(ring))
     if len(coords) < 4:
         raise ValueError("WKT polygon ring must have at least 4 coordinate pairs")
     if coords[0] != coords[-1]:
         raise ValueError("WKT polygon ring must start and end with the same point")
+    for coord in coords:
+        _validate_coordinate_range(coord)
+    _validate_ring_is_simple(coords)
+    return coords
 
 
 def _validate_polygon_body(body: str) -> None:
-    for ring in _split_wkt_components(_unwrap_wkt_group(body)):
-        _validate_polygon_ring(ring)
+    rings = [_validate_polygon_ring(ring) for ring in _split_wkt_components(_unwrap_wkt_group(body))]
+    for hole in rings[1:]:
+        if not all(_point_in_ring(point, rings[0]) for point in hole):
+            raise ValueError("WKT polygon hole must lie inside the outer ring")
 
 
 def _validate_multipolygon_body(body: str) -> None:
@@ -234,7 +340,7 @@ def _validate_supported_aoi_wkt(aoi_wkt: str) -> None:
             f"Unsupported AOI WKT geometry type '{geometry_type}'. Supported types: {supported}"
         )
     if body.upper() == "EMPTY":
-        return
+        raise ValueError("AOI WKT geometry cannot be EMPTY")
 
     validators = {
         "POINT": _validate_point_body,
@@ -245,6 +351,39 @@ def _validate_supported_aoi_wkt(aoi_wkt: str) -> None:
         "MULTIPOLYGON": _validate_multipolygon_body,
     }
     validators[geometry_type](body)
+
+
+def validate_wkt(aoi_wkt: str) -> str:
+    """Check the integrity of an EPSG:4326 WKT geometry and return it normalized.
+
+    The check covers the syntax, the supported geometry types, the longitude
+    and latitude ranges, lines without two distinct points, and polygon rings
+    that are open, degenerate, or that touch or cross themselves, and polygon
+    holes with a corner outside the outer ring.  Overlaps between holes or
+    between the parts of a MULTIPOLYGON are not checked.
+
+    Args:
+        aoi_wkt (str): WKT geometry, for example ``POINT(12.4 41.9)``.
+
+    Returns:
+        str: The WKT string with repeated whitespace collapsed.
+
+    Raises:
+        TypeError: If ``aoi_wkt`` is not a string.
+        ValueError: If the geometry is not valid.
+    """
+    if not isinstance(aoi_wkt, str):
+        raise TypeError("The 'aoi_wkt' parameter must be a string")
+    normalized = " ".join(aoi_wkt.split())
+    if not normalized:
+        raise ValueError("The 'aoi_wkt' parameter cannot be empty")
+    try:
+        _validate_supported_aoi_wkt(normalized)
+    except ValueError as exc:
+        if str(exc).startswith("Unsupported AOI WKT geometry type"):
+            raise
+        raise ValueError(f"The 'aoi_wkt' parameter must be valid WKT: {exc}") from exc
+    return normalized
 
 
 def _strip_closing_coordinate(
@@ -788,19 +927,7 @@ class CopernicusDataSearcher:
             TypeError: If the 'aoi_wkt' parameter is not a string.
         """
         if self.aoi_wkt is not None:
-            if not isinstance(self.aoi_wkt, str):
-                raise TypeError("The 'aoi_wkt' parameter must be a string")
-
-            self.aoi_wkt = ' '.join(self.aoi_wkt.split())
-
-            if not self.aoi_wkt.strip():
-                raise ValueError("The 'aoi_wkt' parameter cannot be empty")
-            try:
-                _validate_supported_aoi_wkt(self.aoi_wkt)
-            except ValueError as exc:
-                if str(exc).startswith("Unsupported AOI WKT geometry type"):
-                    raise
-                raise ValueError(f"The 'aoi_wkt' parameter must be valid WKT: {exc}") from exc
+            self.aoi_wkt = validate_wkt(self.aoi_wkt)
 
     def _validate_time(self):
         """

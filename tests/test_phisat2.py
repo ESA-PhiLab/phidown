@@ -434,3 +434,10 @@ def test_query_by_name_returns_unique_fuzzy_match():
 
     assert len(df) == 1
     assert df.iloc[0]["Id"] == 7
+
+
+@patch("phidown.phisat2.ensure_phisat2_config")
+def test_search_rejects_invalid_aoi_before_reading_config(mock_ensure_config):
+    with pytest.raises(ValueError, match="must be valid WKT"):
+        PhiSat2Searcher(config_file="dummy.s5cfg").query_catalogue(aoi_wkt="POLYGON((0 0, 1 1, 1 0, 0 1, 0 0))")
+    mock_ensure_config.assert_not_called()

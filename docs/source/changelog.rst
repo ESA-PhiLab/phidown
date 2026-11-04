@@ -14,12 +14,22 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 [Unreleased]
 ------------
 
+[0.1.31] - 2026-11-04
+---------------------
+
 ### Changed
 - Product search (``execute_query``, ``query_by_name``, ``search_products_by_name_pattern``) now uses the CDSE STAC API (``https://stac.dataspace.copernicus.eu/v1``) instead of OData. OData collection names, product types, and attribute names are translated to STAC collections and CQL2-JSON filters, and STAC items are mapped back to the existing DataFrame columns.
 - Sentinel-1 burst search still uses the OData ``Bursts`` endpoint, because STAC has no burst catalogue.
+- AOI WKT strings are now rejected when they are ``EMPTY``, have out-of-range longitudes or latitudes, lines without two distinct points, degenerate or self-intersecting polygon rings, or holes outside the outer ring. ``CopernicusDataSearcher``, ``PhiSat2Searcher.query_catalogue``, and AIS AOI filtering all apply these checks.
 
 ### Added
 - ``phidown.stac`` module with the STAC request builder, pagination, and item mapping.
+- Local Sentinel-1 burst assembly: ``merge_burst_safes``, ``discover_burst_safes``, and the ``phidown merge-bursts`` CLI build one SAFE from downloaded burst SAFEs or ZIP archives (``pip install 'phidown[sentinel1]'``), without the online ASF ``burst2safe`` service.
+- ``phidown.validate_wkt`` to check a WKT geometry and return it normalized (`#32 <https://github.com/ESA-PhiLab/phidown/issues/32>`_).
+
+### Fixed
+- STAC searches lower the page size when a collection rejects the requested limit. Default ``top=1000`` searches of ``sentinel-2-l2a`` failed with HTTP 400 before this fix.
+- Sentinel-1 RAW product types no longer raise ``KeyError`` when selecting STAC collections.
 
 [0.1.30] - 2026-09-01
 ---------------------
