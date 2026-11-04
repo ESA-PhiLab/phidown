@@ -1701,7 +1701,8 @@ class CopernicusDataSearcher:
                     if not self.df.empty:
                         return self.df
                 except Exception as e:
-                    logger.warning(f"STAC lookup of '{product_name}' failed, using OData instead: {e}")
+                    # CDSE answers 400 for ids it does not accept, so this is routine.
+                    logger.debug(f"STAC lookup of '{product_name}' failed, using OData instead: {e}")
             odata_name = stac_api.odata_name_for_name(product_name)
             self.query = None
 
@@ -2009,7 +2010,7 @@ class CopernicusDataSearcher:
             return False
         
         # file size in bytes
-        content_length = res['ContentLength'].iloc[0]
+        content_length = res.iloc[0].get('ContentLength')
         
         # Ensure output_dir is an absolute path
         abs_output_dir = os.path.abspath(output_dir)
@@ -2019,7 +2020,10 @@ class CopernicusDataSearcher:
             print(f"Output directory: {abs_output_dir}")
             print(f"Mode: {mode}")
         
-        s3path = res['S3Path'].iloc[0]
+        s3path = res.iloc[0].get('S3Path')
+        if not isinstance(s3path, str) or not s3path:
+            print(f"Product {eo_product_name} has no S3 path, so it cannot be downloaded (it may be offline).")
+            return False
         
         # Choose download method based on mode
         if mode == 'safe':
@@ -2864,7 +2868,7 @@ class CopernicusDataSearcher:
             config_file: Path to s5cmd configuration file.
             mode: Download mode ('fast' for s5cmd, 'safe' for resumable native downloads).
             retry_count: Number of retry attempts for failed downloads.
-            validate: Whether to validate downloaded files (check manifest.safe exists).
+            validate: Whether to validate downloaded files (see ``is_product_complete``).
             verbose: Whether to print progress information.
             show_progress: Whether to show tqdm progress bar.
             state_file: Optional JSON state file path for resumable runs.
@@ -2916,7 +2920,7 @@ class CopernicusDataSearcher:
             s3_path = row.get('S3Path')
             content_length = row.get('ContentLength', 0)
             
-            if not s3_path:
+            if not isinstance(s3_path, str) or not s3_path:
                 summary['failed'] += 1
                 summary['details'].append({
                     'name': product_name,
@@ -2928,8 +2932,8 @@ class CopernicusDataSearcher:
             if verbose:
                 print(f"📥 Downloading {idx + 1}/{total}: {product_name}...")
 
-            product_dir = os.path.join(abs_output_dir, product_name)
-            manifest_path = os.path.join(product_dir, 'manifest.safe')
+            # pull_down names the output after the S3 path, which can differ from the Name.
+            product_dir = os.path.join(abs_output_dir, os.path.basename(s3_path.rstrip('/')))
 
             if not use_native and is_product_complete(product_dir):
                 if state_store is not None:
@@ -2992,7 +2996,7 @@ class CopernicusDataSearcher:
                             success = None
                             break
                         if validate and not is_product_complete(result.output_path):
-                            raise ValueError("manifest.safe not found - download may be incomplete")
+                            raise ValueError("Downloaded product looks incomplete")
                     else:
                         if state_store is not None:
                             state_store.mark(
@@ -3017,8 +3021,8 @@ class CopernicusDataSearcher:
                         
                         # Validate if enabled
                         if validate:
-                            if os.path.isdir(product_dir) and not os.path.exists(manifest_path):
-                                raise ValueError("manifest.safe not found - download may be incomplete")
+                            if not is_product_complete(product_dir):
+                                raise ValueError("Downloaded product looks incomplete")
                     
                     success = True
                     if state_store is not None:

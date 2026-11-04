@@ -256,8 +256,11 @@ def download_by_name(
             return False
         
         # Get product details
-        s3_path = df.iloc[0]['S3Path']
+        s3_path = df.iloc[0].get('S3Path')
         content_length = df.iloc[0].get('ContentLength', None)
+        if not isinstance(s3_path, str) or not s3_path:
+            logger.error(f'❌ Product has no S3 path, so it cannot be downloaded (it may be offline): {product_name}')
+            return False
         
         logger.info(f'✅ Found product in catalog')
         logger.info(f'📦 S3 Path: {s3_path}')
@@ -332,7 +335,7 @@ def download_by_name(
                         logger.info('⏭️  Product already downloaded, skipping.')
                         return True
                     if not is_product_complete(result.output_path):
-                        raise ValueError('manifest.safe not found - download may be incomplete')
+                        raise ValueError('Downloaded product looks incomplete')
                 else:
                     attempt_reset = should_reset_config
                     should_reset_config = False
@@ -351,7 +354,7 @@ def download_by_name(
                     )
 
                     if not is_product_complete(product_dir):
-                        raise ValueError('manifest.safe not found - download may be incomplete')
+                        raise ValueError('Downloaded product looks incomplete')
 
                 if state_store is not None:
                     state_store.mark(
@@ -523,7 +526,7 @@ def download_by_s3path(
                         logger.info('⏭️  Target already downloaded, skipping.')
                         return True
                     if download_all and not is_product_complete(result.output_path):
-                        raise ValueError('manifest.safe not found - download may be incomplete')
+                        raise ValueError('Downloaded product looks incomplete')
                 else:
                     attempt_reset = should_reset_config
                     should_reset_config = False

@@ -46,6 +46,10 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 - ``query_by_name`` finds Sentinel-6, Sentinel-5P, Sentinel-3 and DEM products given without an extension.
 - AOI whitespace just inside parentheses no longer causes HTTP 400. Integer attributes given as strings, and Sentinel-3 product groups, now work on OData.
 - ``--list --format json`` prints ``[]`` when nothing matches.
+- Single-file products (Sentinel-5P ``.nc``) download in fast and safe mode. They failed before because the path was treated as a folder.
+- Download checks accept every product layout, not only ``manifest.safe``, so Sentinel-3, Sentinel-6, Sentinel-5P, DEM and SMOS products are no longer reported as failed or incomplete.
+- ``s5cmd`` is found next to the Python interpreter when its environment is not activated, as in notebook kernels.
+- Products without an S3 path report a clear message instead of raising ``KeyError``.
 - Coverage is measured for point and line AOIs, and the AOI centroid is correct across the antimeridian.
 - ``plot_kml_coordinates`` reads KML files with a default namespace, and ``get_ais_data`` checks the AOI before downloading data.
 

@@ -8,6 +8,7 @@ from phidown.download_state import (
     default_state_file,
     is_non_empty_file,
     is_product_complete,
+    is_single_file_s3_path,
     utc_now_iso,
 )
 
@@ -90,3 +91,35 @@ def test_product_and_file_completion_helpers(tmp_path):
 
     os.remove(manifest)
     assert not is_product_complete(str(product_dir))
+
+
+def test_is_product_complete_covers_every_product_layout(tmp_path):
+    for name, manifest in (("a.SAFE", "manifest.safe"), ("b.SEN3", "xfdumanifest.xml"), ("c.SEN6", "xfdumanifest.xml")):
+        folder = tmp_path / name
+        folder.mkdir()
+        (folder / "data.nc").write_text("x")
+        assert not is_product_complete(str(folder))
+        (folder / manifest).write_text("x")
+        assert is_product_complete(str(folder))
+
+    dem = tmp_path / "Copernicus_DSM_COG_30_N41_00_E012_00_DEM"
+    dem.mkdir()
+    assert not is_product_complete(str(dem))
+    (dem / "empty.tif").write_text("")
+    assert not is_product_complete(str(dem))
+    (dem / "tile.tif").write_text("x")
+    assert is_product_complete(str(dem))
+
+    single = tmp_path / "S5P_X.nc"
+    assert not is_product_complete(str(single))
+    single.write_text("")
+    assert not is_product_complete(str(single))
+    single.write_text("x")
+    assert is_product_complete(str(single))
+
+
+def test_is_single_file_s3_path():
+    assert is_single_file_s3_path("/eodata/Sentinel-5P/TROPOMI/L2__CO____/2024/06/08/S5P_X.nc")
+    assert not is_single_file_s3_path("/eodata/Sentinel-1/SAR/IW_SLC__1S/2024/06/08/S1A_X.SAFE")
+    assert not is_single_file_s3_path("/eodata/Sentinel-6/P4/2024/06/08/S6A_X.SEN6/")
+    assert not is_single_file_s3_path("/eodata/CCM/COP-DEM/Copernicus_DSM_COG_30_N41_00_E012_00_DEM")

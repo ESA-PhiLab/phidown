@@ -11,7 +11,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from tqdm import tqdm
 
-from .download_state import DownloadStateStore, default_state_file
+from .download_state import DownloadStateStore, default_state_file, is_single_file_s3_path
 from .s5cmd_utils import ensure_s5cmd_config
 
 logger = logging.getLogger(__name__)
@@ -260,6 +260,8 @@ def download_s3_resumable(
     reset_config: bool = False,
 ) -> NativeDownloadResult:
     """Download a product/object using native ranged S3 reads."""
+    if is_single_file_s3_path(s3_path):
+        download_all = False
     abs_output_dir = os.path.abspath(output_dir)
     os.makedirs(abs_output_dir, exist_ok=True)
 

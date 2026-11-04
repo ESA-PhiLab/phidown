@@ -47,8 +47,9 @@ def test_split_command_args_windows_paths_with_spaces():
     ]
 
 
+@patch("phidown.s5cmd_utils.shutil.which", return_value="/usr/bin/s5cmd")
 @patch("phidown.s5cmd_utils.subprocess.Popen")
-def test_run_s5cmd_with_config_accepts_command_list(mock_popen, tmp_path):
+def test_run_s5cmd_with_config_accepts_command_list(mock_popen, _which, tmp_path):
     cfg = tmp_path / ".s5cfg"
     _write_s5cfg(cfg)
 
@@ -203,3 +204,28 @@ def test_pull_down_passes_s5cmd_retry_and_workers(mock_run, tmp_path):
     kwargs = mock_run.call_args.kwargs
     assert kwargs["s5cmd_retry_count"] == 7
     assert kwargs["max_workers"] == 32
+
+
+def test_pull_down_copies_single_file_product_without_wildcard(tmp_path):
+    from unittest.mock import patch
+    from phidown import s5cmd_utils
+
+    config = tmp_path / ".s5cfg"
+    config.write_text("[default]\n")
+    with patch.object(s5cmd_utils, "ensure_s5cmd_config"), patch.object(s5cmd_utils, "run_s5cmd_with_config") as run:
+        s5cmd_utils.pull_down("/eodata/Sentinel-5P/X/S5P_X.nc", str(tmp_path), config_file=str(config), show_progress=False)
+    assert run.call_args.kwargs["command"] == ["cp", "s3://eodata/Sentinel-5P/X/S5P_X.nc", f"{tmp_path}/"]
+    assert not (tmp_path / "S5P_X.nc").exists()
+
+
+def test_s5cmd_executable_uses_interpreter_directory(tmp_path):
+    from unittest.mock import patch
+    from phidown import s5cmd_utils
+
+    def which(name, path=None):
+        return f"{path}/{name}" if path else None
+
+    with patch.object(s5cmd_utils.shutil, "which", side_effect=which), patch.object(s5cmd_utils.sys, "executable", "/venv/bin/python"):
+        assert s5cmd_utils._s5cmd_executable() == "/venv/bin/s5cmd"
+    with patch.object(s5cmd_utils.shutil, "which", return_value="/usr/bin/s5cmd"):
+        assert s5cmd_utils._s5cmd_executable() == "s5cmd"

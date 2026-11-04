@@ -656,3 +656,10 @@ def test_query_by_name_resets_state_after_fallback(mock_post, _collections):
         searcher.query_by_name(PRODUCT)
     assert searcher.query is None
     assert searcher.num_results == 1
+
+
+@patch("phidown.stac.requests.post")
+def test_download_product_reports_product_without_s3_path(mock_post, capsys):
+    with patch("phidown.search.requests.get", return_value=_odata_response([{"Id": "x", "Name": "ENV_X", "ContentLength": 0}])):
+        assert CopernicusDataSearcher().download_product("ENV_X", "/tmp/unused") is False
+    assert "no S3 path" in capsys.readouterr().out

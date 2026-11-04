@@ -28,11 +28,36 @@ def default_state_file(output_dir: str) -> str:
     return str(state_dir / 'download_state.json')
 
 
-def is_product_complete(product_dir: str) -> bool:
-    """Check if a SAFE product directory looks complete."""
-    if not os.path.isdir(product_dir):
+# Products stored as one S3 object instead of a folder (Sentinel-5P .nc).
+_SINGLE_FILE_SUFFIXES = ('.nc', '.nc4', '.h5', '.he5', '.hdf', '.tif', '.tiff', '.zip', '.tar', '.gz', '.tgz')
+# Manifests that a complete product folder must hold.
+_PRODUCT_MANIFESTS = {'.safe': 'manifest.safe', '.sen3': 'xfdumanifest.xml', '.sen6': 'xfdumanifest.xml'}
+
+
+def is_single_file_s3_path(s3_path: str) -> bool:
+    """Return whether an S3 path names one object rather than a product folder."""
+    return s3_path.rstrip('/').lower().endswith(_SINGLE_FILE_SUFFIXES)
+
+
+def is_product_complete(product_path: str) -> bool:
+    """Check if a downloaded product looks complete.
+
+    SAFE, SEN3 and SEN6 folders need their manifest.  Other products (DEM
+    tiles, Landsat, SMOS) have none, so they need at least one non-empty file.
+    """
+    if os.path.isfile(product_path):
+        return os.path.getsize(product_path) > 0
+    if not os.path.isdir(product_path):
         return False
-    return os.path.exists(os.path.join(product_dir, 'manifest.safe'))
+    suffix = os.path.splitext(product_path.rstrip('/\\'))[1].lower()
+    manifest = _PRODUCT_MANIFESTS.get(suffix)
+    if manifest:
+        return os.path.exists(os.path.join(product_path, manifest))
+    return any(
+        os.path.getsize(os.path.join(root, name)) > 0
+        for root, _, names in os.walk(product_path)
+        for name in names
+    )
 
 
 def is_non_empty_file(path: str) -> bool:
