@@ -56,7 +56,7 @@ class TestBurstModeInitialization:
             end_date=end_date,
         )
 
-        output = capsys.readouterr().out
+        output = capsys.readouterr().err
         assert (
             'Burst availability depends on the CDSE catalogue and may vary by '
             'acquisition date, area, platform, and acquisition mode. Please verify '
@@ -530,3 +530,27 @@ class TestBurstModeBackwardCompatibility:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+
+def test_parent_product_query_adds_dates_from_the_name():
+    searcher = CopernicusDataSearcher()
+    searcher.query_by_filter(
+        burst_mode=True,
+        parent_product_name='S1A_IW_SLC__1SDV_20240503T031928_20240503T031942_053701_0685FB_670F.SAFE',
+    )
+    url = searcher._build_query()
+    assert 'ContentDate/Start ge 2024-05-03T03:14:28Z' in url
+    assert 'ContentDate/Start le 2024-05-03T03:24:42Z' in url
+
+
+def test_parent_product_query_keeps_user_dates():
+    searcher = CopernicusDataSearcher()
+    searcher.query_by_filter(
+        burst_mode=True,
+        parent_product_name='S1A_IW_SLC__1SDV_20240503T031928_20240503T031942_053701_0685FB_670F.SAFE',
+        start_date='2024-05-03T00:00:00Z',
+    )
+    url = searcher._build_query()
+    assert url.count('ContentDate/Start') == 2  # The user's date and the sort order.
+    assert 'ContentDate/Start ge 2024-05-03T00:00:00Z' in url

@@ -1,0 +1,4 @@
+These Sentinel-1 XML schema files are distributed with the
+ASF HyP3 burst2safe project (BSD 2-Clause License), Copyright (c) 2024
+Alaska Satellite Facility. They describe the public Sentinel-1 SAFE
+metadata format; phidown's assembly implementation is independent code.

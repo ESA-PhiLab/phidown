@@ -12,6 +12,8 @@ import warnings
 import pandas as pd
 from huggingface_hub import hf_hub_download
 
+from .search import validate_wkt
+
 try:
     from shapely import wkt as shapely_wkt
     from shapely.geometry import Point
@@ -93,6 +95,10 @@ class AISDataHandler:
         use_verbose = verbose if verbose is not None else self.verbose
         
         self._errors.clear()
+        
+        # Check the AOI first: the data download below can be large
+        if aoi_wkt:
+            aoi_wkt = validate_wkt(aoi_wkt)
         
         # Parse and validate dates
         start_date_obj = self._parse_date(start_date)

@@ -11,6 +11,52 @@ This document tracks all notable changes to Φ-Down.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
+[Unreleased]
+------------
+
+[0.1.31] - 2026-11-04
+---------------------
+
+### Changed
+- Product search (``execute_query``, ``query_by_name``, ``search_products_by_name_pattern``) now uses the CDSE STAC API (``https://stac.dataspace.copernicus.eu/v1``) instead of OData. OData collection names, product types, and attribute names are translated to STAC collections and CQL2-JSON filters, and STAC items are mapped back to the existing DataFrame columns.
+- Sentinel-1 burst search still uses the OData ``Bursts`` endpoint, because STAC has no burst catalogue.
+- Queries that STAC cannot answer fully use OData automatically: ``search_products_by_name_pattern``, Sentinel-1 RAW and searches with no product type, non-COG Sentinel-1 GRD names, collections other than Sentinel-1/2/3/5P/6 and COP-DEM, attributes outside ``stac.STAC_ATTRIBUTES``, filters or page sizes that a collection rejects, and STAC outages.
+- Sentinel-1 ``GRD`` filter searches on STAC return the ``_COG`` products. ``query_by_name`` still finds non-COG products.
+- OData page failures now raise an error during ``count=True`` pagination instead of returning partial results with a printed warning.
+- Burst parameters without ``burst_mode=True``, compact dates such as ``20240617``, non-integer ``top``, and burst ``order_by`` values other than ``ContentDate/Start`` and ``ContentDate/End`` now raise ``ValueError`` when the query is set.
+- The burst availability warning now goes to stderr, and the "No AOI" coverage message is a debug log, so CLI JSON output stays valid.
+- AOI WKT strings are now rejected when they are ``EMPTY``, have out-of-range longitudes or latitudes, lines without two distinct points, degenerate or self-intersecting polygon rings, or holes outside the outer ring. ``CopernicusDataSearcher``, ``PhiSat2Searcher.query_catalogue``, and AIS AOI filtering all apply these checks.
+
+### Added
+- ``phidown.stac`` module with the STAC request builder, pagination, and item mapping.
+- Local Sentinel-1 burst assembly: ``merge_burst_safes``, ``discover_burst_safes``, and the ``phidown merge-bursts`` CLI build one SAFE from downloaded burst SAFEs or ZIP archives (``pip install 'phidown[sentinel1]'``), without the online ASF ``burst2safe`` service.
+- ``phidown.validate_wkt`` to check a WKT geometry and return it normalized (`#32 <https://github.com/ESA-PhiLab/phidown/issues/32>`_).
+
+### Fixed
+- Default ``top=1000`` searches of ``sentinel-2-l2a`` no longer fail with HTTP 400.
+- Sentinel-1 RAW product types no longer raise ``KeyError`` when selecting STAC collections.
+- ``SLC`` and ``OCN`` searches include the wave mode collections.
+- Product dates select by sensing start like OData, and searches with only ``end_date`` work.
+- One row per product when STAC holds it under two id forms (Sentinel-6). ``Footprint`` is in the OData ``geography'SRID=4326;...'`` format again.
+- STAC requests retry timeouts, and listing collections takes one request instead of 40+ at start-up.
+- OData string filters escape quotes and encode date offsets. Burst pagination retries HTTP 429 and sends at most four requests at a time.
+- ``--burst-coverage --format json`` prints valid JSON, also when no burst matches.
+- ``LANDSAT-8-ESA`` searches use the OData collection name ``LANDSAT-8``.
+- ``COP-DEM-GLO-30`` and ``COP-DEM-GLO-90`` product types select their collections, and COP-DEM name patterns search STAC, because OData has no COP-DEM collection.
+- ``query_by_name`` finds Sentinel-6, Sentinel-5P, Sentinel-3 and DEM products given without an extension.
+- AOI whitespace just inside parentheses no longer causes HTTP 400. Integer attributes given as strings, and Sentinel-3 product groups, now work on OData.
+- ``--list --format json`` prints ``[]`` when nothing matches.
+- Single-file products (Sentinel-5P ``.nc``) download in fast and safe mode. They failed before because the path was treated as a folder.
+- Download checks accept every product layout, not only ``manifest.safe``, so Sentinel-3, Sentinel-6, Sentinel-5P, DEM and SMOS products are no longer reported as failed or incomplete.
+- ``s5cmd`` is found next to the Python interpreter when its environment is not activated, as in notebook kernels.
+- Products without an S3 path report a clear message instead of raising ``KeyError``.
+- Burst searches by ``parent_product_name`` use the dates in the name when no dates are given. These queries took 18-36 s and could exceed the request timeout; they now take under a second.
+- ``merge-bursts`` output was checked against a real parent SLC, which fixed: tie points missing from the measurement TIFF; repeated geolocation grid points and points beyond the image; noise azimuth vectors shifted once per burst; datatake IDs in decimal instead of hex in names; the source ``imageNumber``; manifest slice flags and ANX times describing the parent; manifest schema references with no target; RFI reports and the slice list of absent bursts; generated XML namespace prefixes; manifest footprints that were longitude first and covered the whole parent slice; polarisations not in the product; image statistics, which now cover all pixels with I and Q separate; and manifest metadata links, which now point to each dataset's own annotations.
+- ``merge-bursts`` rejects bursts from different datatakes.
+- ``merge-bursts`` accepts a folder of burst ZIP archives, which is what ``download_bursts`` writes.
+- Coverage is measured for point and line AOIs, and the AOI centroid is correct across the antimeridian.
+- ``plot_kml_coordinates`` reads KML files with a default namespace, and ``get_ais_data`` checks the AOI before downloading data.
+
 [0.1.30] - 2026-09-01
 ---------------------
 

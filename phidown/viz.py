@@ -49,7 +49,9 @@ def plot_kml_coordinates(kml_file: str, output_html: str = "map_overlay.html"):
     tree = ET.parse(kml_file)
     root = tree.getroot()
 
-    coordinates_node = root.find(".//gx:LatLonQuad/coordinates", namespace)
+    coordinates_node = root.find(".//gx:LatLonQuad/kml:coordinates", namespace)
+    if coordinates_node is None:
+        coordinates_node = root.find(".//gx:LatLonQuad/coordinates", namespace)
     if coordinates_node is None or not coordinates_node.text or not coordinates_node.text.strip():
         raise ValueError("KML does not contain gx:LatLonQuad/coordinates data.")
 

@@ -31,6 +31,18 @@ phidown list --collection "SENTINEL-1" --product-type "GRD" --bbox -5 40 5 45 --
 phidown --burst-coverage --aoi-wkt "POLYGON((10 45, 12 45, 12 46, 10 46, 10 45))" --start-date "2024-08-02T00:00:00" --end-date "2024-08-20T23:59:59" --polarisation "VV" --orbit-direction "DESCENDING" --preferred-subswath "IW1,IW2,IW3" --format "json" --save "./outputs/burst_coverage.json"
 ```
 
+## Merge downloaded Sentinel-1 burst products
+```bash
+# Accepts burst SAFE directories, a collection directory, downloaded ZIPs,
+# or the extractor's JSON tree.
+phidown merge-bursts ./bursts --output-dir ./assembled
+phidown merge-bursts ./downloads/burst_*.zip --output-dir ./assembled
+phidown merge-bursts ./slc_tree.json --output-dir ./assembled --overwrite
+```
+
+The assembler writes one standard SAFE from compatible bursts. It requires
+`numpy` and `tifffile`; install them with `pip install "phidown[sentinel1]"`.
+
 ## Python search and inspect
 ```python
 from phidown.search import CopernicusDataSearcher

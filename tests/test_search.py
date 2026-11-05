@@ -1,9 +1,12 @@
+import math
+import time
+
 import pytest
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
-from phidown.search import CopernicusDataSearcher
+from phidown.search import CopernicusDataSearcher, validate_wkt
 
 # Define the path to the config file relative to the test file
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'phidown', 'config.json')
@@ -87,6 +90,81 @@ def test_searcher_invalid_cloud_cover_high():
             product_type='S2MSI1C',
             cloud_cover_threshold=110
         )
+
+
+@pytest.mark.parametrize(
+    ("aoi_wkt", "message"),
+    [
+        ('POINT(181 0)', 'longitude 181.0 is outside'),
+        ('POINT(0 -90.5)', 'latitude -90.5 is outside'),
+        ('POINT(1e999 0)', 'longitude inf is outside'),
+        ('MULTIPOINT((0 0), (0 91))', 'latitude 91.0 is outside'),
+        ('LINESTRING(0 0, 200 1)', 'longitude 200.0 is outside'),
+        ('LINESTRING(1 1)', 'at least 2 distinct'),
+        ('LINESTRING(1 1, 1 1)', 'at least 2 distinct'),
+        ('MULTILINESTRING((0 0, 1 1), (2 2, 2 2))', 'at least 2 distinct'),
+        ('POLYGON((0 0, 200 0, 1 1, 0 0))', 'longitude 200.0 is outside'),
+        ('POLYGON((0 0, 1 1, 1 0, 0 1, 0 0))', 'must not intersect itself'),
+        ('POLYGON((0 0, 2 0, 2 2, 1 0, 0 2, 0 0))', 'must not intersect itself'),
+        ('POLYGON((0 0, 2 0, 1 0, 1 1, 0 0))', 'must not intersect itself'),
+        ('POLYGON((0 0, 1 0, 2 0, 0 0))', 'must not intersect itself'),
+        ('POLYGON((0 0, 1 1, 1 1, 0 0))', 'at least 3 distinct corners'),
+        ('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0), (5 5, 5 6, 6 5, 6 6, 5 5))', 'must not intersect itself'),
+        ('MULTIPOLYGON(((0 0, 1 0, 1 1, 0 0)), ((2 2, 3 3, 3 2, 2 3, 2 2)))', 'must not intersect itself'),
+        ('POLYGON((0 0, 4 0, 4 4, 0 4, 0 0), (5 5, 6 5, 6 6, 5 5))', 'hole must lie inside'),
+        ('POLYGON EMPTY', 'cannot be EMPTY'),
+        ('POLYGON((0 0, 1 0, 1 1, 0 0)) tail', 'must be valid WKT'),
+        ('POLYGON Z((0 0 1, 1 0 1, 1 1 1, 0 0 1))', 'must be valid WKT'),
+    ],
+)
+def test_validate_wkt_rejects_bad_geometries(aoi_wkt, message):
+    with pytest.raises(ValueError, match=message):
+        validate_wkt(aoi_wkt)
+    with pytest.raises(ValueError, match=message):
+        CopernicusDataSearcher().query_by_filter(aoi_wkt=aoi_wkt)
+
+
+@pytest.mark.parametrize(
+    "aoi_wkt",
+    [
+        'POINT(-180 -90)',
+        'POINT(180 90)',
+        'POLYGON((0 0, 0 0, 1 0, 1 1, 0 1, 0 0))',
+        'POLYGON((0 0, 1 0, 2 0, 2 2, 0 2, 0 0))',
+        'POLYGON((0 0, 10 0, 10 10, 0 10, 0 0), (2 2, 2 4, 4 4, 4 2, 2 2))',
+        'POLYGON((0 0, 4 0, 4 4, 0 4, 0 0), (0 0, 1 2, 2 1, 0 0))',
+        'LINESTRING(0 0, 1 1, 0 0)',
+    ],
+)
+def test_validate_wkt_accepts_valid_geometries(aoi_wkt):
+    assert validate_wkt(aoi_wkt) == aoi_wkt
+
+
+def test_validate_wkt_normalizes_whitespace_and_checks_type():
+    assert validate_wkt('  POINT( 1   2 )\n') == 'POINT(1 2)'
+    assert validate_wkt('POLYGON((\n 0 0 , 1 0, 1 1, 0 0\n))') == 'POLYGON((0 0, 1 0, 1 1, 0 0))'
+    assert validate_wkt('polygon((0 0, 1 0, 1 1, 0 0))') == 'POLYGON((0 0, 1 0, 1 1, 0 0))'
+    with pytest.raises(TypeError):
+        validate_wkt(12)
+    with pytest.raises(ValueError, match='cannot be empty'):
+        validate_wkt('   ')
+
+
+def test_validate_wkt_handles_long_rings_quickly():
+    points = [
+        (10 * math.cos(2 * math.pi * i / 20000), 10 * math.sin(2 * math.pi * i / 20000))
+        for i in range(20000)
+    ]
+    ring = ', '.join(f'{lon} {lat}' for lon, lat in points + points[:1])
+    started = time.perf_counter()
+    validate_wkt(f'POLYGON(({ring}))')
+    assert time.perf_counter() - started < 5
+
+
+def test_top_level_validate_wkt_export():
+    import phidown
+
+    assert phidown.validate_wkt is validate_wkt
 
 
 # Test invalid AOI WKT format

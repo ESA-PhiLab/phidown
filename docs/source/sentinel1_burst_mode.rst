@@ -18,6 +18,67 @@ Sentinel-1 SLC Burst Mode allows you to search for and access individual radar b
 - Combine with spatial (AOI) and temporal filters
 - Burst availability depends on the CDSE catalogue and may vary by acquisition date, area, platform, and acquisition mode. Please verify availability for the requested query.
 
+Assemble downloaded bursts into SAFE
+------------------------------------
+
+``phidown`` can assemble either:
+
+* one or more single-burst ``*.SAFE`` directories,
+* downloaded burst ``*.zip`` archives (they are extracted in a temporary
+  directory), or
+* the JSON tree emitted by the CDSE/ASF burst extractor (the JSON maps
+  ``DATA`` and ``METADATA`` files by SLC, swath, polarization, and burst
+  index).
+
+The operation is local and does not change its inputs. It concatenates the
+I/Q rows in burst order, writes one uncompressed complex-int16 GeoTIFF per
+swath/polarization, updates burst byte offsets, line counts, times,
+statistics, geolocation points, and available noise/calibration/RFI vectors,
+and rebuilds ``manifest.safe``. A ``support`` directory containing the
+Sentinel-1 XML schemas is included when the input has one or when the bundled
+schemas are available.
+
+Install the optional dependencies once::
+
+   pip install "phidown[sentinel1]"
+
+Then run::
+
+   phidown merge-bursts /path/to/burst-collection \\
+       --output-dir /path/to/assembled
+
+For an extractor JSON tree::
+
+   phidown merge-bursts /path/to/slc_tree.json \\
+       --output-dir /path/to/assembled
+
+The generated directory has the normal ``*.SAFE`` suffix. Use
+``--output-name NAME.SAFE`` to choose its name or ``--overwrite`` to replace
+an existing output. The default validation is deliberately strict: all
+bursts must belong to one platform, acquisition mode, and absolute orbit;
+IDs must be consecutive within each swath/polarization; and dimensions must
+match. Multiple swaths and the matching dual-polarization groups are emitted
+as separate measurement/annotation datasets in the same SAFE.
+
+Input requirements and limitations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* A burst SAFE must contain ``measurement/*.tif`` or ``*.tiff`` and an
+  annotation XML with exactly one ``burst`` entry per measurement file.
+* Extractor JSON paths may be absolute or relative to the JSON file. Its
+  metadata XML may contain the complete combined ``<burst>`` document; the
+  selected burst is localized before assembly.
+* The input data must be losslessly representable as signed 16-bit I/Q
+  samples. The output TIFF uses the Sentinel-1 representation: one sample
+  per pixel, ``BitsPerSample=32``, ``SamplesPerPixel=1``, and
+  ``SampleFormat=COMPLEXINT`` (interleaved int16 I/Q bytes), with GDAL GCP
+  metadata when geolocation points are present.
+* This first implementation does not synthesize a Sentinel-1 quick-look
+  image. It writes a small footprint preview under ``preview/`` instead.
+  Orbit and other general annotation records are preserved from the first
+  input/template; line-dependent vectors are rebased and merged where the
+  source metadata exposes them.
+
 What are Sentinel-1 Bursts?
 ----------------------------
 

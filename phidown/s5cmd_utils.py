@@ -4,10 +4,14 @@ from typing import Optional, List, Sequence, Union
 import configparser
 import logging
 import shlex
+import shutil
+import sys
 import time
 import threading
 import random
 from tqdm import tqdm
+
+from .download_state import is_single_file_s3_path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,6 +35,17 @@ def _split_command_args(command: str, platform_name: Optional[str] = None) -> Li
     if effective_platform == "nt":
         return [_strip_wrapping_quotes(arg) for arg in shlex.split(command, posix=False)]
     return shlex.split(command)
+
+
+def _s5cmd_executable() -> str:
+    """Return the s5cmd command, also when its environment is not activated.
+
+    A notebook kernel or a direct ``.venv/bin/python`` call does not put the
+    environment's scripts on PATH.
+    """
+    if shutil.which('s5cmd'):
+        return 's5cmd'
+    return shutil.which('s5cmd', path=os.path.dirname(sys.executable)) or 's5cmd'
 
 
 def run_s5cmd_with_config(
@@ -94,7 +109,7 @@ def run_s5cmd_with_config(
         env['AWS_DEFAULT_REGION'] = default_section.get('aws_region', 'us-east-1').strip("'\"")
 
     # Build command
-    cmd_parts = ['s5cmd']
+    cmd_parts = [_s5cmd_executable()]
 
     if s5cmd_retry_count is not None:
         cmd_parts.extend(['--retry-count', str(int(s5cmd_retry_count))])
@@ -317,13 +332,15 @@ def pull_down(
     if not s3_path.startswith('/eodata/'):
         raise ValueError(f'S3 path must start with /eodata/, got: {s3_path}')
 
-    # Create output directory with SAFE name
+    # Create output directory with SAFE name.  A single-file product goes
+    # directly into output_dir, not into a folder named like the file.
+    single_file = is_single_file_s3_path(s3_path)
     safe_name = os.path.basename(s3_path.rstrip('/'))
-    full_output_dir = os.path.join(output_dir, safe_name)
+    full_output_dir = output_dir if single_file else os.path.join(output_dir, safe_name)
     os.makedirs(full_output_dir, exist_ok=True)
 
     # Construct proper S3 URL
-    if download_all and not s3_path.endswith('/*'):
+    if download_all and not single_file and not s3_path.endswith('/*'):
         # For directory download, add wildcard
         s3_url = f's3:/{s3_path}/*'
     else:

@@ -143,7 +143,7 @@ Limitations
 * PhiSat-2 searches do not support Sentinel-1 burst mode.
 * ``--s3path`` is CDSE-only; PhiSat-2 downloads use INSULA HTTP URLs.
 * ``phidown list --provider phisat2`` requires ``--filter``.
-* PhiSat-2 authentication requires ``InsulaWorkflowClient``.
+* PhiSat-2 authentication uses the built-in OIDC authorization-code client and does not require ``InsulaWorkflowClient``.
 
 API Objects
 -----------

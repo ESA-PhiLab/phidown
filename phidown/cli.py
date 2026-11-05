@@ -212,7 +212,7 @@ def download_by_name(
         
     Example:
         >>> success = download_by_name(
-        ...     'S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003',
+        ...     'S1A_IW_GRDH_1SDV_20240503T031929_20240503T031942_053701_0685FB_7532_COG',
         ...     '/path/to/output'
         ... )
     """
@@ -256,8 +256,11 @@ def download_by_name(
             return False
         
         # Get product details
-        s3_path = df.iloc[0]['S3Path']
+        s3_path = df.iloc[0].get('S3Path')
         content_length = df.iloc[0].get('ContentLength', None)
+        if not isinstance(s3_path, str) or not s3_path:
+            logger.error(f'❌ Product has no S3 path, so it cannot be downloaded (it may be offline): {product_name}')
+            return False
         
         logger.info(f'✅ Found product in catalog')
         logger.info(f'📦 S3 Path: {s3_path}')
@@ -332,7 +335,7 @@ def download_by_name(
                         logger.info('⏭️  Product already downloaded, skipping.')
                         return True
                     if not is_product_complete(result.output_path):
-                        raise ValueError('manifest.safe not found - download may be incomplete')
+                        raise ValueError('Downloaded product looks incomplete')
                 else:
                     attempt_reset = should_reset_config
                     should_reset_config = False
@@ -351,7 +354,7 @@ def download_by_name(
                     )
 
                     if not is_product_complete(product_dir):
-                        raise ValueError('manifest.safe not found - download may be incomplete')
+                        raise ValueError('Downloaded product looks incomplete')
 
                 if state_store is not None:
                     state_store.mark(
@@ -523,7 +526,7 @@ def download_by_s3path(
                         logger.info('⏭️  Target already downloaded, skipping.')
                         return True
                     if download_all and not is_product_complete(result.output_path):
-                        raise ValueError('manifest.safe not found - download may be incomplete')
+                        raise ValueError('Downloaded product looks incomplete')
                 else:
                     attempt_reset = should_reset_config
                     should_reset_config = False
@@ -619,6 +622,8 @@ def list_products(
 
             if df.empty:
                 logger.info('No PhiSat-2 products found for the selected filter.')
+                if output_format == 'json':
+                    print('[]')
                 return True
 
             return _render_listing_output(
@@ -651,6 +656,8 @@ def list_products(
 
         if df.empty:
             logger.info('No products found for the selected filters.')
+            if output_format == 'json':
+                print('[]')
             return True
 
         return _render_listing_output(
@@ -706,11 +713,11 @@ def burst_coverage_analysis(
             preferred_subswath=preferred
         )
 
-        if df.empty:
+        if df.empty and output_format != 'json':
             logger.info('No bursts found for the selected filters.')
             return True
 
-        if selected_columns:
+        if selected_columns and not df.empty:
             missing_columns = [col for col in selected_columns if col not in df.columns]
             if missing_columns:
                 logger.error(f'Requested columns are not available: {", ".join(missing_columns)}')
@@ -747,7 +754,7 @@ def burst_coverage_analysis(
 
         if output_format == 'json':
             rendered = json.dumps(
-                {'summary': summary, 'bursts': out_df.to_dict(orient='records')},
+                {'summary': summary, 'bursts': out_df.astype(object).where(out_df.notna(), None).to_dict(orient='records')},
                 indent=2,
                 default=str
             )
@@ -857,12 +864,71 @@ def _main_list_subcommand(argv: Optional[Sequence[str]] = None) -> None:
     sys.exit(0 if success else 1)
 
 
+def _main_merge_bursts_subcommand(argv: Optional[Sequence[str]] = None) -> None:
+    """Handle ``phidown merge-bursts ...``."""
+    parser = argparse.ArgumentParser(
+        prog='phidown merge-bursts',
+        description='Assemble downloaded Sentinel-1 burst SAFEs into one SAFE product',
+    )
+    parser.add_argument(
+        'inputs',
+        nargs='+',
+        help='Burst SAFE directories, downloaded ZIP archives, a collection directory, or an extractor JSON tree',
+    )
+    parser.add_argument(
+        '-o', '--output-dir',
+        default='.',
+        help='Directory in which to write the assembled SAFE (default: current directory)',
+    )
+    parser.add_argument(
+        '--output-name',
+        help='Optional output SAFE directory name; .SAFE is appended when omitted',
+    )
+    parser.add_argument(
+        '--overwrite',
+        action='store_true',
+        help='Replace an existing output SAFE',
+    )
+    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose logging')
+    args = parser.parse_args(argv)
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+    try:
+        from .s1_burst_merge import merge_burst_safes
+
+        output = merge_burst_safes(
+            args.inputs,
+            output_dir=args.output_dir,
+            output_name=args.output_name,
+            overwrite=args.overwrite,
+        )
+    except Exception as exc:
+        logger.error(f'❌ Burst assembly failed: {exc}')
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+    print(f'Created assembled SAFE: {output}')
+    sys.exit(0)
+
+
 def main() -> None:
     """Main entry point for phidown CLI."""
     # Support local agent-skill management: `phidown skill add|remove ...`
     if len(sys.argv) > 1 and sys.argv[1] == 'skill':
         from .skill_cli import skill_main
         sys.exit(skill_main(sys.argv[2:]))
+
+    # Support Sentinel-1 burst assembly: `phidown merge-bursts ...`
+    if len(sys.argv) > 1 and sys.argv[1] == 'merge-bursts':
+        try:
+            _main_merge_bursts_subcommand(sys.argv[2:])
+        except KeyboardInterrupt:
+            logger.warning('\n⚠️  Burst assembly interrupted by user')
+            sys.exit(130)
+        except Exception as e:
+            logger.error(f'❌ Fatal error: {e}')
+            sys.exit(1)
 
     # Support subcommand-style UX: `phidown list ...`
     if len(sys.argv) > 1 and sys.argv[1] == 'list':
@@ -891,7 +957,7 @@ Examples:
   phidown list --provider phisat2 --filter SESSION_ID_12345
 
   # Download by product name
-  phidown --name S1A_IW_GRDH_1SDV_20240503T031926_20240503T031942_053701_0685FB_E003 -o ./data
+  phidown --name S1A_IW_GRDH_1SDV_20240503T031929_20240503T031942_053701_0685FB_7532_COG -o ./data
 
   # Download a PhiSat-2 product by exact filename or unique search token
   phidown --provider phisat2 --name SESSION_ID_12345 -o ./data
@@ -1143,7 +1209,7 @@ Examples:
     parser.add_argument(
         '--version',
         action='version',
-        version='%(prog)s 0.1.30'
+        version='%(prog)s 0.1.31'
     )
     
     args = parser.parse_args()
