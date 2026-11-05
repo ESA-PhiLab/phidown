@@ -18,7 +18,7 @@ from typing import Optional, List, Sequence, Union
 from .search import CopernicusDataSearcher
 from .phisat2 import PhiSat2Searcher
 from .s5cmd_utils import pull_down
-from .download_state import DownloadStateStore, default_state_file, is_product_complete
+from .download_state import DownloadStateStore, can_skip_download, default_state_file, is_product_complete
 from .native_download import download_s3_resumable
 
 # Configure logger
@@ -283,7 +283,7 @@ def download_by_name(
             resolved_state_file = state_file or default_state_file(abs_output_dir)
             state_store = DownloadStateStore(resolved_state_file)
 
-            if is_product_complete(product_dir):
+            if can_skip_download(product_dir, content_length):
                 state_store.mark(
                     state_item_id,
                     'success',
@@ -469,7 +469,7 @@ def download_by_s3path(
             resolved_state_file = state_file or default_state_file(abs_output_dir)
             state_store = DownloadStateStore(resolved_state_file)
 
-            already_complete = is_product_complete(target_dir) if download_all else _dir_has_files(target_dir)
+            already_complete = can_skip_download(target_dir) if download_all else _dir_has_files(target_dir)
             if already_complete:
                 state_store.mark(
                     state_item_id,
@@ -1209,7 +1209,7 @@ Examples:
     parser.add_argument(
         '--version',
         action='version',
-        version='%(prog)s 0.1.31'
+        version='%(prog)s 0.1.32'
     )
     
     args = parser.parse_args()

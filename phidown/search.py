@@ -18,7 +18,7 @@ import warnings
 from urllib.parse import quote
 
 from .downloader import pull_down, get_token, download_burst_on_demand, TokenManager
-from .download_state import DownloadStateStore, default_state_file, is_non_empty_file, is_product_complete
+from .download_state import DownloadStateStore, can_skip_download, default_state_file, is_non_empty_file, is_product_complete
 from .native_download import download_s3_resumable
 from .phisat2 import PhiSat2Searcher
 from . import stac as stac_api
@@ -2954,7 +2954,7 @@ class CopernicusDataSearcher:
             # pull_down names the output after the S3 path, which can differ from the Name.
             product_dir = os.path.join(abs_output_dir, os.path.basename(s3_path.rstrip('/')))
 
-            if not use_native and is_product_complete(product_dir):
+            if not use_native and can_skip_download(product_dir, content_length):
                 if state_store is not None:
                     state_store.mark(
                         product_name,

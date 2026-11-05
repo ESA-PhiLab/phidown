@@ -496,3 +496,27 @@ def test_rfi_reports_are_combined_across_parent_slices():
     output = rfi("t0", "t1")
     _keep_rfi_reports_of_bursts(output, [record], [rfi("t1", "t2", "t3")])
     assert [item.findtext("azimuthTime") for item in output.find("rfiBurstReportList")] == ["t1", "t2"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["{dest}", "../escaped.SAFE", "sub/name.SAFE", "sub\\name.SAFE", "C:name.SAFE"],
+)
+@pytest.mark.parametrize("overwrite", [False, True])
+def test_merge_rejects_a_path_as_output_name_and_touches_nothing(tmp_path, name, overwrite):
+    destination = tmp_path / "existing.SAFE"
+    destination.mkdir()
+    (destination / "keep.txt").write_text("keep")
+    output_dir = tmp_path / "out"
+
+    with pytest.raises(BurstMergeError, match="without a path"):
+        merge_burst_safes(
+            [tmp_path / "missing.zip"],
+            output_dir,
+            output_name=name.format(dest=destination),
+            overwrite=overwrite,
+        )
+
+    assert (destination / "keep.txt").read_text() == "keep"
+    assert not output_dir.exists()
+    assert not (tmp_path / "escaped.SAFE").exists()

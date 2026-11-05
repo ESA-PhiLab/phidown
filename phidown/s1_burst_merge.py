@@ -40,7 +40,7 @@ import zipfile
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Iterable, Sequence
 from xml.sax.saxutils import escape
 
@@ -1585,6 +1585,9 @@ def merge_burst_safes(
     overwrite: bool = False,
 ) -> Path:
     """Merge downloaded burst SAFEs or burst ZIP archives into one SAFE."""
+    # A path would bypass output_dir and make the work folder the destination.
+    if output_name and PureWindowsPath(output_name).name != output_name:
+        raise BurstMergeError(f"output_name must be a name without a path, got: {output_name}")
     input_paths: list[Path] = []
     for raw in inputs:
         path = Path(raw).expanduser().resolve()

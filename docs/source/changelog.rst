@@ -14,6 +14,16 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 [Unreleased]
 ------------
 
+[0.1.32] - 2026-11-05
+---------------------
+
+### Fixed
+
+- ``polarisationChannels`` matches the exact channel set again on STAC searches. ``VV`` no longer also returns dual-polarisation ``VV&VH`` products, as it did in 0.1.31.
+- ``query_by_name`` finds COP-DEM products when given the catalogue name ending in ``.DEM``.
+- ``merge-bursts`` and ``merge_burst_safes`` reject an ``output_name`` that contains a path. An absolute path with ``overwrite=True`` deleted the destination and lost the merged output, and ``../`` wrote outside ``output_dir``.
+- Downloads no longer skip partial products in ``fast`` mode. A single file must match the catalogue size when known, and a folder without a manifest (DEM, Landsat, SMOS) is downloaded again. Use ``mode="safe"`` to resume such folders file by file.
+
 [0.1.31] - 2026-11-04
 ---------------------
 
