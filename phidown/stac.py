@@ -136,7 +136,7 @@ _OTHER_NAME_PREFIXES = (
     ("DEM1_", "cop-dem-eea-"),
 )
 
-_PRODUCT_SUFFIXES = (".SAFE", ".SEN3", ".SEN6", ".zip", ".nc", ".tar", ".h5", ".tif", ".TIF")
+_PRODUCT_SUFFIXES = (".SAFE", ".SEN3", ".SEN6", ".DEM", ".zip", ".nc", ".tar", ".h5", ".tif", ".TIF")
 _ODATA_ID_RE = re.compile(r"Products\(([0-9a-fA-F-]{36})\)")
 
 
@@ -487,9 +487,14 @@ def build_search_body(
 
     def equals(prop: str, value: typing.Any) -> None:
         if prop == "sar:polarizations" and isinstance(value, str):
-            for polarization in re.split(r"[\s&+,/]+", value.upper()):
-                if polarization:
-                    conditions.append({"op": "a_contains", "args": [{"property": prop}, [polarization]]})
+            # OData matches the exact channel set.  CDSE compares arrays in
+            # order and lists the co-polarised channel first.
+            channels = sorted(
+                {channel for channel in re.split(r"[\s&+,/]+", value.upper()) if channel},
+                key=lambda channel: (channel not in ("HH", "VV"), channel),
+            )
+            if channels:
+                conditions.append({"op": "a_equals", "args": [{"property": prop}, channels]})
             return
         conditions.append({"op": "=", "args": [{"property": prop}, _property_value(prop, value, constellation)]})
 

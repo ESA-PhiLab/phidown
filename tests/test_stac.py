@@ -161,12 +161,26 @@ def test_build_search_body_translates_filters():
             {"op": "=", "args": [{"property": "sat:orbit_state"}, "descending"]},
             {"op": "<", "args": [{"property": "eo:cloud_cover"}, 20]},
             {"op": "=", "args": [{"property": "sat:relative_orbit"}, 117]},
-            {"op": "a_contains", "args": [{"property": "sar:polarizations"}, ["VV"]]},
-            {"op": "a_contains", "args": [{"property": "sar:polarizations"}, ["VH"]]},
+            {"op": "a_equals", "args": [{"property": "sar:polarizations"}, ["VV", "VH"]]},
             {"op": "=", "args": [{"property": "platform"}, "sentinel-2a"]},
             {"op": "=", "args": [{"property": "grid:code"}, "MGRS-33TUG"]},
         ],
     }
+
+
+@pytest.mark.parametrize(
+    "value, channels",
+    [
+        ("VV", ["VV"]),
+        ("vh", ["VH"]),
+        ("VH&VV", ["VV", "VH"]),
+        ("HV HH", ["HH", "HV"]),
+        ("VV,VV", ["VV"]),
+    ],
+)
+def test_build_search_body_matches_the_exact_polarisation_set(value, channels):
+    body = stac.build_search_body(collections=["sentinel-1-grd"], attributes={"polarisationChannels": value})
+    assert body["filter"] == {"op": "a_equals", "args": [{"property": "sar:polarizations"}, channels]}
 
 
 def test_build_search_body_open_date_range_and_no_filter():
@@ -618,6 +632,8 @@ def test_item_ids_and_odata_names_handle_extensions():
     assert stac.odata_name_for_name("S6A_X") == "S6A_X.SEN6"
     assert stac.odata_name_for_name("S5P_X") == "S5P_X.nc"
     assert stac.odata_name_for_name("DEM1_X") == "DEM1_X.DEM"
+    assert stac.odata_name_for_name("DEM1_X.DEM") == "DEM1_X.DEM"
+    assert stac.item_id_for_name("DEM1_X.DEM") == "DEM1_X"
     assert stac.odata_name_for_name("S1A_X.SAFE") == "S1A_X.SAFE"
     assert stac.odata_name_for_name("LC08_X") == "LC08_X"
 

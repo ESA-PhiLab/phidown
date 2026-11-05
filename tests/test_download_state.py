@@ -2,9 +2,13 @@
 
 import os
 from datetime import datetime, timezone
+from unittest.mock import patch
+
+import pandas as pd
 
 from phidown.download_state import (
     DownloadStateStore,
+    can_skip_download,
     default_state_file,
     is_non_empty_file,
     is_product_complete,
@@ -116,6 +120,82 @@ def test_is_product_complete_covers_every_product_layout(tmp_path):
     assert not is_product_complete(str(single))
     single.write_text("x")
     assert is_product_complete(str(single))
+
+
+def test_can_skip_download_needs_evidence_of_a_full_download(tmp_path):
+    single = tmp_path / "S5P_X.nc"
+    single.write_bytes(b"x" * 10)
+    assert can_skip_download(str(single))
+    assert can_skip_download(str(single), 10)
+    assert can_skip_download(str(single), float("nan"))
+    assert not can_skip_download(str(single), 1000)
+
+    safe = tmp_path / "S1A_X.SAFE"
+    safe.mkdir()
+    (safe / "preview.png").write_bytes(b"x")
+    assert not can_skip_download(str(safe))
+    (safe / "manifest.safe").write_bytes(b"x")
+    assert can_skip_download(str(safe), 123456)
+
+    dem = tmp_path / "DEM1_X"
+    dem.mkdir()
+    (dem / "tile.tif").write_bytes(b"x")
+    assert not can_skip_download(str(dem))
+    assert is_product_complete(str(dem))
+    assert not can_skip_download(str(tmp_path / "missing"))
+
+
+def _download(tmp_path, s3_path, content_length):
+    from phidown.search import CopernicusDataSearcher
+
+    df = pd.DataFrame([{"Name": "product", "S3Path": s3_path, "ContentLength": content_length}])
+    config = tmp_path / ".s5cfg"
+    config.write_text("[default]\n")
+    with patch("phidown.search.pull_down") as pull_down:
+        summary = CopernicusDataSearcher().download_products(
+            df=df, output_dir=str(tmp_path), config_file=str(config), mode="fast", verbose=False
+        )
+    return summary, pull_down
+
+
+def test_download_products_fetches_a_truncated_file_again(tmp_path):
+    (tmp_path / "S5P_X.nc").write_bytes(b"x")
+    summary, pull_down = _download(tmp_path, "/eodata/Sentinel-5P/S5P_X.nc", 1000)
+    assert pull_down.call_count == 1
+    assert summary["skipped"] == 0
+
+
+def test_download_products_skips_a_file_of_the_catalogue_size(tmp_path):
+    (tmp_path / "S5P_X.nc").write_bytes(b"x" * 1000)
+    summary, pull_down = _download(tmp_path, "/eodata/Sentinel-5P/S5P_X.nc", 1000)
+    assert pull_down.call_count == 0
+    assert summary["skipped"] == 1
+
+
+def test_download_products_fetches_a_partial_folder_again(tmp_path):
+    (tmp_path / "DEM1_X").mkdir()
+    (tmp_path / "DEM1_X" / "tile.tif").write_bytes(b"x")
+    summary, pull_down = _download(tmp_path, "/eodata/CCM/DEM1_X", 1000)
+    assert pull_down.call_count == 1
+    assert summary["skipped"] == 0
+
+
+def test_download_products_safe_mode_leaves_a_partial_folder_to_the_resumable_download(tmp_path):
+    from phidown.search import CopernicusDataSearcher
+
+    (tmp_path / "DEM1_X").mkdir()
+    (tmp_path / "DEM1_X" / "tile.tif").write_bytes(b"x")
+    df = pd.DataFrame([{"Name": "product", "S3Path": "/eodata/CCM/DEM1_X", "ContentLength": 1000}])
+    config = tmp_path / ".s5cfg"
+    config.write_text("[default]\n")
+    with patch("phidown.search.download_s3_resumable") as resumable:
+        resumable.return_value.status = "success"
+        resumable.return_value.output_path = str(tmp_path / "DEM1_X")
+        summary = CopernicusDataSearcher().download_products(
+            df=df, output_dir=str(tmp_path), config_file=str(config), mode="safe", verbose=False
+        )
+    assert resumable.call_count == 1
+    assert summary["skipped"] == 0
 
 
 def test_is_single_file_s3_path():

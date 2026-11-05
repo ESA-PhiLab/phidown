@@ -60,6 +60,20 @@ def is_product_complete(product_path: str) -> bool:
     )
 
 
+def can_skip_download(product_path: str, expected_size: Optional[float] = None) -> bool:
+    """Check if existing output can be trusted without any record of its download.
+
+    A single file must have the catalogue size when that is known.  A folder
+    without a manifest is never trusted, as it may hold only some of its files.
+    """
+    if not is_product_complete(product_path):
+        return False
+    if os.path.isfile(product_path):
+        return not (expected_size and expected_size > 0) or os.path.getsize(product_path) == expected_size
+    suffix = os.path.splitext(product_path.rstrip('/\\'))[1].lower()
+    return suffix in _PRODUCT_MANIFESTS
+
+
 def is_non_empty_file(path: str) -> bool:
     """Check if file exists and has non-zero size."""
     return os.path.isfile(path) and os.path.getsize(path) > 0
