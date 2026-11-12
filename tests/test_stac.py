@@ -400,6 +400,7 @@ def _odata_response(rows):
         {"collection_name": "CCM"},
         {"collection_name": "SENTINEL-1"},
         {"collection_name": "SENTINEL-1", "attributes": {"productType": "IW_RAW__0S"}},
+        {"collection_name": "SENTINEL-1", "product_type": "RAW"},
         {"collection_name": "SENTINEL-1", "product_type": "SLC", "attributes": {"processingLevel": "LEVEL1"}},
         {"collection_name": "SENTINEL-2", "attributes": {"instrumentShortName": "MSI"}},
     ],
@@ -413,6 +414,18 @@ def test_queries_stac_cannot_answer_use_odata(mock_post, query):
     mock_post.assert_not_called()
     assert "odata/v1/Products" in mock_get.call_args.args[0]
     assert list(df["Id"]) == ["x"]
+
+
+@patch("phidown.stac.requests.post")
+def test_sentinel1_raw_product_type_sends_odata_product_type_filter(mock_post):
+    with patch("phidown.search.requests.get", return_value=_odata_response([])) as mock_get:
+        searcher = CopernicusDataSearcher()
+        searcher.query_by_filter(collection_name="SENTINEL-1", product_type="RAW")
+        searcher.execute_query()
+    mock_post.assert_not_called()
+    url = mock_get.call_args.args[0]
+    assert "odata/v1/Products" in url
+    assert "att/Name eq 'productType' and att/OData.CSC.StringAttribute/Value eq 'RAW'" in url
 
 
 @patch("phidown.stac.list_collections", return_value=COLLECTIONS)
