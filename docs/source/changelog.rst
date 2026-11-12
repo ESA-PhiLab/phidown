@@ -14,6 +14,13 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 [Unreleased]
 ------------
 
+[0.1.33] - 2026-11-12
+---------------------
+
+### Fixed
+
+- ``CopernicusDataSearcher.query_by_filter(collection_name="SENTINEL-1", product_type="RAW")`` no longer raises ``Invalid product type``. ``RAW`` was missing from the Sentinel-1 product types in ``config.json``, although the docs list it and the search already sends Sentinel-1 RAW queries to OData, because STAC has no Sentinel-1 RAW collection.
+
 [0.1.32] - 2026-11-05
 ---------------------
 

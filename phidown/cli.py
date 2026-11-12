@@ -1209,7 +1209,7 @@ Examples:
     parser.add_argument(
         '--version',
         action='version',
-        version='%(prog)s 0.1.32'
+        version='%(prog)s 0.1.33'
     )
     
     args = parser.parse_args()

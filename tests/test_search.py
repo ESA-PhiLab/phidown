@@ -59,6 +59,12 @@ def test_searcher_invalid_product_type():
         CopernicusDataSearcher(config_path=CONFIG_PATH, collection_name='SENTINEL-1', product_type='INVALID-TYPE')
 
 
+# Sentinel-1 RAW is a valid product type (searched through OData, not STAC)
+def test_searcher_sentinel1_raw_product_type():
+    searcher = CopernicusDataSearcher(config_path=CONFIG_PATH, collection_name='SENTINEL-1', product_type='RAW')
+    assert searcher.product_type == 'RAW'
+
+
 # Test invalid orbit direction
 def test_searcher_invalid_orbit_direction():
     with pytest.raises(ValueError, match="Invalid orbit direction"):

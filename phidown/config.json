@@ -34,7 +34,7 @@
     "valid_operational_modes": ["IW", "EW"],
     "attributes": {
         "SENTINEL-1": {
-            "productType": ["SLC", "GRD", "OCN"],
+            "productType": ["SLC", "GRD", "OCN", "RAW"],
             "origin": "ESA",
             "datatakeID": null,
             "timeliness": ["NRT", "NTC"],

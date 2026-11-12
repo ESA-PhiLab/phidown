@@ -33,7 +33,7 @@ When searching for Sentinel-1 data, parameters are passed in two ways:
 
 1. **Direct Parameters:** Passed directly to the ``search()`` method
    - ``collection_name`` - Mission/collection identifier
-   - ``product_type`` - Product type (GRD, SLC, OCN, etc.)
+   - ``product_type`` - Product type (GRD, SLC, OCN or RAW). RAW is searched through OData, since the STAC API has no Sentinel-1 RAW collection
    - ``orbit_direction`` - Orbit direction (ASCENDING/DESCENDING)
    - ``aoi_wkt`` - Area of interest in WKT format
    - ``start_date`` / ``end_date`` - Temporal range
